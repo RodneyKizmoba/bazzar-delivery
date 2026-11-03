@@ -1,5 +1,5 @@
 {
-  "id": "76d8655d-2210-43a1-8dc0-4671c7183b1c",
+  "id": "b45435c2-901b-4ac8-8da3-a81d103aee5d",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1694,6 +1694,38 @@
           "notNull": true,
           "default": false
         },
+        "is_home_business": {
+          "name": "is_home_business",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "min_notice_min": {
+          "name": "min_notice_min",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "max_orders_per_day": {
+          "name": "max_orders_per_day",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "payout_method": {
+          "name": "payout_method",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "payout_reference": {
+          "name": "payout_reference",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "phone": {
           "name": "phone",
           "type": "text",
@@ -2108,7 +2140,8 @@
         "pharmacy",
         "beauty",
         "flowers",
-        "retail"
+        "retail",
+        "bakery"
       ]
     },
     "public.user_type": {

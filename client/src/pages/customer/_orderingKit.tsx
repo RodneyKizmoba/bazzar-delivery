@@ -59,6 +59,14 @@ export interface StoreSummary {
   id: number; name: string; logoUrl: string | null; phone?: string; zone: string; street: string;
   zonesServed: string[]; isOpenNow: boolean; openingTime: string; closingTime: string;
   deliveryFee: number; minOrder: number; deliveryTimeMin: number; latitude: number | null; longitude: number | null;
+  isHomeBusiness?: boolean; minNoticeMin?: number; maxAheadHours?: number;
+}
+
+/** Texto "24 h" / "2 dias" para a antecedência mínima. */
+export function noticeLabel(min: number, t: (s: Tr) => string) {
+  if (min >= 1440 && min % 1440 === 0) { const d = min / 1440; return t({ pt: `${d} dia${d > 1 ? "s" : ""}`, en: `${d} day${d > 1 ? "s" : ""}`, fr: `${d} jour${d > 1 ? "s" : ""}` }); }
+  if (min >= 60 && min % 60 === 0) return `${min / 60} h`;
+  return `${min} min`;
 }
 
 export const FINAL_STATUSES = ["delivered", "cancelled", "rejected"];
@@ -152,19 +160,22 @@ function useMinuteTick() {
 export type WhenMode = "now" | "schedule";
 
 /** Escolha "Agora" / "Agendar" com dia e hora (hora de Luanda). value = ISO ou null. */
-export function WhenPicker({ mode, onModeChange, value, onChange, hours, allowNow = true, nowNote }: {
+export function WhenPicker({ mode, onModeChange, value, onChange, hours, allowNow = true, nowNote, minNoticeMin = 0, maxAheadHours }: {
   mode: WhenMode; onModeChange: (m: WhenMode) => void;
   value: string | null; onChange: (iso: string | null) => void;
   hours?: { openingTime: string; closingTime: string };
   allowNow?: boolean; nowNote?: string;
+  /** antecedência mínima exigida pela loja (negócios por encomenda) */
+  minNoticeMin?: number;
+  maxAheadHours?: number;
 }) {
   const t = useT();
   const { lang } = useLang();
   const meta = useMeta();
   const tick = useMinuteTick();
   const days = useMemo(
-    () => (meta.data ? buildSlots(meta.data.schedule.minLeadMin, meta.data.schedule.maxAheadHours, hours, new Date(tick)) : []),
-    [meta.data, hours?.openingTime, hours?.closingTime, tick],
+    () => (meta.data ? buildSlots(Math.max(meta.data.schedule.minLeadMin, minNoticeMin), maxAheadHours ?? meta.data.schedule.maxAheadHours, hours, new Date(tick)) : []),
+    [meta.data, hours?.openingTime, hours?.closingTime, tick, minNoticeMin, maxAheadHours],
   );
   const todayKey = luandaDayKey(new Date(tick));
   const tomorrowKey = luandaDayKey(new Date(tick + 24 * H));

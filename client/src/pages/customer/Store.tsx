@@ -206,6 +206,7 @@ export default function StorePage() {
             <p className="text-sm text-neutral-500">
               {STORE_TYPE[store.storeType] ? `${STORE_TYPE[store.storeType].icon} ` : ""}
               {store.cuisines.join(" · ") || (STORE_TYPE[store.storeType] ? t(STORE_TYPE[store.storeType]) : "")}
+              {store.isHomeBusiness && <span className="ml-1.5 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-900">🏠 {t({ pt: "Feito em casa", en: "Home-made", fr: "Fait maison" })}</span>}
               {store.isChain && <span className="ml-1.5 rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-medium text-neutral-700">{t({ pt: "Rede", en: "Chain", fr: "Chaîne" })}</span>}
             </p>
           </div>
@@ -240,7 +241,21 @@ export default function StorePage() {
           {store.phone && <p className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" aria-hidden /><a href={`tel:${store.phone.replace(/\s/g, "")}`} className="underline">{store.phone}</a></p>}
         </div>
 
-        {!store.isOpenNow && (
+        {!!store.minNoticeMin && (
+          <div className="mt-3 flex items-start gap-2 rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900" role="status">
+            <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+            {(() => {
+              const m = store.minNoticeMin!;
+              const n = m % 1440 === 0 ? `${m / 1440} ${t({ pt: "dia(s)", en: "day(s)", fr: "jour(s)" })}` : m % 60 === 0 ? `${m / 60} h` : `${m} min`;
+              return t({
+                pt: `Trabalha por encomenda: agende a entrega com pelo menos ${n} de antecedência.`,
+                en: `Pre-order only: schedule delivery at least ${n} ahead.`,
+                fr: `Sur commande uniquement : programmez la livraison au moins ${n} à l'avance.`,
+              });
+            })()}
+          </div>
+        )}
+        {!store.isOpenNow && !store.minNoticeMin && (
           <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900" role="status">
             <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
             {t({ pt: "Fechado agora — pode agendar a entrega no checkout.", en: "Closed now — you can schedule delivery at checkout.", fr: "Fermé pour le moment — vous pouvez programmer la livraison au paiement." })}

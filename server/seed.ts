@@ -34,6 +34,7 @@ type Item = {
 type StoreSeed = {
   name: string; storeType: any; cuisines: string[]; zone: string; street: string; lat: number; lng: number;
   zonesServed: string[]; deliveryFee: number; minOrder?: number; time: number; isChain?: boolean;
+  home?: boolean; noticeMin?: number; maxPerDay?: number;
   open?: string; close?: string; description: string; owner?: string; approved?: boolean;
   menu: Record<string, Item[]>;
 };
@@ -216,6 +217,26 @@ const STORES: StoreSeed[] = [
     },
   },
   {
+    name: "Bolos da Tia Rosa", storeType: "bakery", cuisines: ["Bolos", "Pastelaria caseira"], zone: "Kilamba",
+    street: "Centralidade do Kilamba, Bloco R (entregas)", lat: -8.9905, lng: 13.2650, zonesServed: ["Kilamba", "Camama", "Talatona", "Viana", "Zango"],
+    deliveryFee: 1500, time: 40, owner: "tiarosa", home: true, noticeMin: 24 * 60, maxPerDay: 5, open: "08:00", close: "19:00",
+    description: "Bolos de aniversário, bolo de ginguba e salgados feitos em casa. Encomende com 24h de antecedência.",
+    menu: {
+      "Bolos": [
+        { name: "Bolo de aniversário (1 kg)", price: 12000, allergens: ["gluten", "eggs", "dairy"], dietary: ["vegetarian"], popular: true, groups: [
+          { name: "Sabor", min: 1, max: 1, options: [["Chocolate", 0], ["Baunilha e morango", 0], ["Ginguba", 500]] },
+          { name: "Tamanho", min: 1, max: 1, options: [["1 kg", 0], ["2 kg", 10000]] },
+          { name: "Extras", min: 0, max: 2, options: [["Mensagem escrita no bolo", 0], ["Velas", 300]] },
+        ] },
+        { name: "Bolo de ginguba", price: 6000, allergens: ["gluten", "eggs", "peanuts"], dietary: ["vegetarian"] },
+      ],
+      "Salgados": [
+        { name: "Pastéis de carne (20 un.)", price: 7000, allergens: ["gluten", "eggs"] },
+        { name: "Rissóis de camarão (20 un.)", price: 8000, allergens: ["gluten", "seafood"] },
+      ],
+    },
+  },
+  {
     name: "Kitanda da Avó (pendente)", storeType: "restaurant", cuisines: ["Angolana"], zone: "Cazenga",
     street: "Rua 11, Cazenga", lat: -8.8250, lng: 13.2900, zonesServed: ["Cazenga", "Rangel"], deliveryFee: 800, time: 40,
     description: "Comida caseira. (Loja de demonstração à espera de aprovação do admin)", owner: "loja2", approved: false,
@@ -229,6 +250,7 @@ const DEMO_USERS = [
   { username: "cliente2", password: "Cliente#2026", fullName: "João Amigo", phone: "+244923000003", userType: "customer" as const },
   { username: "loja", password: "Loja#2026demo", fullName: "Paulo Grelhados", phone: "+244923000004", userType: "supplier" as const },
   { username: "loja2", password: "Loja#2026demo", fullName: "Ana Kitanda", phone: "+244923000005", userType: "supplier" as const },
+  { username: "tiarosa", password: "Loja#2026demo", fullName: "Rosa Bolos", phone: "+244923000008", userType: "supplier" as const },
   { username: "estafeta", password: "Estafeta#2026", fullName: "Carlos Estafeta", phone: "+244923000006", userType: "driver" as const },
   { username: "estafeta2", password: "Estafeta#2026", fullName: "Rui Novo", phone: "+244923000007", userType: "driver" as const, pending: true },
 ];
@@ -260,7 +282,7 @@ export async function seedDemoData() {
         ownerId: s.owner ? ids[s.owner] : null, name: s.name, storeType: s.storeType, description: s.description,
         cuisines: s.cuisines, isChain: !!s.isChain, phone: "+244923100100", street: s.street, zone: s.zone,
         latitude: s.lat, longitude: s.lng, zonesServed: s.zonesServed, openingTime: s.open ?? "00:00", closingTime: s.close ?? "00:00",
-        isOpen: true, isApproved: s.approved ?? true, deliveryFee: s.deliveryFee, minOrder: s.minOrder ?? 0,
+        isOpen: true, isApproved: s.approved ?? true, isHomeBusiness: !!s.home, minNoticeMin: s.noticeMin ?? 0, maxOrdersPerDay: s.maxPerDay ?? null, deliveryFee: s.deliveryFee, minOrder: s.minOrder ?? 0,
         deliveryTimeMin: s.time, prepTimeMin: Math.round(s.time / 2),
         ratingAvg: s.approved === false ? 0 : 4 + Math.round(Math.random() * 9) / 10, ratingCount: s.approved === false ? 0 : 20 + Math.floor(Math.random() * 200),
       }).returning();

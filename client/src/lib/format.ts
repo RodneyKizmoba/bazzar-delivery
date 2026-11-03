@@ -46,6 +46,7 @@ export const STATUS_COLOR: Record<string, string> = {
 
 export const STORE_TYPE: Record<string, Tr & { icon: string }> = {
   restaurant: { pt: "Restaurantes", en: "Restaurants", fr: "Restaurants", icon: "🍽️" },
+  bakery: { pt: "Pastelaria e bolos", en: "Bakery & cakes", fr: "Pâtisserie", icon: "🎂" },
   grocery: { pt: "Supermercado", en: "Grocery", fr: "Épicerie", icon: "🛒" },
   pharmacy: { pt: "Farmácia", en: "Pharmacy", fr: "Pharmacie", icon: "💊" },
   beauty: { pt: "Beleza", en: "Beauty", fr: "Beauté", icon: "💄" },

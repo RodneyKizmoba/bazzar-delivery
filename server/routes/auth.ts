@@ -82,6 +82,9 @@ authRouter.post("/register", authLimiter, ah(async (req, res) => {
         zonesServed: [input.business.zone],
         businessNif: input.business.nif || null,
         description: input.business.description || null,
+        isHomeBusiness: !!input.business.isHomeBusiness,
+        minNoticeMin: (input.business.minNoticeHours ?? 0) * 60,
+        maxOrdersPerDay: input.business.isHomeBusiness ? 10 : null,
         isApproved: false, // fica pendente até o admin aprovar
         isOpen: false,
       });

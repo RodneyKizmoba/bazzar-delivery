@@ -113,7 +113,8 @@ function HostCheckout({ view, token }: { view: GroupView; token: string }) {
       </Section>
       <Section title={t({ pt: "Quando", en: "When", fr: "Quand" })} icon={<Clock className="h-4 w-4 text-primary" />}>
         <WhenPicker mode={mode} onModeChange={setMode} value={scheduledFor} onChange={setScheduledFor}
-          hours={{ openingTime: store.openingTime, closingTime: store.closingTime }} allowNow={store.isOpenNow}
+          hours={{ openingTime: store.openingTime, closingTime: store.closingTime }} allowNow={store.isOpenNow && !store.minNoticeMin}
+          minNoticeMin={store.minNoticeMin ?? 0} maxAheadHours={store.maxAheadHours}
           nowNote={store.isOpenNow ? `~${store.deliveryTimeMin} ${t(T.minutes)}` : t({ pt: "Loja fechada agora", en: "Store closed now", fr: "Magasin fermé" })} />
         {mode === "schedule" && scheduledFor && <p className="mt-2 text-xs text-neutral-500">{dateTime(scheduledFor, lang)}</p>}
       </Section>

@@ -7,7 +7,7 @@ import {
 } from "@shared/schema";
 import { config } from "../config";
 import { badRequest, conflict, forbidden, notFound } from "./http";
-import { assertStoreCanTakeOrder, buildQuote, validateSchedule } from "./pricing";
+import { assertDailyCapacity, assertStoreCanTakeOrder, buildQuote, validateSchedule } from "./pricing";
 import { assertMethodAvailable, refundOrderPayment, startOrderPayment } from "./payments";
 import { notifyOrderStatus } from "./notify";
 import { notifyExternalDispatch } from "./dispatch";
@@ -56,7 +56,6 @@ export interface CreateOrderInput {
 }
 
 export async function createOrder(input: CreateOrderInput): Promise<Order> {
-  validateSchedule(input.scheduledFor ?? null);
   assertMethodAvailable(input.paymentMethod);
 
   const created = await db.transaction(async (tx) => {
@@ -68,7 +67,10 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
       storeId: input.storeId, lines: input.lines, user, promoCode: input.promoCode, usePoints: input.usePoints,
     });
     const store = quote.store;
+    validateSchedule(input.scheduledFor ?? null, store);
     assertStoreCanTakeOrder(store, input.scheduledFor ?? null);
+    await tx.execute(sql`select pg_advisory_xact_lock(${store.id})`); // evita ultrapassar a capacidade diária em pedidos simultâneos
+    await assertDailyCapacity(tx, store, input.scheduledFor ?? new Date());
     if (store.zonesServed.length > 0 && !store.zonesServed.some((z) => z.toLowerCase() === addr.zone.toLowerCase())) {
       throw conflict(`${store.name} não entrega na zona "${addr.zone}".`, "ZONE_NOT_SERVED");
     }
@@ -235,9 +237,10 @@ export async function modifyOrder(
       if (order.status === "pending" && patch.scheduledFor) throw conflict("A encomenda já foi enviada à loja; não pode ser agendada.");
       if (order.status === "scheduled") {
         if (!patch.scheduledFor) throw badRequest("Indique a nova hora de entrega.");
-        validateSchedule(patch.scheduledFor);
         const [store] = await tx.select().from(stores).where(eq(stores.id, order.storeId));
+        validateSchedule(patch.scheduledFor, store);
         assertStoreCanTakeOrder(store, patch.scheduledFor);
+        await assertDailyCapacity(tx, store, patch.scheduledFor, order.id);
         update.scheduledFor = patch.scheduledFor;
         update.estimatedDeliveryAt = patch.scheduledFor;
       }

@@ -75,7 +75,7 @@ adminRouter.get("/stores", ah(async (req, res) => {
 
 adminRouter.patch("/stores/:id", ah(async (req, res) => {
   const input = parse(z.object({
-    isApproved: z.boolean().optional(), isChain: z.boolean().optional(), isOpen: z.boolean().optional(),
+    isApproved: z.boolean().optional(), isChain: z.boolean().optional(), isOpen: z.boolean().optional(), isHomeBusiness: z.boolean().optional(),
     deliveryFee: z.number().int().min(0).optional(), zonesServed: z.array(z.string().trim().min(2).max(60)).optional(),
   }), req.body);
   const [s] = await db.update(stores).set(input).where(eq(stores.id, idParam(req))).returning();

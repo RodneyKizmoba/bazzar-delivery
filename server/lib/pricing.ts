@@ -57,16 +57,52 @@ export async function hasActivePlus(db: DbOrTx, userId: number): Promise<boolean
   return !!s;
 }
 
-export function validateSchedule(scheduledFor: Date | null): void {
+/** Antecedência máxima: 24h normalmente; até 7 dias para lojas que trabalham por encomenda antecipada. */
+export function maxAheadHoursFor(store?: Pick<Store, "minNoticeMin"> | null) {
+  return store && store.minNoticeMin > 0 ? Math.max(config.scheduleMaxAheadHours, 7 * 24) : config.scheduleMaxAheadHours;
+}
+
+export function validateSchedule(scheduledFor: Date | null, store?: Pick<Store, "minNoticeMin" | "name"> | null): void {
+  if (store && store.minNoticeMin > 0 && !scheduledFor) {
+    throw badRequest(
+      `${store.name} trabalha por encomenda antecipada: agende a entrega com pelo menos ${formatNotice(store.minNoticeMin)} de antecedência.`,
+      "PREORDER_REQUIRED",
+    );
+  }
   if (!scheduledFor) return;
   const now = Date.now();
-  const min = now + config.scheduleMinLeadMin * 60_000;
-  const max = now + config.scheduleMaxAheadHours * 3_600_000;
-  if (scheduledFor.getTime() < min) {
-    throw badRequest(`A entrega agendada tem de ser pelo menos ${config.scheduleMinLeadMin} minutos a partir de agora.`, "SCHEDULE_TOO_SOON");
+  const leadMin = Math.max(config.scheduleMinLeadMin, store?.minNoticeMin ?? 0);
+  const maxH = maxAheadHoursFor(store);
+  if (scheduledFor.getTime() < now + leadMin * 60_000) {
+    throw badRequest(
+      store && store.minNoticeMin > 0
+        ? `${store.name} precisa de pelo menos ${formatNotice(store.minNoticeMin)} de antecedência.`
+        : `A entrega agendada tem de ser pelo menos ${config.scheduleMinLeadMin} minutos a partir de agora.`,
+      store && store.minNoticeMin > 0 ? "NOTICE_TOO_SHORT" : "SCHEDULE_TOO_SOON",
+    );
   }
-  if (scheduledFor.getTime() > max) {
-    throw badRequest(`Só é possível agendar até ${config.scheduleMaxAheadHours} horas de antecedência.`, "SCHEDULE_TOO_FAR");
+  if (scheduledFor.getTime() > now + maxH * 3_600_000) {
+    throw badRequest(`Só é possível agendar até ${maxH} horas de antecedência.`, "SCHEDULE_TOO_FAR");
+  }
+}
+
+export function formatNotice(min: number) {
+  if (min % 1440 === 0) return `${min / 1440} dia(s)`;
+  if (min % 60 === 0) return `${min / 60} hora(s)`;
+  return `${min} minutos`;
+}
+
+/** Limite diário de encomendas (capacidade de pequenos negócios). Conta encomendas não canceladas para o mesmo dia de entrega (hora de Luanda). */
+export async function assertDailyCapacity(db: DbOrTx, store: Store, deliveryAt: Date, excludeOrderId?: number) {
+  if (!store.maxOrdersPerDay) return;
+  const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(orders).where(and(
+    eq(orders.storeId, store.id),
+    sql`${orders.status} not in ('cancelled','rejected')`,
+    sql`date((coalesce(${orders.scheduledFor}, ${orders.createdAt}) at time zone 'UTC') + interval '1 hour') = date((${deliveryAt.toISOString()}::timestamptz at time zone 'UTC') + interval '1 hour')`,
+    excludeOrderId ? ne(orders.id, excludeOrderId) : sql`true`,
+  ));
+  if (n >= store.maxOrdersPerDay) {
+    throw conflict(`${store.name} já atingiu o limite de encomendas para esse dia. Escolha outro dia.`, "STORE_FULL_DAY");
   }
 }
 

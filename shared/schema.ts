@@ -8,7 +8,7 @@ import { z } from "zod";
 // ---------------------------------------------------------------------------
 export const userTypeEnum = pgEnum("user_type", ["customer", "supplier", "driver", "admin"]);
 export const storeTypeEnum = pgEnum("store_type", [
-  "restaurant", "grocery", "pharmacy", "beauty", "flowers", "retail",
+  "restaurant", "grocery", "pharmacy", "beauty", "flowers", "retail", "bakery",
 ]);
 
 export const ORDER_STATUSES = [
@@ -21,7 +21,8 @@ export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
 export const DIETARY_TAGS = ["vegan", "vegetarian", "gluten_free", "halal", "lactose_free", "spicy"] as const;
 export const ALLERGENS = ["gluten", "dairy", "eggs", "nuts", "peanuts", "seafood", "fish", "soy"] as const;
-export const STORE_TYPES = ["restaurant", "grocery", "pharmacy", "beauty", "flowers", "retail"] as const;
+export const STORE_TYPES = ["restaurant", "bakery", "grocery", "pharmacy", "beauty", "flowers", "retail"] as const;
+export const PAYOUT_METHODS = ["multicaixa_express", "unitel_money", "bank_transfer"] as const;
 
 // ---------------------------------------------------------------------------
 // Users
@@ -75,6 +76,12 @@ export const stores = pgTable("stores", {
   description: text("description"),
   cuisines: text("cuisines").array().notNull().default([]),
   isChain: boolean("is_chain").notNull().default(false),
+  // Negócio caseiro (ex.: senhora que faz bolos em casa): sem loja física, pode exigir encomenda antecipada
+  isHomeBusiness: boolean("is_home_business").notNull().default(false),
+  minNoticeMin: integer("min_notice_min").notNull().default(0), // >0 = só por encomenda antecipada
+  maxOrdersPerDay: integer("max_orders_per_day"), // limite de capacidade diária (null = sem limite)
+  payoutMethod: text("payout_method"), // multicaixa_express | unitel_money | bank_transfer
+  payoutReference: text("payout_reference"), // telefone Multicaixa Express/Unitel Money ou IBAN
   phone: text("phone").notNull(),
   street: text("street").notNull(),
   zone: text("zone").notNull(),
@@ -355,6 +362,8 @@ export const registerSchema = z.object({
     zone: z.string().trim().min(2).max(60),
     nif: z.string().trim().max(30).optional().nullable(),
     description: z.string().trim().max(500).optional().nullable(),
+    isHomeBusiness: z.boolean().optional().default(false),
+    minNoticeHours: z.number().int().min(0).max(168).optional().default(0),
   }).optional(),
 });
 export type RegisterInput = z.infer<typeof registerSchema>;
@@ -432,6 +441,10 @@ export const storeUpdateSchema = z.object({
   minOrder: z.number().int().min(0).max(1000000),
   prepTimeMin: z.number().int().min(1).max(240),
   deliveryTimeMin: z.number().int().min(5).max(300),
+  minNoticeMin: z.number().int().min(0).max(10080),
+  maxOrdersPerDay: z.number().int().min(1).max(10000).nullable(),
+  payoutMethod: z.enum(PAYOUT_METHODS).nullable(),
+  payoutReference: z.string().trim().max(60).nullable(),
 }).partial();
 
 export const menuItemInputSchema = z.object({

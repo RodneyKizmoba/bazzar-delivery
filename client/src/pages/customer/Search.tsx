@@ -45,7 +45,7 @@ function fromUrl(): Filters {
     maxDeliveryTime: sp.get("maxDeliveryTime") ?? "",
     freeDelivery: sp.get("freeDelivery") === "1",
     openNow: sp.get("openNow") === "1",
-    chain: sp.get("chain") ?? "",
+    chain: sp.get("homeBusiness") === "1" ? "home" : sp.get("chain") ?? "",
     sort: sp.get("sort") ?? "recommended",
   };
 }
@@ -61,7 +61,8 @@ function toParams(f: Filters): URLSearchParams {
   if (f.maxDeliveryTime) sp.set("maxDeliveryTime", f.maxDeliveryTime);
   if (f.freeDelivery) sp.set("freeDelivery", "1");
   if (f.openNow) sp.set("openNow", "1");
-  if (f.chain) sp.set("chain", f.chain);
+  if (f.chain === "home") sp.set("homeBusiness", "1");
+  else if (f.chain) sp.set("chain", f.chain);
   if (f.sort && f.sort !== "recommended") sp.set("sort", f.sort);
   return sp;
 }
@@ -298,10 +299,11 @@ export default function Search() {
 
             <fieldset className="space-y-2">
               <legend className="text-sm font-medium">{t({ pt: "Tipo de negócio", en: "Business type", fr: "Type d'enseigne" })}</legend>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Chip active={!f.chain} onClick={() => set("chain", "")}>{t({ pt: "Todos", en: "All", fr: "Tous" })}</Chip>
                 <Chip active={f.chain === "chain"} onClick={() => set("chain", "chain")}>{t({ pt: "Redes", en: "Chains", fr: "Chaînes" })}</Chip>
                 <Chip active={f.chain === "independent"} onClick={() => set("chain", "independent")}>{t({ pt: "Independentes", en: "Independent", fr: "Indépendants" })}</Chip>
+                <Chip active={f.chain === "home"} onClick={() => set("chain", "home")}>🏠 {t({ pt: "Feito em casa", en: "Home-made", fr: "Fait maison" })}</Chip>
               </div>
             </fieldset>
 

@@ -8,7 +8,7 @@ import {
 } from "@shared/schema";
 import { config } from "../config";
 import { ah, idParam, notFound, parse } from "../lib/http";
-import { isWithinOpeningHours } from "../lib/pricing";
+import { isWithinOpeningHours, maxAheadHoursFor } from "../lib/pricing";
 import { paymentMethods } from "../lib/payments";
 
 export const catalogRouter = Router();
@@ -26,6 +26,9 @@ export function storeCard(s: Store, now = new Date()) {
     description: s.description,
     cuisines: s.cuisines,
     isChain: s.isChain,
+    isHomeBusiness: s.isHomeBusiness,
+    minNoticeMin: s.minNoticeMin,
+    maxAheadHours: maxAheadHoursFor(s),
     zone: s.zone,
     street: s.street,
     zonesServed: s.zonesServed,
@@ -56,7 +59,11 @@ catalogRouter.get("/meta", ah(async (_req, res) => {
     paymentsMode: config.paymentsMode,
     plus: { monthlyPrice: config.plusMonthlyPrice, freeDeliveryMinOrder: config.plusFreeDeliveryMinOrder },
     schedule: { minLeadMin: config.scheduleMinLeadMin, maxAheadHours: config.scheduleMaxAheadHours },
-    points: { pointValueKz: config.pointValueKz, kzPerPointEarned: config.kzPerPointEarned, maxDiscountPct: config.maxPointsDiscountPct },
+    points: {
+      pointValueKz: config.pointValueKz, kzPerPointEarned: config.kzPerPointEarned, maxDiscountPct: config.maxPointsDiscountPct,
+      welcomeBonusPoints: config.welcomeBonusPoints, referralBonusPoints: config.referralBonusPoints,
+    },
+    welcomeBonusPoints: config.welcomeBonusPoints,
   });
 }));
 
@@ -73,6 +80,8 @@ const searchSchema = z.object({
   freeDelivery: z.enum(["1", "true"]).optional(),
   openNow: z.enum(["1", "true"]).optional(),
   chain: z.enum(["chain", "independent"]).optional(),
+  homeBusiness: z.enum(["1", "true"]).optional(),
+  excludeType: z.enum(STORE_TYPES).optional(),
   sort: z.enum(["recommended", "rating", "delivery_time", "delivery_fee", "name"]).default("recommended"),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
@@ -89,6 +98,8 @@ catalogRouter.get("/stores", ah(async (req, res) => {
   if (f.maxDeliveryTime) conds.push(sql`${stores.deliveryTimeMin} <= ${f.maxDeliveryTime}`);
   if (f.freeDelivery) conds.push(eq(stores.deliveryFee, 0));
   if (f.chain) conds.push(eq(stores.isChain, f.chain === "chain"));
+  if (f.homeBusiness) conds.push(eq(stores.isHomeBusiness, true));
+  if (f.excludeType) conds.push(sql`${stores.storeType} <> ${f.excludeType}`);
   for (const tag of dietary) {
     conds.push(sql`exists (select 1 from menu_items mi where mi.store_id = ${stores.id} and mi.is_available and ${tag} = any(mi.dietary_tags))`);
   }

@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 import { AdminPage } from "./AdminDashboard";
 
 interface AdminStore {
-  id: number; name: string; storeType: string; zone: string; street: string; phone: string; isApproved: boolean; isChain: boolean;
+  id: number; name: string; storeType: string; zone: string; street: string; phone: string; isApproved: boolean; isChain: boolean; isHomeBusiness?: boolean;
   isOpen: boolean; deliveryFee: number; businessNif: string | null; ownerName: string | null; ownerPhone: string | null;
   logoUrl: string | null; createdAt: string; ratingAvg: number; ratingCount: number; zonesServed: string[];
 }
@@ -57,7 +57,7 @@ function StoreRow({ store }: { store: AdminStore }) {
   const [fee, setFee] = useState(String(store.deliveryFee));
   const [confirmSuspend, setConfirmSuspend] = useState(false);
   const m = useMutation({
-    mutationFn: (body: Partial<Pick<AdminStore, "isApproved" | "isChain" | "isOpen" | "deliveryFee">>) => patch(`/api/admin/stores/${store.id}`, body),
+    mutationFn: (body: Partial<Pick<AdminStore, "isApproved" | "isChain" | "isOpen" | "deliveryFee" | "isHomeBusiness">>) => patch(`/api/admin/stores/${store.id}`, body),
     onSuccess: () => {
       queryClient.invalidateQueries({ predicate: (q) => typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).startsWith("/api/admin/stores") });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
@@ -93,6 +93,10 @@ function StoreRow({ store }: { store: AdminStore }) {
         <div className="flex items-center gap-2">
           <Switch id={`chain-${store.id}`} checked={store.isChain} disabled={m.isPending} onCheckedChange={(v) => m.mutate({ isChain: v })} />
           <Label htmlFor={`chain-${store.id}`}>{t({ pt: "Cadeia", en: "Chain", fr: "Chaîne" })}</Label>
+        </div>
+        <div className="flex items-center gap-2">
+          <Switch id={`home-${store.id}`} checked={!!store.isHomeBusiness} disabled={m.isPending} onCheckedChange={(v) => m.mutate({ isHomeBusiness: v })} />
+          <Label htmlFor={`home-${store.id}`}>🏠 {t({ pt: "Negócio caseiro", en: "Home business", fr: "Activité à domicile" })}</Label>
         </div>
         <div className="flex items-center gap-2">
           <Switch id={`open-${store.id}`} checked={store.isOpen} disabled={m.isPending} onCheckedChange={(v) => m.mutate({ isOpen: v })} />

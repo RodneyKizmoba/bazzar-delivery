@@ -1,4 +1,4 @@
-CREATE TYPE "public"."store_type" AS ENUM('restaurant', 'grocery', 'pharmacy', 'beauty', 'flowers', 'retail');--> statement-breakpoint
+CREATE TYPE "public"."store_type" AS ENUM('restaurant', 'grocery', 'pharmacy', 'beauty', 'flowers', 'retail', 'bakery');--> statement-breakpoint
 CREATE TYPE "public"."user_type" AS ENUM('customer', 'supplier', 'driver', 'admin');--> statement-breakpoint
 CREATE TABLE "addresses" (
 	"id" serial PRIMARY KEY NOT NULL,
@@ -207,6 +207,11 @@ CREATE TABLE "stores" (
 	"description" text,
 	"cuisines" text[] DEFAULT '{}' NOT NULL,
 	"is_chain" boolean DEFAULT false NOT NULL,
+	"is_home_business" boolean DEFAULT false NOT NULL,
+	"min_notice_min" integer DEFAULT 0 NOT NULL,
+	"max_orders_per_day" integer,
+	"payout_method" text,
+	"payout_reference" text,
 	"phone" text NOT NULL,
 	"street" text NOT NULL,
 	"zone" text NOT NULL,

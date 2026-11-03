@@ -16,7 +16,7 @@ import { kz, dateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
   AddressPicker, clearCheckoutPrefs, OrderErrorAlert, PaymentPicker, QuoteBreakdown, readCheckoutPrefs, Section,
-  useAddresses, useMeta, useQuote, WhenPicker, type StoreDetail, type WhenMode,
+  useAddresses, useMeta, useQuote, WhenPicker, noticeLabel, type StoreDetail, type WhenMode,
 } from "./_orderingKit";
 
 function CheckoutInner() {
@@ -122,8 +122,11 @@ function CheckoutInner() {
       <Section title={t({ pt: "Quando", en: "When", fr: "Quand" })} icon={<Clock className="h-4 w-4 text-primary" />}>
         <WhenPicker mode={mode} onModeChange={setMode} value={scheduledFor} onChange={setScheduledFor}
           hours={store ? { openingTime: store.openingTime, closingTime: store.closingTime } : undefined}
-          allowNow={!storeClosedNow}
-          nowNote={storeClosedNow ? t({ pt: "Loja fechada agora", en: "Store closed now", fr: "Magasin fermé" }) : store ? `~${store.deliveryTimeMin} ${t(T.minutes)}` : undefined} />
+          allowNow={!storeClosedNow && !(store?.minNoticeMin)}
+          minNoticeMin={store?.minNoticeMin ?? 0} maxAheadHours={store?.maxAheadHours}
+          nowNote={store?.minNoticeMin
+            ? t({ pt: `Só por encomenda (${noticeLabel(store.minNoticeMin, t)} antes)`, en: `Pre-order only (${noticeLabel(store.minNoticeMin, t)} ahead)`, fr: `Sur commande (${noticeLabel(store.minNoticeMin, t)} avant)` })
+            : storeClosedNow ? t({ pt: "Loja fechada agora", en: "Store closed now", fr: "Magasin fermé" }) : store ? `~${store.deliveryTimeMin} ${t(T.minutes)}` : undefined} />
         {mode === "schedule" && scheduledFor && (
           <p className="mt-2 text-xs text-neutral-500">
             {t({ pt: "Entrega prevista:", en: "Expected delivery:", fr: "Livraison prévue :" })} <span className="font-medium text-neutral-800">{dateTime(scheduledFor, lang)}</span>

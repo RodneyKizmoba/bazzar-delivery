@@ -23,6 +23,8 @@ export interface StoreCardData {
   description: string | null;
   cuisines: string[];
   isChain: boolean;
+  isHomeBusiness?: boolean;
+  minNoticeMin?: number;
   zone: string;
   street?: string;
   logoUrl: string | null;
@@ -70,6 +72,16 @@ export function StoreCard({ store, compact, footer }: { store: StoreCardData; co
             {!store.isOpenNow && (
               <span className="rounded-full bg-neutral-900/85 px-2.5 py-1 text-[11px] font-semibold text-white">
                 {t({ pt: "Fechado — agende", en: "Closed — schedule", fr: "Fermé — programmez" })}
+              </span>
+            )}
+            {store.isHomeBusiness && (
+              <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-900 shadow-sm">
+                🏠 {t({ pt: "Feito em casa", en: "Home-made", fr: "Fait maison" })}
+              </span>
+            )}
+            {!!store.minNoticeMin && (
+              <span className="rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-neutral-800 shadow-sm">
+                {t({ pt: "Por encomenda", en: "Pre-order", fr: "Sur commande" })}
               </span>
             )}
             {store.isChain && (
@@ -302,6 +314,10 @@ export default function Home() {
 
       <Section title={t({ pt: "Perto de si", en: "Near you", fr: "Près de chez vous" })} href={`/pesquisa?sort=recommended${zq}`}>
         <StoreRow url={storesUrl({ zone: z, sort: "recommended" })} emptyText={empty} />
+      </Section>
+      <Section title={t({ pt: "Feito em casa 🏠", en: "Home-made 🏠", fr: "Fait maison 🏠" })} href={`/pesquisa?homeBusiness=1${zq}`}>
+        <StoreRow url={storesUrl({ zone: z, homeBusiness: "1", sort: "rating" })}
+          emptyText={t({ pt: "Ainda não há negócios caseiros na sua zona.", en: "No home businesses in your area yet.", fr: "Pas encore de commerces faits maison ici." })} />
       </Section>
       <Section title={t({ pt: "Mais bem avaliados", en: "Top rated", fr: "Les mieux notés" })} href={`/pesquisa?sort=rating${zq}`}>
         <StoreRow url={storesUrl({ zone: z, sort: "rating" })} emptyText={empty} />

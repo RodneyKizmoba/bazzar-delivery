@@ -49,7 +49,7 @@ export default function Register() {
   const [form, setForm] = useState({
     fullName: "", username: "", phone: "", email: "", password: "", confirm: "", referralCode: sp.get("ref") ?? "",
   });
-  const [biz, setBiz] = useState({ name: "", storeType: "restaurant", phone: "", street: "", zone: "", nif: "", description: "" });
+  const [biz, setBiz] = useState({ name: "", storeType: "restaurant", phone: "", street: "", zone: "", nif: "", description: "", isHomeBusiness: false, minNoticeHours: 0 });
   const [terms, setTerms] = useState(false);
   const [show, setShow] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -109,6 +109,7 @@ export default function Register() {
         business: type === "supplier" ? {
           name: biz.name.trim(), storeType: biz.storeType, phone: biz.phone.trim(), street: biz.street.trim(), zone: biz.zone,
           nif: biz.nif.trim() || null, description: biz.description.trim() || null,
+          isHomeBusiness: biz.isHomeBusiness, minNoticeHours: biz.isHomeBusiness ? biz.minNoticeHours : 0,
         } : undefined,
       };
       const { user } = await post<{ user: User }>("/api/auth/register", body);
@@ -222,7 +223,43 @@ export default function Register() {
           {type === "supplier" && (
             <fieldset className="space-y-4 rounded-2xl border p-4">
               <legend className="px-1 text-sm font-semibold">{t({ pt: "Dados do negócio", en: "Business details", fr: "Informations de l'entreprise" })}</legend>
-              <Field id="b-name" label={t({ pt: "Nome da loja", en: "Store name", fr: "Nom du magasin" })} error={err("business.name")}>
+              <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label={t({ pt: "Tipo de negócio", en: "Business kind", fr: "Type d'activité" })}>
+                {[
+                  { home: false, icon: "🏪", label: { pt: "Loja ou restaurante", en: "Shop or restaurant", fr: "Magasin ou restaurant" }, hint: { pt: "Com espaço físico", en: "With premises", fr: "Avec local" } },
+                  { home: true, icon: "🏠", label: { pt: "Negócio caseiro", en: "Home business", fr: "Activité à domicile" }, hint: { pt: "Bolos, salgados, comida feita em casa", en: "Cakes, snacks, home cooking", fr: "Gâteaux, snacks, cuisine maison" } },
+                ].map((o) => (
+                  <button key={String(o.home)} type="button" role="radio" aria-checked={biz.isHomeBusiness === o.home}
+                    onClick={() => setBiz((b) => ({ ...b, isHomeBusiness: o.home, storeType: o.home && b.storeType === "restaurant" ? "bakery" : b.storeType, minNoticeHours: o.home ? (b.minNoticeHours || 24) : 0 }))}
+                    className={cn("rounded-xl border-2 p-3 text-left text-sm", biz.isHomeBusiness === o.home ? "border-primary bg-orange-50" : "border-neutral-200")}>
+                    <span className="text-xl" aria-hidden>{o.icon}</span>
+                    <span className="block font-semibold">{t(o.label)}</span>
+                    <span className="block text-xs text-neutral-500">{t(o.hint)}</span>
+                  </button>
+                ))}
+              </div>
+              {biz.isHomeBusiness && (
+                <div className="space-y-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
+                  <p>{t({
+                    pt: "Não precisa de loja física nem de NIF para começar. A nossa equipa contacta-a para verificar a cozinha e explicar as regras de higiene.",
+                    en: "You don't need premises or a tax number to start. Our team will contact you to check your kitchen and explain hygiene rules.",
+                    fr: "Pas besoin de local ni de NIF pour commencer. Notre équipe vous contactera pour vérifier la cuisine et expliquer les règles d'hygiène.",
+                  })}</p>
+                  <Field id="b-notice" label={t({ pt: "Com quanta antecedência precisa das encomendas?", en: "How much notice do you need?", fr: "Délai de commande nécessaire ?" })}>
+                    <Select value={String(biz.minNoticeHours)} onValueChange={(v) => setBiz((b) => ({ ...b, minNoticeHours: Number(v) }))}>
+                      <SelectTrigger id="b-notice" className="h-11 rounded-xl bg-white"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="0">{t({ pt: "Aceito encomendas para já", en: "I accept orders right away", fr: "Commandes immédiates" })}</SelectItem>
+                        <SelectItem value="2">2 h</SelectItem>
+                        <SelectItem value="12">12 h</SelectItem>
+                        <SelectItem value="24">24 h</SelectItem>
+                        <SelectItem value="48">48 h</SelectItem>
+                        <SelectItem value="72">72 h</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                </div>
+              )}
+              <Field id="b-name" label={biz.isHomeBusiness ? t({ pt: "Nome do seu negócio (ex.: Bolos da Tia Rosa)", en: "Business name (e.g. Aunt Rosa's Cakes)", fr: "Nom de l'activité" }) : t({ pt: "Nome da loja", en: "Store name", fr: "Nom du magasin" })} error={err("business.name")}>
                 <Input id="b-name" value={biz.name} onChange={updB("name")} className={inputCls("business.name")} />
               </Field>
               <Field id="b-type" label={t({ pt: "Tipo de loja", en: "Store type", fr: "Type de magasin" })} error={err("business.storeType")}>
@@ -233,10 +270,10 @@ export default function Register() {
                   </SelectContent>
                 </Select>
               </Field>
-              <Field id="b-phone" label={t({ pt: "Telefone da loja", en: "Store phone", fr: "Téléphone du magasin" })} error={err("business.phone")}>
+              <Field id="b-phone" label={biz.isHomeBusiness ? t({ pt: "Telefone / WhatsApp", en: "Phone / WhatsApp", fr: "Téléphone / WhatsApp" }) : t({ pt: "Telefone da loja", en: "Store phone", fr: "Téléphone du magasin" })} error={err("business.phone")}>
                 <Input id="b-phone" type="tel" inputMode="tel" placeholder="+244 2XX XXX XXX" value={biz.phone} onChange={updB("phone")} className={inputCls("business.phone")} />
               </Field>
-              <Field id="b-street" label={t({ pt: "Morada (rua e número)", en: "Address (street)", fr: "Adresse (rue)" })} error={err("business.street")}>
+              <Field id="b-street" label={biz.isHomeBusiness ? t({ pt: "Morada de recolha (onde o estafeta vai buscar)", en: "Pickup address (where riders collect)", fr: "Adresse de retrait" }) : t({ pt: "Morada (rua e número)", en: "Address (street)", fr: "Adresse (rue)" })} error={err("business.street")}>
                 <Input id="b-street" autoComplete="street-address" value={biz.street} onChange={updB("street")} className={inputCls("business.street")} />
               </Field>
               <Field id="b-zone" label={t({ pt: "Zona / bairro", en: "Area / neighbourhood", fr: "Quartier" })} error={err("business.zone")}>

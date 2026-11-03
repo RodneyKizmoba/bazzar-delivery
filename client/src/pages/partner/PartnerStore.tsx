@@ -32,6 +32,7 @@ interface Form {
   name: string; description: string; cuisines: string[]; phone: string; street: string; zone: string;
   zonesServed: string[]; logoUrl: string; coverUrl: string; openingTime: string; closingTime: string;
   isOpen: boolean; deliveryFee: string; minOrder: string; prepTimeMin: string; deliveryTimeMin: string;
+  minNoticeHours: string; maxOrdersPerDay: string; payoutMethod: string; payoutReference: string;
 }
 
 function StoreForm() {
@@ -51,6 +52,8 @@ function StoreForm() {
         coverUrl: s.coverUrl ?? "", openingTime: s.openingTime ?? "10:00", closingTime: s.closingTime ?? "22:00",
         isOpen: !!s.isOpen, deliveryFee: String(s.deliveryFee ?? 0), minOrder: String(s.minOrder ?? 0),
         prepTimeMin: String(s.prepTimeMin ?? 20), deliveryTimeMin: String(s.deliveryTimeMin ?? 35),
+        minNoticeHours: String(Math.round((s.minNoticeMin ?? 0) / 60)), maxOrdersPerDay: s.maxOrdersPerDay ? String(s.maxOrdersPerDay) : "",
+        payoutMethod: s.payoutMethod ?? "", payoutReference: s.payoutReference ?? "",
       });
     }
   }, [storeQ.data]);
@@ -85,6 +88,9 @@ function StoreForm() {
     : !isInt(form.minOrder, 0, 1000000) ? { pt: "Pedido mínimo inválido.", en: "Invalid minimum order.", fr: "Minimum de commande invalide." }
     : !isInt(form.prepTimeMin, 1, 240) ? { pt: "Tempo de preparação entre 1 e 240 min.", en: "Prep time between 1 and 240 min.", fr: "Préparation entre 1 et 240 min." }
     : !isInt(form.deliveryTimeMin, 5, 300) ? { pt: "Tempo de entrega entre 5 e 300 min.", en: "Delivery time between 5 and 300 min.", fr: "Livraison entre 5 et 300 min." }
+    : !isInt(form.minNoticeHours, 0, 168) ? { pt: "Antecedência entre 0 e 168 horas.", en: "Notice between 0 and 168 hours.", fr: "Délai entre 0 et 168 heures." }
+    : form.maxOrdersPerDay !== "" && !isInt(form.maxOrdersPerDay, 1, 10000) ? { pt: "Limite diário inválido.", en: "Invalid daily limit.", fr: "Limite quotidienne invalide." }
+    : form.payoutMethod && form.payoutReference.trim().length < 9 ? { pt: "Indique o número/IBAN para receber.", en: "Enter the number/IBAN for payouts.", fr: "Indiquez le numéro/IBAN." }
     : null;
 
   const addCuisine = () => {
@@ -105,6 +111,8 @@ function StoreForm() {
       openingTime: form.openingTime, closingTime: form.closingTime, isOpen: form.isOpen,
       deliveryFee: Number(form.deliveryFee), minOrder: Number(form.minOrder),
       prepTimeMin: Number(form.prepTimeMin), deliveryTimeMin: Number(form.deliveryTimeMin),
+      minNoticeMin: Number(form.minNoticeHours) * 60, maxOrdersPerDay: form.maxOrdersPerDay === "" ? null : Number(form.maxOrdersPerDay),
+      payoutMethod: form.payoutMethod || null, payoutReference: form.payoutReference.trim() || null,
     });
   };
 
@@ -226,6 +234,38 @@ function StoreForm() {
           </Field>
           <Field id="st-dt" label={{ pt: "Tempo total de entrega estimado (min)", en: "Estimated total delivery time (min)", fr: "Délai total de livraison estimé (min)" }}>
             <Input id="st-dt" type="number" min={5} max={300} value={form.deliveryTimeMin} onChange={(e) => set("deliveryTimeMin", e.target.value)} />
+          </Field>
+        </div>
+      </Card>
+
+      <Card title={{ pt: "Encomendas antecipadas e capacidade", en: "Pre-orders & capacity", fr: "Commandes anticipées et capacité" }}>
+        <p className="mb-3 text-sm text-neutral-600">{t({
+          pt: "Ideal para negócios caseiros e bolos por encomenda: os clientes só podem agendar com a antecedência que escolher, e não recebe mais encomendas por dia do que consegue fazer.",
+          en: "Ideal for home businesses and made-to-order cakes: customers must book with the notice you set, and you never get more orders per day than you can make.",
+          fr: "Idéal pour les activités à domicile : les clients réservent avec le délai choisi et vous ne recevez pas plus de commandes que vous ne pouvez en préparer.",
+        })}</p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field id="st-notice" label={{ pt: "Antecedência mínima (horas, 0 = aceita para já)", en: "Minimum notice (hours, 0 = on demand)", fr: "Délai minimum (heures, 0 = immédiat)" }}>
+            <Input id="st-notice" type="number" min={0} max={168} value={form.minNoticeHours} onChange={(e) => set("minNoticeHours", e.target.value)} />
+          </Field>
+          <Field id="st-cap" label={{ pt: "Máximo de encomendas por dia (vazio = sem limite)", en: "Max orders per day (empty = no limit)", fr: "Commandes max par jour (vide = illimité)" }}>
+            <Input id="st-cap" type="number" min={1} value={form.maxOrdersPerDay} onChange={(e) => set("maxOrdersPerDay", e.target.value)} />
+          </Field>
+        </div>
+      </Card>
+
+      <Card title={{ pt: "Como recebe os pagamentos", en: "How you get paid", fr: "Comment vous êtes payé" }}>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field id="st-payout" label={{ pt: "Método", en: "Method", fr: "Méthode" }}>
+            <select id="st-payout" className="h-10 w-full rounded-md border bg-white px-3 text-sm" value={form.payoutMethod} onChange={(e) => set("payoutMethod", e.target.value)}>
+              <option value="">{t({ pt: "— escolher —", en: "— choose —", fr: "— choisir —" })}</option>
+              <option value="multicaixa_express">Multicaixa Express</option>
+              <option value="unitel_money">Unitel Money</option>
+              <option value="bank_transfer">{t({ pt: "Transferência bancária (IBAN)", en: "Bank transfer (IBAN)", fr: "Virement (IBAN)" })}</option>
+            </select>
+          </Field>
+          <Field id="st-payref" label={{ pt: "Número de telemóvel ou IBAN", en: "Phone number or IBAN", fr: "Numéro ou IBAN" }}>
+            <Input id="st-payref" value={form.payoutReference} onChange={(e) => set("payoutReference", e.target.value)} placeholder="+244 9XX XXX XXX / AO06…" />
           </Field>
         </div>
       </Card>
