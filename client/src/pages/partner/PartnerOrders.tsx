@@ -38,7 +38,7 @@ interface PartnerOrderItem {
   selectedOptions: SelectedOption[]; specialInstructions: string | null; addedBy: string | null;
 }
 export interface PartnerOrder {
-  id: number; orderNumber: string; status: string; createdAt: string; scheduledFor: string | null;
+  id: number; orderNumber: string; status: string; createdAt: string; scheduledFor: string | null; storeConfirmedAt?: string | null;
   customerName: string; notes: string | null; subtotal: number; total: number; deliveryFee: number;
   paymentMethod: string; paymentStatus: string; driverId: number | null; groupOrderId: number | null;
   cancelReason: string | null; items: PartnerOrderItem[];
@@ -246,6 +246,15 @@ function OrderCard({ order }: { order: PartnerOrder }) {
     onError: (err: Error) => toast({ variant: "destructive", title: t(T.error), description: err.message }),
   });
 
+  const confirm = useMutation({
+    mutationFn: () => post(`/api/partner/orders/${order.id}/confirm`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [ORDERS_ACTIVE] });
+      toast({ title: t({ pt: "Encomenda confirmada", en: "Order confirmed", fr: "Commande confirmée" }) });
+    },
+    onError: (err: Error) => toast({ variant: "destructive", title: t(T.error), description: err.message }),
+  });
+
   const isCash = order.paymentMethod === "cash";
   return (
     <article className={cn("rounded-lg border bg-white p-3 shadow-sm", order.status === "pending" && "ring-2 ring-amber-400")}>
@@ -311,6 +320,22 @@ function OrderCard({ order }: { order: PartnerOrder }) {
       )}
 
       <div className="mt-3 flex flex-wrap gap-2">
+        {order.status === "scheduled" && (
+          order.storeConfirmedAt ? (
+            <p className="flex-1 rounded bg-green-50 px-2 py-1.5 text-center text-xs font-medium text-green-800">
+              ✓ {t({ pt: "Confirmada — entra na fila no dia", en: "Confirmed — joins the queue on the day", fr: "Confirmée — arrive dans la file le jour J" })}
+            </p>
+          ) : (
+            <>
+              <Button className="flex-1" disabled={confirm.isPending} onClick={() => confirm.mutate()}>
+                {t({ pt: "Confirmar", en: "Confirm", fr: "Confirmer" })}
+              </Button>
+              <Button variant="outline" className="flex-1 text-red-700" disabled={setStatus.isPending} onClick={() => setRejectOpen(true)}>
+                {t({ pt: "Recusar", en: "Reject", fr: "Refuser" })}
+              </Button>
+            </>
+          )
+        )}
         {order.status === "pending" && (
           <>
             <Button className="flex-1" disabled={setStatus.isPending} onClick={() => setStatus.mutate({ status: "accepted" })}>

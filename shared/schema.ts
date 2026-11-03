@@ -177,6 +177,7 @@ export const orders = pgTable("orders", {
   paymentStatus: text("payment_status").notNull().default("pending"), // pending | paid | failed | refunded
   cancelReason: text("cancel_reason"),
   estimatedDeliveryAt: timestamp("estimated_delivery_at"),
+  storeConfirmedAt: timestamp("store_confirmed_at"), // loja confirmou uma encomenda agendada
   driverLatitude: real("driver_latitude"),
   driverLongitude: real("driver_longitude"),
   driverLocationAt: timestamp("driver_location_at"),
@@ -434,8 +435,8 @@ export const storeUpdateSchema = z.object({
   zonesServed: z.array(z.string().trim().min(2).max(60)).max(50),
   logoUrl: z.string().url().max(500).nullable(),
   coverUrl: z.string().url().max(500).nullable(),
-  openingTime: z.string().regex(/^\d{2}:\d{2}$/),
-  closingTime: z.string().regex(/^\d{2}:\d{2}$/),
+  openingTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Hora inválida (HH:MM)"),
+  closingTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Hora inválida (HH:MM)"),
   isOpen: z.boolean(),
   deliveryFee: z.number().int().min(0).max(100000),
   minOrder: z.number().int().min(0).max(1000000),
@@ -466,7 +467,8 @@ export const menuItemInputSchema = z.object({
       priceDelta: z.number().int().min(-1000000).max(1000000).default(0),
       isAvailable: z.boolean().default(true),
     })).min(1).max(30),
-  }).refine((g) => g.minSelect <= g.maxSelect, "minSelect > maxSelect")).max(10).default([]),
+  }).refine((g) => g.minSelect <= g.maxSelect, "O mínimo não pode ser maior que o máximo")
+    .refine((g) => g.minSelect <= g.options.length, "O mínimo de escolhas é maior que o número de opções")).max(10).default([]),
 });
 
 export const promoInputSchema = z.object({

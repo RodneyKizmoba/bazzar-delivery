@@ -386,11 +386,11 @@ function OrderDetailInner({ id }: { id: string }) {
             <p className="text-xs text-neutral-500">{t({ pt: "O seu estafeta", en: "Your rider", fr: "Votre livreur" })}</p>
             <p className="truncate font-semibold">{driver.fullName}</p>
           </div>
-          <a href={`tel:${driver.phone.replace(/\s/g, "")}`}>
-            <Button variant="outline" size="sm" aria-label={t({ pt: `Ligar a ${driver.fullName}`, en: `Call ${driver.fullName}`, fr: `Appeler ${driver.fullName}` })}>
+          <Button asChild variant="outline" size="sm">
+            <a href={`tel:${driver.phone.replace(/\s/g, "")}`} aria-label={t({ pt: `Ligar a ${driver.fullName}`, en: `Call ${driver.fullName}`, fr: `Appeler ${driver.fullName}` })}>
               <Phone className="mr-1.5 h-4 w-4" />{t({ pt: "Ligar", en: "Call", fr: "Appeler" })}
-            </Button>
-          </a>
+            </a>
+          </Button>
         </div>
       )}
 
@@ -437,9 +437,9 @@ function OrderDetailInner({ id }: { id: string }) {
           <p className="truncate text-xs text-neutral-500">{store.street}, {store.zone}</p>
         </Link>
         {store.phone && (
-          <a href={`tel:${store.phone.replace(/\s/g, "")}`}>
-            <Button variant="outline" size="icon" aria-label={t({ pt: "Ligar à loja", en: "Call the store", fr: "Appeler le magasin" })}><Phone className="h-4 w-4" /></Button>
-          </a>
+          <Button asChild variant="outline" size="icon">
+            <a href={`tel:${store.phone.replace(/\s/g, "")}`} aria-label={t({ pt: "Ligar à loja", en: "Call the store", fr: "Appeler le magasin" })}><Phone className="h-4 w-4" /></a>
+          </Button>
         )}
       </div>
 

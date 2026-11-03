@@ -1,5 +1,5 @@
 {
-  "id": "b45435c2-901b-4ac8-8da3-a81d103aee5d",
+  "id": "c1ef88d7-6779-4cdc-9150-750fb3471800",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1043,6 +1043,12 @@
         },
         "estimated_delivery_at": {
           "name": "estimated_delivery_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "store_confirmed_at": {
+          "name": "store_confirmed_at",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": false

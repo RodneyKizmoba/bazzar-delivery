@@ -7,3 +7,5 @@ vite.config.ts.*
 .env
 .env.*
 cookies.txt
+
+tests/screenshots

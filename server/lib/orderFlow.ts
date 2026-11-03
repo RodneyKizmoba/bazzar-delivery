@@ -17,7 +17,7 @@ export type Actor = { kind: "customer" | "store" | "driver" | "admin" | "system"
 /** Transições permitidas por tipo de ator. */
 const TRANSITIONS: Record<Actor["kind"], Partial<Record<OrderStatus, OrderStatus[]>>> = {
   customer: { scheduled: ["cancelled"], pending: ["cancelled"], accepted: ["cancelled"] },
-  store: { pending: ["accepted", "rejected"], accepted: ["preparing", "rejected"], preparing: ["ready"] },
+  store: { scheduled: ["rejected"], pending: ["accepted", "rejected"], accepted: ["preparing", "rejected"], preparing: ["ready"] },
   driver: { ready: ["picked_up"], picked_up: ["delivered"] },
   admin: {
     scheduled: ["pending", "cancelled"], pending: ["accepted", "rejected", "cancelled"], accepted: ["preparing", "cancelled"],
@@ -58,6 +58,9 @@ export interface CreateOrderInput {
 export async function createOrder(input: CreateOrderInput): Promise<Order> {
   assertMethodAvailable(input.paymentMethod);
 
+  if (input.user.userType !== "customer" && input.user.userType !== "admin") {
+    throw forbidden("Só contas de cliente podem fazer encomendas.");
+  }
   const created = await db.transaction(async (tx) => {
     const [user] = await tx.select().from(users).where(eq(users.id, input.user.id)).for("update");
     const [addr] = await tx.select().from(addresses).where(eq(addresses.id, input.addressId));
@@ -112,7 +115,11 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
     await tx.insert(orderEvents).values({ orderId: order.id, status: order.status, actorId: user.id, note: "Encomenda criada" });
 
     if (quote.promo) {
-      await tx.update(promoCodes).set({ usedCount: sql`${promoCodes.usedCount} + 1` }).where(eq(promoCodes.id, quote.promo.id));
+      // incremento atómico: nunca ultrapassa maxUses mesmo com pedidos simultâneos
+      const [claimed] = await tx.update(promoCodes).set({ usedCount: sql`${promoCodes.usedCount} + 1` })
+        .where(and(eq(promoCodes.id, quote.promo.id), sql`(${promoCodes.maxUses} is null or ${promoCodes.usedCount} < ${promoCodes.maxUses})`))
+        .returning({ id: promoCodes.id });
+      if (!claimed) throw badRequest("Este código já atingiu o limite de utilizações.", "PROMO_EXHAUSTED");
     }
     if (quote.pointsRedeemed > 0) await addPoints(tx, user.id, -quote.pointsRedeemed, "order_redeemed", order.id);
 
@@ -200,6 +207,7 @@ export async function changeStatus(orderId: number, to: OrderStatus, actor: Acto
 /** Estafeta aceita uma entrega disponível (sem corrida entre estafetas). */
 export async function claimDelivery(orderId: number, driverId: number): Promise<Order> {
   return db.transaction(async (tx) => {
+    await tx.select({ id: users.id }).from(users).where(eq(users.id, driverId)).for("update");
     const [active] = await tx.select({ id: orders.id }).from(orders)
       .where(and(eq(orders.driverId, driverId), inArray(orders.status, ["accepted", "preparing", "ready", "picked_up"])));
     if (active) throw conflict("Já tem uma entrega em curso. Termine-a antes de aceitar outra.", "DRIVER_BUSY");
@@ -272,7 +280,15 @@ export async function modifyOrder(
             : promo.discountType === "fixed" ? Math.min(promo.value, quote.subtotal) : quote.deliveryFee;
         }
       }
-      const pointsDiscount = Math.min(order.pointsRedeemed * config.pointValueKz, quote.subtotal + quote.deliveryFee - discount);
+      // pontos: respeitar o limite percentual e devolver os pontos que deixam de ser usados
+      const remaining = Math.max(0, quote.subtotal + quote.deliveryFee - discount);
+      const capKz = Math.floor((remaining * config.maxPointsDiscountPct) / 100);
+      const keepPoints = Math.min(order.pointsRedeemed, Math.floor(capKz / config.pointValueKz));
+      const pointsDiscount = keepPoints * config.pointValueKz;
+      if (keepPoints < order.pointsRedeemed) {
+        await addPoints(tx, order.customerId, order.pointsRedeemed - keepPoints, "refund", order.id);
+        update.pointsRedeemed = keepPoints;
+      }
       await tx.delete(orderItems).where(eq(orderItems.orderId, order.id));
       await tx.insert(orderItems).values(quote.lines.map((l) => ({
         orderId: order.id, menuItemId: l.menuItem.id, name: l.menuItem.name, unitPrice: l.unitPrice,
@@ -310,4 +326,19 @@ export async function releaseScheduledOrders(): Promise<number> {
     }
   }
   return n;
+}
+
+/** A loja confirma uma encomenda agendada (ex.: bolo para daqui a 2 dias) sem a pôr já em preparação. */
+export async function confirmScheduled(orderId: number, ownerId: number): Promise<Order> {
+  return db.transaction(async (tx) => {
+    const [order] = await tx.select().from(orders).where(eq(orders.id, orderId)).for("update");
+    if (!order) throw notFound("Encomenda não encontrada");
+    const [store] = await tx.select().from(stores).where(eq(stores.id, order.storeId));
+    if (!store || store.ownerId !== ownerId) throw forbidden();
+    if (order.status !== "scheduled") throw conflict("Só encomendas agendadas podem ser confirmadas antecipadamente.", "INVALID_TRANSITION");
+    if (order.storeConfirmedAt) return order;
+    const [updated] = await tx.update(orders).set({ storeConfirmedAt: new Date(), updatedAt: new Date() }).where(eq(orders.id, order.id)).returning();
+    await tx.insert(orderEvents).values({ orderId: order.id, status: "scheduled", actorId: ownerId, note: "Confirmada pela loja" });
+    return updated;
+  });
 }

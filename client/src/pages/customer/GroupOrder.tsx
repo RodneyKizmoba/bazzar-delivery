@@ -22,7 +22,7 @@ import { useLang, useT, T } from "@/lib/i18n";
 import { kz, dateTime, time } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
-  AddressPicker, OrderErrorAlert, PaymentPicker, PromoInput, Section, WhenPicker, type SelectedOption, type StoreDetail, type WhenMode,
+  AddressPicker, useAddresses, OrderErrorAlert, PaymentPicker, PromoInput, Section, WhenPicker, type SelectedOption, type StoreDetail, type WhenMode,
 } from "./_orderingKit";
 
 interface GroupItemView {
@@ -30,7 +30,7 @@ interface GroupItemView {
   name: string; unitPrice: number; lineTotal: number; selectedOptions: SelectedOption[]; problem: string | null;
 }
 interface GroupView {
-  group: { token: string; status: "open" | "locked" | "ordered" | "cancelled"; expiresAt: string; orderId: number | null; hostId: number };
+  group: { token: string; status: "open" | "locked" | "checking_out" | "ordered" | "cancelled"; expiresAt: string; orderId: number | null; hostId: number };
   store: StoreDetail["store"];
   participants: { id: number; name: string; isHost: boolean; items: GroupItemView[]; subtotal: number }[];
   subtotal: number; itemCount: number;
@@ -102,7 +102,10 @@ function HostCheckout({ view, token }: { view: GroupView; token: string }) {
     onError: (e) => { setError(e); queryClient.invalidateQueries({ queryKey: [`/api/groups/${token}`] }); },
   });
 
-  const canPlace = view.itemCount > 0 && !!addressId && !(mode === "schedule" && !scheduledFor) && !hasProblems && !belowMin && !checkout.isPending;
+  const addrs = useAddresses();
+  const chosenZone = addrs.data?.addresses.find((a) => a.id === addressId)?.zone;
+  const zoneServed = !chosenZone || !store.zonesServed?.length || store.zonesServed.some((z) => z.toLowerCase() === chosenZone.toLowerCase());
+  const canPlace = view.itemCount > 0 && !!addressId && zoneServed && !(mode === "schedule" && !scheduledFor) && !hasProblems && !belowMin && !checkout.isPending;
 
   return (
     <div className="space-y-4">
@@ -163,7 +166,7 @@ export default function GroupOrder() {
 
   const groupQ = useQuery<GroupView>({
     queryKey: [`/api/groups/${token}`],
-    refetchInterval: (q) => (q.state.data?.group.status === "open" || q.state.data?.group.status === "locked" ? 4_000 : false),
+    refetchInterval: (q) => (q.state.data?.group.status === "open" || q.state.data?.group.status === "locked" || q.state.data?.group.status === "checking_out" ? 4_000 : false),
   });
   const view = groupQ.data;
   const storeQ = useQuery<StoreDetail>({ queryKey: [`/api/stores/${view?.store.id}`], enabled: !!view?.store.id });
@@ -256,7 +259,7 @@ export default function GroupOrder() {
         </div>
 
         {/* Estados */}
-        {group.status === "locked" && (
+        {(group.status === "locked" || group.status === "checking_out") && (
           <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
             <Lock className="mt-0.5 h-4 w-4 shrink-0" />
             <p>{isHost ? t({ pt: "Fechou o cesto. Ninguém pode adicionar ou remover itens até o reabrir.", en: "You locked the basket. No one can add or remove items until you reopen it.", fr: "Panier verrouillé. Rouvrez-le pour modifier." })

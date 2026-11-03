@@ -8,7 +8,7 @@ import {
 } from "@shared/schema";
 import { ah, forbidden, idParam, notFound, parse } from "../lib/http";
 import { requireRole } from "../lib/auth";
-import { changeStatus } from "../lib/orderFlow";
+import { changeStatus, confirmScheduled } from "../lib/orderFlow";
 
 export const partnerRouter = Router();
 partnerRouter.use(requireRole("supplier"));
@@ -52,6 +52,11 @@ partnerRouter.get("/orders", ah(async (req, res) => {
       items: items.filter((i) => i.orderId === r.order.id),
     })),
   });
+}));
+
+partnerRouter.post("/orders/:id/confirm", ah(async (req, res) => {
+  const order = await confirmScheduled(idParam(req), req.user!.id);
+  res.json({ order });
 }));
 
 partnerRouter.post("/orders/:id/status", ah(async (req, res) => {

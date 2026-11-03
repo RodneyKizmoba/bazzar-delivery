@@ -260,8 +260,9 @@ customerRouter.get("/plus", requireAuth, ah(async (req, res) => {
 
 customerRouter.post("/plus/subscribe", requireAuth, ah(async (req, res) => {
   const { paymentMethod } = parse(z.object({ paymentMethod: z.enum(PAYMENT_METHODS) }), req.body);
-  if (await hasActivePlus(db, req.user!.id)) throw conflict("Já é membro PedeAí Plus.", "ALREADY_PLUS");
   const sub = await db.transaction(async (tx) => {
+    await tx.select({ id: users.id }).from(users).where(eq(users.id, req.user!.id)).for("update");
+    if (await hasActivePlus(tx, req.user!.id)) throw conflict("Já é membro PedeAí Plus.", "ALREADY_PLUS");
     const [s] = await tx.insert(subscriptions).values({ userId: req.user!.id, status: "pending_payment" }).returning();
     await chargeSubscription(tx, req.user!.id, s.id, paymentMethod);
     const now = new Date();

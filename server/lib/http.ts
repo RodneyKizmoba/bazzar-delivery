@@ -40,6 +40,18 @@ export function errorHandler(err: any, _req: Request, res: Response, _next: Next
   if (err?.type === "entity.parse.failed") {
     return res.status(400).json({ message: "JSON inválido", code: "BAD_JSON" });
   }
+  if (err?.type === "entity.too.large") {
+    return res.status(413).json({ message: "Pedido demasiado grande", code: "PAYLOAD_TOO_LARGE" });
+  }
+  // erros do PostgreSQL (vêm muitas vezes dentro de err.cause com o drizzle)
+  const pgCode = err?.code ?? err?.cause?.code;
+  if (pgCode === "23505") {
+    const constraint = err?.constraint ?? err?.cause?.constraint;
+    if (constraint === "reviews_order_idx") return res.status(409).json({ message: "Já avaliou esta encomenda.", code: "ALREADY_REVIEWED" });
+    return res.status(409).json({ message: "Este registo já existe.", code: "DUPLICATE" });
+  }
+  if (pgCode === "23503") return res.status(404).json({ message: "Registo relacionado não encontrado.", code: "NOT_FOUND" });
+  if (pgCode === "22P02") return res.status(400).json({ message: "Valor inválido.", code: "INVALID_VALUE" });
   console.error("[erro]", err);
   res.status(500).json({ message: "Erro interno do servidor", code: "INTERNAL" });
 }

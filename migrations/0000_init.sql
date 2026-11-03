@@ -134,6 +134,7 @@ CREATE TABLE "orders" (
 	"payment_status" text DEFAULT 'pending' NOT NULL,
 	"cancel_reason" text,
 	"estimated_delivery_at" timestamp,
+	"store_confirmed_at" timestamp,
 	"driver_latitude" real,
 	"driver_longitude" real,
 	"driver_location_at" timestamp,

@@ -1,5 +1,5 @@
 import { Router, type Request } from "express";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { randomBytes, timingSafeEqual } from "crypto";
 import { z } from "zod";
 import { db } from "../db";
@@ -127,6 +127,7 @@ groupRouter.delete("/:token/items/:itemId", ah(async (req, res) => {
   if (g.status !== "open") throw conflict("O cesto do grupo está fechado.", "GROUP_CLOSED");
   const p = await participantFromReq(req, g.id);
   const itemId = Number(req.params.itemId);
+  if (!Number.isInteger(itemId) || itemId <= 0) throw badRequest("ID inválido", "INVALID_ID");
   const [it] = await db.select().from(groupItems).where(and(eq(groupItems.id, itemId), eq(groupItems.groupOrderId, g.id)));
   if (!it) throw notFound("Item não encontrado");
   if (it.participantId !== p.id && !p.isHost) throw forbidden("Só pode remover os seus próprios itens.");
@@ -171,8 +172,10 @@ groupRouter.post("/:token/checkout", requireAuth, ah(async (req, res) => {
   const input = parse(checkoutSchema, req.body);
 
   // fechar o cesto antes de criar a encomenda (ninguém adiciona durante o checkout)
-  const [locked] = await db.update(groupOrders).set({ status: "locked" })
-    .where(eq(groupOrders.id, g.id)).returning();
+  // passagem atómica para "checking_out": um segundo pedido simultâneo não encontra o grupo disponível
+  const [locked] = await db.update(groupOrders).set({ status: "checking_out" })
+    .where(and(eq(groupOrders.id, g.id), inArray(groupOrders.status, ["open", "locked"]))).returning();
+  if (!locked) throw conflict("Esta encomenda de grupo já está a ser finalizada.", "GROUP_CHECKOUT_IN_PROGRESS");
   const rows = await db.select({ it: groupItems, name: groupParticipants.name }).from(groupItems)
     .innerJoin(groupParticipants, eq(groupParticipants.id, groupItems.participantId))
     .where(eq(groupItems.groupOrderId, g.id)).orderBy(asc(groupItems.id));

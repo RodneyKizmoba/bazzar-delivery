@@ -284,7 +284,7 @@ export async function seedDemoData() {
         latitude: s.lat, longitude: s.lng, zonesServed: s.zonesServed, openingTime: s.open ?? "00:00", closingTime: s.close ?? "00:00",
         isOpen: true, isApproved: s.approved ?? true, isHomeBusiness: !!s.home, minNoticeMin: s.noticeMin ?? 0, maxOrdersPerDay: s.maxPerDay ?? null, deliveryFee: s.deliveryFee, minOrder: s.minOrder ?? 0,
         deliveryTimeMin: s.time, prepTimeMin: Math.round(s.time / 2),
-        ratingAvg: s.approved === false ? 0 : 4 + Math.round(Math.random() * 9) / 10, ratingCount: s.approved === false ? 0 : 20 + Math.floor(Math.random() * 200),
+        // sem avaliações inventadas: a média nasce das avaliações reais dos clientes
       }).returning();
       let order = 0;
       for (const [sectionName, items] of Object.entries(s.menu)) {

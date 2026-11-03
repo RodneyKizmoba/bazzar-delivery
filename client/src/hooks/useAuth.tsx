@@ -28,6 +28,11 @@ interface AuthCtx {
 const Ctx = createContext<AuthCtx | null>(null);
 const KEY = ["/api/auth/me"];
 
+/** Limpa dados de outro utilizador sem desligar a query de sessão que o AuthProvider observa. */
+function resetOtherQueries() {
+  queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== KEY[0] });
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { data, isLoading } = useQuery({
     queryKey: KEY,
@@ -42,7 +47,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     staleTime: 60_000,
   });
 
-  const setUser = (u: User | null) => queryClient.setQueryData(KEY, u);
+  const setUser = (u: User | null) => {
+    if (u?.id !== data?.id) resetOtherQueries();
+    queryClient.setQueryData(KEY, u);
+  };
 
   const value: AuthCtx = {
     user: data ?? null,
@@ -51,13 +59,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refresh: async () => { await queryClient.invalidateQueries({ queryKey: KEY }); },
     login: async (username, password) => {
       const { user } = await post<{ user: User }>("/api/auth/login", { username, password });
-      queryClient.clear();
+      resetOtherQueries();
       setUser(user);
       return user;
     },
     logout: async () => {
       await post("/api/auth/logout");
-      queryClient.clear();
+      resetOtherQueries();
       setUser(null);
     },
   };

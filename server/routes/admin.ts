@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { and, desc, eq, gte, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, inArray, ne, or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
 import { orders, promoCodes, promoInputSchema, stores, subscriptions, users, ORDER_STATUSES } from "@shared/schema";
@@ -56,9 +56,19 @@ adminRouter.post("/orders/:id/assign-driver", ah(async (req, res) => {
     const [d] = await db.select().from(users).where(eq(users.id, driverId));
     if (!d || d.userType !== "driver" || !d.isApproved || !d.isActive) throw badRequest("Estafeta inválido.");
   }
-  const [o] = await db.update(orders).set({ driverId, updatedAt: new Date() })
-    .where(and(eq(orders.id, id), inArray(orders.status, ["accepted", "preparing", "ready", "picked_up"]))).returning();
-  if (!o) throw conflict("Só é possível atribuir estafeta a encomendas aceites e não terminadas.");
+  const o = await db.transaction(async (tx) => {
+    if (driverId) {
+      await tx.select({ id: users.id }).from(users).where(eq(users.id, driverId)).for("update");
+      const [busy] = await tx.select({ id: orders.id }).from(orders).where(and(
+        eq(orders.driverId, driverId), ne(orders.id, id), inArray(orders.status, ["accepted", "preparing", "ready", "picked_up"]),
+      ));
+      if (busy) throw conflict("Este estafeta já tem uma entrega em curso.", "DRIVER_BUSY");
+    }
+    const [row] = await tx.update(orders).set({ driverId, updatedAt: new Date() })
+      .where(and(eq(orders.id, id), inArray(orders.status, ["accepted", "preparing", "ready", "picked_up"]))).returning();
+    if (!row) throw conflict("Só é possível atribuir estafeta a encomendas aceites e não terminadas.");
+    return row;
+  });
   res.json({ order: o });
 }));
 
@@ -114,6 +124,8 @@ adminRouter.get("/drivers", ah(async (_req, res) => {
 // Plus activado manualmente (ex.: pago em numerário/transferência no escritório)
 adminRouter.post("/users/:id/plus", ah(async (req, res) => {
   const id = idParam(req);
+  const [target] = await db.select({ id: users.id }).from(users).where(eq(users.id, id));
+  if (!target) throw notFound("Utilizador não encontrado");
   const { months } = parse(z.object({ months: z.number().int().min(1).max(12).default(1) }), req.body ?? {});
   const now = new Date();
   const ends = new Date(now); ends.setMonth(ends.getMonth() + months);
