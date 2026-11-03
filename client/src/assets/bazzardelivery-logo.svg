@@ -1,0 +1,14 @@
+<svg width="200" height="50" viewBox="0 0 200 50" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="25" cy="25" r="20" fill="#ea580c" />
+
+  <!-- Delivery icon -->
+  <path d="M15 20h8v2h-8zm0 4h6v2h-6zm0 4h4v2h-4z" fill="white" />
+  <path d="M28 18h6l3 4v6h-2a3 3 0 11-6 0h-1v-10z" fill="white" />
+  <circle cx="32" cy="30" r="2" fill="#ea580c" />
+  <circle cx="18" cy="30" r="2" fill="#ea580c" />
+
+  <!-- Text -->
+  <text x="55" y="20" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white">Bazzar</text>
+  <text x="55" y="35" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#ea580c">Delivery</text>
+</svg>
