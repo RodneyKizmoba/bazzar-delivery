@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import { MARIATO } from "./seedMariato";
 import { randomBytes } from "crypto";
 import { eq, sql } from "drizzle-orm";
 import { db } from "./db";
@@ -26,16 +27,16 @@ export async function ensureAdmin() {
   console.log(`[admin] conta de administrador "${username}" criada.`);
 }
 
-type OptGroup = { name: string; min: number; max: number; options: [string, number][] };
-type Item = {
+export type OptGroup = { name: string; min: number; max: number; options: [string, number][] };
+export type Item = {
   name: string; price: number; description?: string; dietary?: string[]; allergens?: string[];
   popular?: boolean; groups?: OptGroup[];
 };
-type StoreSeed = {
+export type StoreSeed = {
   name: string; storeType: any; cuisines: string[]; zone: string; street: string; lat: number; lng: number;
   zonesServed: string[]; deliveryFee: number; minOrder?: number; time: number; isChain?: boolean;
   home?: boolean; noticeMin?: number; maxPerDay?: number;
-  open?: string; close?: string; description: string; owner?: string; approved?: boolean;
+  open?: string; close?: string; description: string; owner?: string; approved?: boolean; phone?: string;
   menu: Record<string, Item[]>;
 };
 
@@ -242,6 +243,7 @@ const STORES: StoreSeed[] = [
     description: "Comida caseira. (Loja de demonstração à espera de aprovação do admin)", owner: "loja2", approved: false,
     menu: { "Pratos": [{ name: "Funje com peixe", price: 3500, allergens: ["fish"] }] },
   },
+  MARIATO, // no fim, para não mudar os IDs das lojas usados nos testes
 ];
 
 const DEMO_USERS = [
@@ -253,6 +255,7 @@ const DEMO_USERS = [
   { username: "tiarosa", password: "Loja#2026demo", fullName: "Rosa Bolos", phone: "+244923000008", userType: "supplier" as const },
   { username: "estafeta", password: "Estafeta#2026", fullName: "Carlos Estafeta", phone: "+244923000006", userType: "driver" as const },
   { username: "estafeta2", password: "Estafeta#2026", fullName: "Rui Novo", phone: "+244923000007", userType: "driver" as const, pending: true },
+  { username: "mariato", password: "Loja#2026demo", fullName: "Gerência Mariato", phone: "+244927671480", userType: "supplier" as const },
 ];
 
 /** Dados de demonstração (só se a base de dados ainda não tiver lojas). */
@@ -280,7 +283,7 @@ export async function seedDemoData() {
     for (const s of STORES) {
       const [store] = await tx.insert(stores).values({
         ownerId: s.owner ? ids[s.owner] : null, name: s.name, storeType: s.storeType, description: s.description,
-        cuisines: s.cuisines, isChain: !!s.isChain, phone: "+244923100100", street: s.street, zone: s.zone,
+        cuisines: s.cuisines, isChain: !!s.isChain, phone: s.phone ?? "+244923100100", street: s.street, zone: s.zone,
         latitude: s.lat, longitude: s.lng, zonesServed: s.zonesServed, openingTime: s.open ?? "00:00", closingTime: s.close ?? "00:00",
         isOpen: true, isApproved: s.approved ?? true, isHomeBusiness: !!s.home, minNoticeMin: s.noticeMin ?? 0, maxOrdersPerDay: s.maxPerDay ?? null, deliveryFee: s.deliveryFee, minOrder: s.minOrder ?? 0,
         deliveryTimeMin: s.time, prepTimeMin: Math.round(s.time / 2),
