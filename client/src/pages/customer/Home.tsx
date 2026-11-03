@@ -49,7 +49,7 @@ export interface Meta {
   points: { pointValueKz: number; kzPerPointEarned: number; maxDiscountPct: number };
 }
 
-const ZONE_KEY = "bazzar.zone";
+const ZONE_KEY = "pedeai.zone";
 
 /** Zona guardada no dispositivo (para visitantes). */
 export function readStoredZone(): string {
@@ -231,7 +231,7 @@ export default function Home() {
   return (
     <CustomerShell>
       {/* Cabeçalho com saudação, zona e pesquisa */}
-      <div className="bg-gradient-to-b from-orange-50 to-white px-4 pb-4 pt-4">
+      <div className="bg-gradient-to-b from-teal-50 to-white px-4 pb-4 pt-4">
         <p className="text-sm text-neutral-600">{greet}{firstName ? `, ${firstName}` : ""} 👋</p>
         <h1 className="mt-0.5 text-2xl font-extrabold tracking-tight text-neutral-900">
           {t({ pt: "O que lhe apetece hoje?", en: "What are you craving today?", fr: "Qu'est-ce qui vous ferait plaisir ?" })}
@@ -265,18 +265,18 @@ export default function Home() {
         {(meta.data?.storeTypes ?? Object.keys(STORE_TYPE)).map((type) => STORE_TYPE[type] && (
           <Link key={type} href={`/pesquisa?type=${type}${zq}`}
             className="flex min-w-[4.75rem] flex-col items-center gap-1.5 rounded-2xl px-1 py-2 hover:bg-neutral-50">
-            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-50 text-2xl" aria-hidden>{STORE_TYPE[type].icon}</span>
+            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-50 text-2xl" aria-hidden>{STORE_TYPE[type].icon}</span>
             <span className="text-center text-xs font-medium leading-tight text-neutral-700">{t(STORE_TYPE[type])}</span>
           </Link>
         ))}
       </div>
 
-      {/* Bazzar Plus */}
+      {/* PedeAí Plus */}
       <div className="px-4 pt-4">
-        <Link href="/plus" className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-primary to-orange-500 p-4 text-white shadow-md">
+        <Link href="/plus" className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-primary to-teal-500 p-4 text-white shadow-md">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/20"><Crown className="h-6 w-6" aria-hidden /></span>
           <div className="min-w-0 flex-1">
-            <p className="font-bold">Bazzar Plus</p>
+            <p className="font-bold">PedeAí Plus</p>
             <p className="text-sm text-white/90">
               {meta.data
                 ? t({

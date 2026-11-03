@@ -305,7 +305,7 @@ export async function seedDemoData() {
     await tx.insert(promoCodes).values([
       { code: "BEMVINDO", description: "20% na primeira encomenda (máx. 2.000 Kz)", discountType: "percent", value: 20, maxDiscount: 2000, firstOrderOnly: true },
       { code: "ENTREGAGRATIS", description: "Entrega grátis em encomendas a partir de 5.000 Kz", discountType: "free_delivery", value: 0, minOrder: 5000, maxUsesPerUser: 3 },
-      { code: "PLUS10", description: "10% exclusivo Bazzar Plus", discountType: "percent", value: 10, maxDiscount: 3000, plusOnly: true, maxUsesPerUser: 5 },
+      { code: "PLUS10", description: "10% exclusivo PedeAí Plus", discountType: "percent", value: 10, maxDiscount: 3000, plusOnly: true, maxUsesPerUser: 5 },
     ]);
   });
   console.log("[seed] pronto. Contas de teste em replit.md");

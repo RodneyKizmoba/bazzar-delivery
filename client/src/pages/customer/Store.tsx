@@ -85,7 +85,7 @@ export default function StorePage() {
   const group = useMutation({
     mutationFn: () => post<{ token: string; participantId: number; secret: string }>("/api/groups", { storeId: Number(id) }),
     onSuccess: (r) => {
-      try { localStorage.setItem(`bazzar.group.${r.token}`, JSON.stringify({ participantId: r.participantId, secret: r.secret })); } catch { /* ignore */ }
+      try { localStorage.setItem(`pedeai.group.${r.token}`, JSON.stringify({ participantId: r.participantId, secret: r.secret })); } catch { /* ignore */ }
       navigate(`/grupo/${r.token}`);
     },
     onError: (err: Error) => toast({ variant: "destructive", title: t(T.error), description: err.message }),
@@ -235,7 +235,7 @@ export default function StorePage() {
         <div className="mt-3 space-y-1 text-xs text-neutral-600">
           {store.minOrder > 0 && <p className="flex items-center gap-1.5"><ShoppingBag className="h-3.5 w-3.5" aria-hidden />{t({ pt: "Pedido mínimo", en: "Minimum order", fr: "Commande minimum" })}: <b>{kz(store.minOrder)}</b></p>}
           {store.openingTime && store.closingTime && (
-            <p className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" aria-hidden />{t({ pt: "Horário", en: "Opening hours", fr: "Horaires" })}: <b>{store.openingTime.slice(0, 5)} – {store.closingTime.slice(0, 5)}</b></p>
+            <p className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" aria-hidden />{t({ pt: "Horário", en: "Opening hours", fr: "Horaires" })}: <b>{store.openingTime.slice(0, 5) === store.closingTime.slice(0, 5) ? t({ pt: "24 horas", en: "24 hours", fr: "24 h/24" }) : `${store.openingTime.slice(0, 5)} – ${store.closingTime.slice(0, 5)}`}</b></p>
           )}
           {(store.street || store.zone) && <p className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" aria-hidden />{[store.street, store.zone].filter(Boolean).join(", ")}</p>}
           {store.phone && <p className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" aria-hidden /><a href={`tel:${store.phone.replace(/\s/g, "")}`} className="underline">{store.phone}</a></p>}
@@ -331,7 +331,7 @@ export default function StorePage() {
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-1.5">
                               <h3 className="font-semibold text-neutral-900">{it.name}</h3>
-                              {it.isPopular && <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold text-orange-800">🔥 {t({ pt: "Popular", en: "Popular", fr: "Populaire" })}</span>}
+                              {it.isPopular && <span className="rounded-full bg-teal-100 px-2 py-0.5 text-[10px] font-semibold text-teal-800">🔥 {t({ pt: "Popular", en: "Popular", fr: "Populaire" })}</span>}
                               {!it.isAvailable && <span className="rounded-full bg-neutral-200 px-2 py-0.5 text-[10px] font-semibold text-neutral-700">{t({ pt: "Esgotado", en: "Sold out", fr: "Épuisé" })}</span>}
                             </div>
                             {it.description && <p className="mt-0.5 line-clamp-2 text-sm text-neutral-500">{it.description}</p>}
@@ -371,7 +371,7 @@ export default function StorePage() {
                   <li key={r.id} className="py-4">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-100 text-sm font-bold text-orange-800" aria-hidden>{r.author.charAt(0).toUpperCase()}</span>
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-100 text-sm font-bold text-teal-800" aria-hidden>{r.author.charAt(0).toUpperCase()}</span>
                         <span className="font-medium">{r.author}</span>
                       </div>
                       <time className="text-xs text-neutral-500" dateTime={r.createdAt}>{dateTime(r.createdAt, lang)}</time>
@@ -379,7 +379,7 @@ export default function StorePage() {
                     <div className="mt-1.5"><Stars value={r.rating} /></div>
                     {r.comment && <p className="mt-1.5 text-sm text-neutral-700">{r.comment}</p>}
                     {r.reply && (
-                      <div className="mt-2 rounded-xl border-l-4 border-primary bg-orange-50/60 px-3 py-2 text-sm">
+                      <div className="mt-2 rounded-xl border-l-4 border-primary bg-teal-50/60 px-3 py-2 text-sm">
                         <p className="text-xs font-semibold text-neutral-800">{t({ pt: "Resposta da loja", en: "Store reply", fr: "Réponse du magasin" })}</p>
                         <p className="text-neutral-700">{r.reply}</p>
                       </div>

@@ -271,7 +271,7 @@ export const groupItems = pgTable("group_items", {
 export type GroupItem = typeof groupItems.$inferSelect;
 
 // ---------------------------------------------------------------------------
-// Bazzar Plus (subscrição)
+// PedeAí Plus (subscrição)
 // ---------------------------------------------------------------------------
 export const subscriptions = pgTable("subscriptions", {
   id: serial("id").primaryKey(),

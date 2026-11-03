@@ -200,7 +200,7 @@ export default function Search() {
             {stores.map((s) => (
               <li key={s.id}>
                 <StoreCard store={s} footer={!!s.matchingItems?.length && (
-                  <Link href={`/loja/${s.id}`} className="mt-2 block rounded-xl bg-orange-50 px-3 py-2 text-sm">
+                  <Link href={`/loja/${s.id}`} className="mt-2 block rounded-xl bg-teal-50 px-3 py-2 text-sm">
                     <span className="font-medium text-neutral-800">{t({ pt: "Encontrámos:", en: "We found:", fr: "Nous avons trouvé :" })}</span>
                     <ul className="mt-1 space-y-0.5">
                       {s.matchingItems.map((m) => (

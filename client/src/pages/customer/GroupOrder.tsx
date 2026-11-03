@@ -37,7 +37,7 @@ interface GroupView {
 }
 interface Creds { participantId: number; secret: string }
 
-const credKey = (token: string) => `bazzar.group.${token}`;
+const credKey = (token: string) => `pedeai.group.${token}`;
 function readCreds(token: string): Creds | null {
   try {
     const v = JSON.parse(localStorage.getItem(credKey(token)) || "null");
@@ -52,15 +52,15 @@ function ShareBox({ link, storeName }: { link: string; storeName: string }) {
   const t = useT();
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
-  const msg = t({ pt: `Junta-te à minha encomenda de grupo em ${storeName} no BazzarDelivery: ${link}`, en: `Join my group order from ${storeName} on BazzarDelivery: ${link}`, fr: `Rejoins ma commande groupée chez ${storeName} sur BazzarDelivery : ${link}` });
+  const msg = t({ pt: `Junta-te à minha encomenda de grupo em ${storeName} no PedeAí Delivery: ${link}`, en: `Join my group order from ${storeName} on PedeAí Delivery: ${link}`, fr: `Rejoins ma commande groupée chez ${storeName} sur PedeAí Delivery : ${link}` });
   const copy = async () => {
     try { await navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 2000); }
     catch { toast({ variant: "destructive", title: t({ pt: "Não foi possível copiar", en: "Couldn't copy", fr: "Copie impossible" }) }); }
   };
   return (
-    <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4">
-      <p className="flex items-center gap-2 text-sm font-semibold text-orange-900"><Share2 className="h-4 w-4" />{t({ pt: "Convide amigos para o cesto", en: "Invite friends to the basket", fr: "Invitez vos amis" })}</p>
-      <p className="mt-0.5 text-xs text-orange-800">{t({ pt: "Cada pessoa escolhe o que quer — não precisam de conta.", en: "Everyone picks their own — no account needed.", fr: "Chacun choisit — sans compte." })}</p>
+    <div className="rounded-2xl border border-teal-200 bg-teal-50 p-4">
+      <p className="flex items-center gap-2 text-sm font-semibold text-teal-900"><Share2 className="h-4 w-4" />{t({ pt: "Convide amigos para o cesto", en: "Invite friends to the basket", fr: "Invitez vos amis" })}</p>
+      <p className="mt-0.5 text-xs text-teal-800">{t({ pt: "Cada pessoa escolhe o que quer — não precisam de conta.", en: "Everyone picks their own — no account needed.", fr: "Chacun choisit — sans compte." })}</p>
       <div className="mt-3 flex gap-2">
         <Input readOnly value={link} aria-label={t({ pt: "Link do grupo", en: "Group link", fr: "Lien du groupe" })} className="bg-white text-xs" onFocus={(e) => e.target.select()} />
         <Button variant="outline" className="bg-white" onClick={copy} aria-label={t({ pt: "Copiar link", en: "Copy link", fr: "Copier le lien" })}>
@@ -374,7 +374,7 @@ export default function GroupOrder() {
                           <div className="mt-1"><DietaryBadges tags={it.dietaryTags} small /></div>
                         </div>
                         {it.imageUrl ? <img src={it.imageUrl} alt="" className="h-16 w-16 rounded-lg object-cover" loading="lazy" /> : null}
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-orange-50 text-primary"><Plus className="h-4 w-4" /></span>
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-50 text-primary"><Plus className="h-4 w-4" /></span>
                       </button>
                     </li>
                   ))}

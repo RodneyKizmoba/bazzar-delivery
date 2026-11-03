@@ -51,9 +51,9 @@ function RewardsBody() {
 
   const link = `${window.location.origin}/registar?ref=${data.referralCode}`;
   const shareText = t({
-    pt: `Experimenta a BazzarDelivery! Regista-te com o meu código ${data.referralCode} e ganha ${data.welcomeBonusPoints} pontos: ${link}`,
-    en: `Try BazzarDelivery! Sign up with my code ${data.referralCode} and get ${data.welcomeBonusPoints} points: ${link}`,
-    fr: `Essaie BazzarDelivery ! Inscris-toi avec mon code ${data.referralCode} et gagne ${data.welcomeBonusPoints} points : ${link}`,
+    pt: `Experimenta a PedeAí Delivery! Regista-te com o meu código ${data.referralCode} e ganha ${data.welcomeBonusPoints} pontos: ${link}`,
+    en: `Try PedeAí Delivery! Sign up with my code ${data.referralCode} and get ${data.welcomeBonusPoints} points: ${link}`,
+    fr: `Essaie PedeAí Delivery ! Inscris-toi avec mon code ${data.referralCode} et gagne ${data.welcomeBonusPoints} points : ${link}`,
   });
   const maxPct = meta.data?.points?.maxDiscountPct ?? 50;
 
@@ -68,7 +68,7 @@ function RewardsBody() {
 
   return (
     <div className="space-y-4 p-4">
-      <section className="rounded-2xl bg-gradient-to-br from-primary to-orange-500 p-5 text-white">
+      <section className="rounded-2xl bg-gradient-to-br from-primary to-teal-500 p-5 text-white">
         <p className="text-sm opacity-90">{t({ pt: "O seu saldo", en: "Your balance", fr: "Votre solde" })}</p>
         <p className="text-4xl font-bold">{data.balance} <span className="text-lg font-medium">{t({ pt: "pontos", en: "points", fr: "points" })}</span></p>
         <p className="mt-1 text-sm opacity-90">≈ {kz(data.balance * data.pointValueKz)} {t({ pt: "de desconto", en: "off your orders", fr: "de réduction" })}</p>

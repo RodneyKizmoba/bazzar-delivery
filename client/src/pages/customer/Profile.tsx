@@ -177,7 +177,7 @@ function ProfileInner() {
 
       {/* Pontos */}
       {isCustomer && (
-        <Link href="/perfil/pontos" className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 p-4 text-white shadow-sm">
+        <Link href="/perfil/pontos" className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-amber-500 to-teal-600 p-4 text-white shadow-sm">
           <Coins className="h-7 w-7" />
           <div className="flex-1">
             <p className="text-2xl font-extrabold leading-none">{u.loyaltyPoints}</p>
@@ -193,7 +193,7 @@ function ProfileInner() {
         <Row href="/perfil/moradas" icon={<MapPin className="h-5 w-5" />} label={t({ pt: "Moradas", en: "Addresses", fr: "Adresses" })} />
         {isCustomer && <Row href="/favoritos" icon={<Heart className="h-5 w-5" />} label={t({ pt: "Favoritos", en: "Favourites", fr: "Favoris" })} />}
         {isCustomer && <Row href="/perfil/pontos" icon={<Coins className="h-5 w-5" />} label={t({ pt: "Pontos e convites", en: "Points & referrals", fr: "Points et parrainage" })} />}
-        {isCustomer && <Row href="/plus" icon={<Crown className="h-5 w-5" />} label="Bazzar Plus"
+        {isCustomer && <Row href="/plus" icon={<Crown className="h-5 w-5" />} label="PedeAí Plus"
           hint={plusQ.data?.active ? <span className="text-xs font-semibold text-violet-700">{t({ pt: "Activo", en: "Active", fr: "Actif" })}</span> : undefined} />}
       </nav>
 

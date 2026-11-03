@@ -1,8 +1,8 @@
-# BazzarDelivery - Food Delivery Platform
+# PedeAí Delivery - Food Delivery Platform
 
 ## Overview
 
-BazzarDelivery is a comprehensive food delivery platform built for the Angolan market. It connects customers with restaurants, manages orders, handles payments, and coordinates deliveries through a network of drivers. The platform is designed as a full-stack web application with a focus on mobile-first design and multi-language support.
+PedeAí Delivery is a comprehensive food delivery platform built for the Angolan market. It connects customers with restaurants, manages orders, handles payments, and coordinates deliveries through a network of drivers. The platform is designed as a full-stack web application with a focus on mobile-first design and multi-language support.
 
 ## User Preferences
 
@@ -61,7 +61,7 @@ Preferred communication style: Simple, everyday language.
 - Driver assignment and tracking
 - Real-time order status updates
 - Delivery route optimization (planned)
-- Integration with external driver portal (BazzarDriver)
+- Integration with external driver portal (PedeAí Rider)
 
 ## Data Flow
 
@@ -81,7 +81,7 @@ Preferred communication style: Simple, everyday language.
 ### Third-Party Services
 - **Twilio**: SMS notifications for order updates (configured but optional)
 - **Payment Gateway**: Ready for integration with Angolan payment providers
-- **BazzarDriver Portal**: External driver management system integration
+- **PedeAí Rider Portal**: External driver management system integration
 
 ### Development Tools
 - **Vite**: Frontend build tool and development server

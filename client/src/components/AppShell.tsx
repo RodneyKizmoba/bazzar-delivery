@@ -1,11 +1,24 @@
 import type { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { Home, Search, ShoppingBag, Receipt, User, ChevronLeft } from "lucide-react";
-import logo from "@/assets/bazzardelivery-logo.svg";
+import mark from "@/assets/pedeai-mark.png";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useLang, useT, type Lang } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+
+/** Logótipo PedeAí Delivery: símbolo + nome (compacto, para cabeçalhos). */
+export function BrandLogo({ size = "md" }: { size?: "sm" | "md" }) {
+  return (
+    <span className="flex items-center gap-2">
+      <img src={mark} alt="" className={size === "sm" ? "h-7 w-7" : "h-9 w-9"} />
+      <span className="flex flex-col leading-none">
+        <span className={cn("font-extrabold tracking-tight text-neutral-800", size === "sm" ? "text-base" : "text-lg")}>PEDEAÍ</span>
+        <span className="text-[9px] font-semibold tracking-[0.3em] text-neutral-600">DELIVERY</span>
+      </span>
+    </span>
+  );
+}
 
 export function LanguageSwitch({ className }: { className?: string }) {
   const { lang, setLang } = useLang();
@@ -63,8 +76,8 @@ export function CustomerShell({ children, hideHeader, hideNav }: { children: Rea
     <div className="mx-auto min-h-screen max-w-md bg-white shadow-sm">
       {!hideHeader && (
         <header className="sticky top-0 z-30 flex items-center justify-between border-b bg-white/95 px-4 py-2.5 backdrop-blur">
-          <Link href="/" className="flex items-center gap-2" aria-label="BazzarDelivery">
-            <img src={logo} alt="BazzarDelivery" className="h-8 w-auto" />
+          <Link href="/" className="flex items-center gap-2" aria-label="PedeAí Delivery">
+            <BrandLogo />
           </Link>
           <div className="flex items-center gap-2">
             {user && user.userType !== "customer" && (
@@ -114,7 +127,7 @@ export function PanelShell({ title, tabs, children }: { title: string; tabs: { h
       <header className="sticky top-0 z-30 border-b bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2.5">
           <div className="flex items-center gap-3 min-w-0">
-            <Link href="/"><img src={logo} alt="BazzarDelivery" className="h-7 w-auto" /></Link>
+            <Link href="/" aria-label="PedeAí Delivery"><BrandLogo size="sm" /></Link>
             <span className="truncate font-semibold text-neutral-800">{title}</span>
           </div>
           <div className="flex items-center gap-2">

@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import NotFound from "@/pages/info/NotFound";
 import type { Meta } from "@/pages/customer/Home";
 
-const SUPPORT_EMAIL = "suporte@bazzardelivery.ao";
+const SUPPORT_EMAIL = "suporte@pedeai.ao";
 // Contactos provisórios — substituir pelos números reais antes do lançamento.
 const SUPPORT_PHONE = "+244 900 000 000";
 const SUPPORT_WHATSAPP = "244900000000";
@@ -64,16 +64,16 @@ function About() {
     {
       h: { pt: "Quem somos", en: "Who we are", fr: "Qui sommes-nous" },
       p: [{
-        pt: "A BazzarDelivery é uma plataforma de entregas feita em Luanda, para Luanda. Ligamos clientes a restaurantes, supermercados, farmácias e outras lojas locais, e a estafetas que entregam à porta — de Talatona ao Cazenga, do Kilamba à Ilha.",
-        en: "BazzarDelivery is a delivery platform made in Luanda, for Luanda. We connect customers with restaurants, supermarkets, pharmacies and other local shops, and with riders who deliver to your door — from Talatona to Cazenga, from Kilamba to the Ilha.",
-        fr: "BazzarDelivery est une plateforme de livraison créée à Luanda, pour Luanda. Nous relions les clients aux restaurants, supermarchés, pharmacies et autres commerces locaux, ainsi qu'aux livreurs qui livrent à domicile — de Talatona à Cazenga, de Kilamba à l'Ilha.",
+        pt: "A PedeAí Delivery é uma plataforma de entregas feita em Luanda, para Luanda. Ligamos clientes a restaurantes, supermercados, farmácias e outras lojas locais, e a estafetas que entregam à porta — de Talatona ao Cazenga, do Kilamba à Ilha.",
+        en: "PedeAí Delivery is a delivery platform made in Luanda, for Luanda. We connect customers with restaurants, supermarkets, pharmacies and other local shops, and with riders who deliver to your door — from Talatona to Cazenga, from Kilamba to the Ilha.",
+        fr: "PedeAí Delivery est une plateforme de livraison créée à Luanda, pour Luanda. Nous relions les clients aux restaurants, supermarchés, pharmacies et autres commerces locaux, ainsi qu'aux livreurs qui livrent à domicile — de Talatona à Cazenga, de Kilamba à l'Ilha.",
       }],
     },
     {
       h: { pt: "O que oferecemos", en: "What we offer", fr: "Ce que nous proposons" },
       p: [
         { pt: "Encomendas imediatas ou agendadas, acompanhamento em tempo real, encomendas em grupo, pagamento em numerário, Multicaixa Express, Unitel Money e outros métodos locais.", en: "On-demand or scheduled orders, real-time tracking, group orders, and payment by cash, Multicaixa Express, Unitel Money and other local methods.", fr: "Commandes immédiates ou programmées, suivi en temps réel, commandes groupées et paiement en espèces, Multicaixa Express, Unitel Money et autres moyens locaux." },
-        { pt: "Com o Bazzar Plus tem entregas grátis em encomendas elegíveis, e cada encomenda acumula pontos que pode trocar por descontos.", en: "With Bazzar Plus you get free delivery on eligible orders, and every order earns points you can redeem for discounts.", fr: "Avec Bazzar Plus, la livraison est gratuite sur les commandes éligibles, et chaque commande rapporte des points échangeables contre des réductions." },
+        { pt: "Com o PedeAí Plus tem entregas grátis em encomendas elegíveis, e cada encomenda acumula pontos que pode trocar por descontos.", en: "With PedeAí Plus you get free delivery on eligible orders, and every order earns points you can redeem for discounts.", fr: "Avec PedeAí Plus, la livraison est gratuite sur les commandes éligibles, et chaque commande rapporte des points échangeables contre des réductions." },
       ],
     },
     {
@@ -83,9 +83,9 @@ function About() {
   ];
   return (
     <>
-      <div className="mb-6 rounded-2xl bg-gradient-to-br from-primary to-orange-500 p-5 text-white">
+      <div className="mb-6 rounded-2xl bg-gradient-to-br from-primary to-teal-500 p-5 text-white">
         <p className="text-3xl" aria-hidden>🛵</p>
-        <p className="mt-2 text-xl font-extrabold">BazzarDelivery</p>
+        <p className="mt-2 text-xl font-extrabold">PedeAí Delivery</p>
         <p className="text-sm text-white/90">{t({ pt: "Tudo o que precisa, entregue em Luanda.", en: "Everything you need, delivered in Luanda.", fr: "Tout ce qu'il vous faut, livré à Luanda." })}</p>
       </div>
       <Prose blocks={blocks} />
@@ -107,7 +107,7 @@ function Terms() {
   const blocks: Block[] = [
     {
       h: { pt: "1. Âmbito", en: "1. Scope", fr: "1. Objet" },
-      p: [{ pt: "A BazzarDelivery é um mercado online que liga clientes a lojas parceiras e estafetas independentes em Luanda, Angola. Os produtos são vendidos pelas lojas; a BazzarDelivery facilita a encomenda, o pagamento e a entrega. Ao usar a plataforma aceita estes termos.", en: "BazzarDelivery is an online marketplace connecting customers with partner stores and independent riders in Luanda, Angola. Products are sold by the stores; BazzarDelivery facilitates ordering, payment and delivery. By using the platform you accept these terms.", fr: "BazzarDelivery est une place de marché en ligne reliant les clients aux commerces partenaires et à des livreurs indépendants à Luanda, Angola. Les produits sont vendus par les commerces ; BazzarDelivery facilite la commande, le paiement et la livraison. En utilisant la plateforme, vous acceptez ces conditions." }],
+      p: [{ pt: "A PedeAí Delivery é um mercado online que liga clientes a lojas parceiras e estafetas independentes em Luanda, Angola. Os produtos são vendidos pelas lojas; a PedeAí Delivery facilita a encomenda, o pagamento e a entrega. Ao usar a plataforma aceita estes termos.", en: "PedeAí Delivery is an online marketplace connecting customers with partner stores and independent riders in Luanda, Angola. Products are sold by the stores; PedeAí Delivery facilitates ordering, payment and delivery. By using the platform you accept these terms.", fr: "PedeAí Delivery est une place de marché en ligne reliant les clients aux commerces partenaires et à des livreurs indépendants à Luanda, Angola. Les produits sont vendus par les commerces ; PedeAí Delivery facilite la commande, le paiement et la livraison. En utilisant la plateforme, vous acceptez ces conditions." }],
     },
     {
       h: { pt: "2. Contas", en: "2. Accounts", fr: "2. Comptes" },
@@ -122,15 +122,15 @@ function Terms() {
     },
     {
       h: { pt: "4. Cancelamentos e alterações", en: "4. Cancellations and changes", fr: "4. Annulations et modifications" },
-      p: [{ pt: "Pode cancelar gratuitamente até a loja começar a preparar a encomenda. Depois disso, o cancelamento pode não ser possível ou o valor pode não ser reembolsado. Encomendas agendadas podem ser alteradas ou canceladas até a loja as aceitar. Se a loja ou a BazzarDelivery cancelarem, é reembolsado na totalidade pelo método de pagamento original (ou em saldo, se preferir).", en: "You may cancel free of charge until the store starts preparing your order. After that, cancellation may not be possible or the amount may not be refunded. Scheduled orders may be changed or cancelled until the store accepts them. If the store or BazzarDelivery cancels, you are refunded in full to the original payment method (or as credit, if you prefer).", fr: "Vous pouvez annuler gratuitement tant que le commerce n'a pas commencé la préparation. Ensuite, l'annulation peut être impossible ou non remboursée. Les commandes programmées peuvent être modifiées ou annulées jusqu'à leur acceptation par le commerce. Si le commerce ou BazzarDelivery annule, vous êtes intégralement remboursé sur le moyen de paiement initial (ou en crédit, si vous le souhaitez)." }],
+      p: [{ pt: "Pode cancelar gratuitamente até a loja começar a preparar a encomenda. Depois disso, o cancelamento pode não ser possível ou o valor pode não ser reembolsado. Encomendas agendadas podem ser alteradas ou canceladas até a loja as aceitar. Se a loja ou a PedeAí Delivery cancelarem, é reembolsado na totalidade pelo método de pagamento original (ou em saldo, se preferir).", en: "You may cancel free of charge until the store starts preparing your order. After that, cancellation may not be possible or the amount may not be refunded. Scheduled orders may be changed or cancelled until the store accepts them. If the store or PedeAí Delivery cancels, you are refunded in full to the original payment method (or as credit, if you prefer).", fr: "Vous pouvez annuler gratuitement tant que le commerce n'a pas commencé la préparation. Ensuite, l'annulation peut être impossible ou non remboursée. Les commandes programmées peuvent être modifiées ou annulées jusqu'à leur acceptation par le commerce. Si le commerce ou PedeAí Delivery annule, vous êtes intégralement remboursé sur le moyen de paiement initial (ou en crédit, si vous le souhaitez)." }],
     },
     {
       h: { pt: "5. Pagamentos", en: "5. Payments", fr: "5. Paiements" },
       p: [{ pt: "Aceitamos numerário na entrega, Multicaixa Express, Unitel Money, cartão e transferência bancária, consoante a disponibilidade. Pagamentos electrónicos são processados por parceiros licenciados; não guardamos dados completos de cartão. Em pagamento em numerário, tenha o valor pronto — o estafeta pode não ter troco para notas grandes.", en: "We accept cash on delivery, Multicaixa Express, Unitel Money, card and bank transfer, depending on availability. Electronic payments are processed by licensed partners; we do not store full card details. For cash payments, please have the amount ready — riders may not have change for large notes.", fr: "Nous acceptons les espèces à la livraison, Multicaixa Express, Unitel Money, la carte et le virement, selon disponibilité. Les paiements électroniques sont traités par des partenaires agréés ; nous ne conservons pas les données complètes de carte. Pour un paiement en espèces, préparez le montant — le livreur peut ne pas avoir de monnaie pour les grosses coupures." }],
     },
     {
-      h: { pt: "6. Bazzar Plus", en: "6. Bazzar Plus", fr: "6. Bazzar Plus" },
-      p: [{ pt: "O Bazzar Plus é uma subscrição mensal com renovação automática ao preço indicado no momento da adesão. Pode cancelar a qualquer momento no seu perfil; após o cancelamento mantém as vantagens até ao fim do período já pago e não há novas cobranças. Não há reembolsos parciais de períodos iniciados. As vantagens (por exemplo, entrega grátis acima de um valor mínimo) podem mudar com aviso prévio.", en: "Bazzar Plus is a monthly subscription that renews automatically at the price shown when you join. You can cancel anytime in your profile; after cancelling you keep the benefits until the end of the period already paid and are not charged again. There are no partial refunds for periods already started. Benefits (e.g. free delivery above a minimum order) may change with prior notice.", fr: "Bazzar Plus est un abonnement mensuel à renouvellement automatique au prix indiqué lors de l'adhésion. Vous pouvez résilier à tout moment depuis votre profil ; après résiliation, vous conservez les avantages jusqu'à la fin de la période payée et aucun nouveau prélèvement n'est effectué. Aucun remboursement partiel d'une période entamée. Les avantages (ex. livraison gratuite au-delà d'un minimum) peuvent évoluer avec préavis." }],
+      h: { pt: "6. PedeAí Plus", en: "6. PedeAí Plus", fr: "6. PedeAí Plus" },
+      p: [{ pt: "O PedeAí Plus é uma subscrição mensal com renovação automática ao preço indicado no momento da adesão. Pode cancelar a qualquer momento no seu perfil; após o cancelamento mantém as vantagens até ao fim do período já pago e não há novas cobranças. Não há reembolsos parciais de períodos iniciados. As vantagens (por exemplo, entrega grátis acima de um valor mínimo) podem mudar com aviso prévio.", en: "PedeAí Plus is a monthly subscription that renews automatically at the price shown when you join. You can cancel anytime in your profile; after cancelling you keep the benefits until the end of the period already paid and are not charged again. There are no partial refunds for periods already started. Benefits (e.g. free delivery above a minimum order) may change with prior notice.", fr: "PedeAí Plus est un abonnement mensuel à renouvellement automatique au prix indiqué lors de l'adhésion. Vous pouvez résilier à tout moment depuis votre profil ; après résiliation, vous conservez les avantages jusqu'à la fin de la période payée et aucun nouveau prélèvement n'est effectué. Aucun remboursement partiel d'une période entamée. Les avantages (ex. livraison gratuite au-delà d'un minimum) peuvent évoluer avec préavis." }],
     },
     {
       h: { pt: "7. Pontos de fidelidade", en: "7. Loyalty points", fr: "7. Points de fidélité" },
@@ -148,7 +148,7 @@ function Terms() {
     },
     {
       h: { pt: "9. Responsabilidade", en: "9. Liability", fr: "9. Responsabilité" },
-      p: [{ pt: "As lojas são responsáveis pela qualidade, segurança, informação de alergénios e conformidade dos produtos. A BazzarDelivery responde pelos serviços que presta directamente e, na medida permitida por lei, não é responsável por danos indirectos ou por falhas causadas por terceiros ou por motivos de força maior. Nada nestes termos limita os direitos que a lei angolana de defesa do consumidor lhe garante. Se houver um problema com a encomenda (itens em falta, danificados ou errados), contacte o suporte em até 24 horas.", en: "Stores are responsible for the quality, safety, allergen information and compliance of their products. BazzarDelivery is liable for the services it provides directly and, to the extent permitted by law, is not liable for indirect damages or failures caused by third parties or force majeure. Nothing in these terms limits your rights under Angolan consumer protection law. If there is a problem with your order (missing, damaged or wrong items), contact support within 24 hours.", fr: "Les commerces sont responsables de la qualité, de la sécurité, des informations sur les allergènes et de la conformité de leurs produits. BazzarDelivery répond des services qu'elle fournit directement et, dans la mesure permise par la loi, n'est pas responsable des dommages indirects ni des défaillances de tiers ou cas de force majeure. Rien dans ces conditions ne limite vos droits au titre du droit angolais de la consommation. En cas de problème (articles manquants, endommagés ou erronés), contactez le support sous 24 heures." }],
+      p: [{ pt: "As lojas são responsáveis pela qualidade, segurança, informação de alergénios e conformidade dos produtos. A PedeAí Delivery responde pelos serviços que presta directamente e, na medida permitida por lei, não é responsável por danos indirectos ou por falhas causadas por terceiros ou por motivos de força maior. Nada nestes termos limita os direitos que a lei angolana de defesa do consumidor lhe garante. Se houver um problema com a encomenda (itens em falta, danificados ou errados), contacte o suporte em até 24 horas.", en: "Stores are responsible for the quality, safety, allergen information and compliance of their products. PedeAí Delivery is liable for the services it provides directly and, to the extent permitted by law, is not liable for indirect damages or failures caused by third parties or force majeure. Nothing in these terms limits your rights under Angolan consumer protection law. If there is a problem with your order (missing, damaged or wrong items), contact support within 24 hours.", fr: "Les commerces sont responsables de la qualité, de la sécurité, des informations sur les allergènes et de la conformité de leurs produits. PedeAí Delivery répond des services qu'elle fournit directement et, dans la mesure permise par la loi, n'est pas responsable des dommages indirects ni des défaillances de tiers ou cas de force majeure. Rien dans ces conditions ne limite vos droits au titre du droit angolais de la consommation. En cas de problème (articles manquants, endommagés ou erronés), contactez le support sous 24 heures." }],
     },
     {
       h: { pt: "10. Alterações e lei aplicável", en: "10. Changes and governing law", fr: "10. Modifications et droit applicable" },
@@ -162,7 +162,7 @@ function Privacy() {
   const blocks: Block[] = [
     {
       h: { pt: "1. Responsável pelo tratamento", en: "1. Data controller", fr: "1. Responsable du traitement" },
-      p: [{ pt: `A BazzarDelivery é responsável pelos dados pessoais tratados na plataforma, nos termos da Lei n.º 22/11 de Protecção de Dados Pessoais de Angola. Contacto: ${SUPPORT_EMAIL}.`, en: `BazzarDelivery is the controller of personal data processed on the platform, under Angola's Personal Data Protection Law (Law 22/11). Contact: ${SUPPORT_EMAIL}.`, fr: `BazzarDelivery est responsable des données personnelles traitées sur la plateforme, conformément à la loi angolaise n° 22/11 sur la protection des données. Contact : ${SUPPORT_EMAIL}.` }],
+      p: [{ pt: `A PedeAí Delivery é responsável pelos dados pessoais tratados na plataforma, nos termos da Lei n.º 22/11 de Protecção de Dados Pessoais de Angola. Contacto: ${SUPPORT_EMAIL}.`, en: `PedeAí Delivery is the controller of personal data processed on the platform, under Angola's Personal Data Protection Law (Law 22/11). Contact: ${SUPPORT_EMAIL}.`, fr: `PedeAí Delivery est responsable des données personnelles traitées sur la plateforme, conformément à la loi angolaise n° 22/11 sur la protection des données. Contact : ${SUPPORT_EMAIL}.` }],
     },
     {
       h: { pt: "2. Dados que recolhemos", en: "2. Data we collect", fr: "2. Données collectées" },
@@ -219,7 +219,7 @@ const FAQ: { q: Tr; a: Tr }[] = [
     a: { pt: "Na página da loja toque em «Encomenda em grupo» e partilhe o link. Cada pessoa adiciona os seus produtos e o anfitrião finaliza e paga.", en: "On the store page tap “Group order” and share the link. Everyone adds their items and the host checks out and pays.", fr: "Sur la page du commerce, touchez « Commande groupée » et partagez le lien. Chacun ajoute ses articles et l'hôte valide et paie." },
   },
   {
-    q: { pt: "O que é o Bazzar Plus?", en: "What is Bazzar Plus?", fr: "Qu'est-ce que Bazzar Plus ?" },
+    q: { pt: "O que é o PedeAí Plus?", en: "What is PedeAí Plus?", fr: "Qu'est-ce que PedeAí Plus ?" },
     a: { pt: "Uma subscrição mensal com entregas grátis em encomendas acima de um valor mínimo. Pode cancelar quando quiser e mantém as vantagens até ao fim do mês pago.", en: "A monthly subscription with free delivery on orders above a minimum. Cancel anytime and keep benefits until the end of the paid month.", fr: "Un abonnement mensuel avec livraison gratuite au-delà d'un montant minimum. Résiliable à tout moment, avantages conservés jusqu'à la fin du mois payé." },
   },
   {
@@ -227,7 +227,7 @@ const FAQ: { q: Tr; a: Tr }[] = [
     a: { pt: "Ganha pontos em cada encomenda entregue e ao convidar amigos com o seu código. No checkout pode usar os pontos como desconto.", en: "You earn points on every delivered order and by inviting friends with your code. At checkout you can use points as a discount.", fr: "Vous gagnez des points à chaque commande livrée et en parrainant des amis avec votre code. Au paiement, utilisez-les comme réduction." },
   },
   {
-    q: { pt: "Quero vender ou entregar com a BazzarDelivery.", en: "I want to sell or deliver with BazzarDelivery.", fr: "Je veux vendre ou livrer avec BazzarDelivery." },
+    q: { pt: "Quero vender ou entregar com a PedeAí Delivery.", en: "I want to sell or deliver with PedeAí Delivery.", fr: "Je veux vendre ou livrer avec PedeAí Delivery." },
     a: { pt: "Crie uma conta do tipo «Loja/Restaurante» ou «Estafeta». A nossa equipa verifica os dados e activa a conta, normalmente em 1–3 dias úteis.", en: "Create a “Store/Restaurant” or “Rider” account. Our team reviews your details and activates the account, usually within 1–3 working days.", fr: "Créez un compte « Magasin/Restaurant » ou « Livreur ». Notre équipe vérifie vos informations et active le compte, généralement sous 1 à 3 jours ouvrés." },
   },
 ];
@@ -236,7 +236,7 @@ function Support() {
   const t = useT();
   const contacts: { href: string; icon: typeof Phone; label: string; value: string; cls: string }[] = [
     { href: `https://wa.me/${SUPPORT_WHATSAPP}`, icon: MessageCircle, label: "WhatsApp", value: SUPPORT_PHONE, cls: "bg-green-50 text-green-800" },
-    { href: `tel:${SUPPORT_PHONE.replace(/\s/g, "")}`, icon: Phone, label: t({ pt: "Telefone", en: "Phone", fr: "Téléphone" }), value: SUPPORT_PHONE, cls: "bg-orange-50 text-orange-800" },
+    { href: `tel:${SUPPORT_PHONE.replace(/\s/g, "")}`, icon: Phone, label: t({ pt: "Telefone", en: "Phone", fr: "Téléphone" }), value: SUPPORT_PHONE, cls: "bg-teal-50 text-teal-800" },
     { href: `mailto:${SUPPORT_EMAIL}`, icon: Mail, label: "Email", value: SUPPORT_EMAIL, cls: "bg-sky-50 text-sky-800" },
   ];
   return (

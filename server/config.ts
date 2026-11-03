@@ -19,7 +19,7 @@ export const config = {
   // Pagamentos: "disabled" (só numerário), "sandbox" (simulação para testes) ou "live" (gateway real)
   paymentsMode: (process.env.PAYMENTS_MODE || (isProd ? "disabled" : "sandbox")) as "disabled" | "sandbox" | "live",
 
-  // Bazzar Plus
+  // PedeAí Plus
   plusMonthlyPrice: num("PLUS_MONTHLY_PRICE", 2500),
   plusFreeDeliveryMinOrder: num("PLUS_FREE_DELIVERY_MIN_ORDER", 3000),
 

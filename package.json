@@ -1,5 +1,5 @@
 {
-  "name": "bazzar-delivery",
+  "name": "pedeai-delivery",
   "version": "1.0.0",
   "type": "module",
   "license": "MIT",
@@ -101,6 +101,7 @@
     "drizzle-kit": "^0.30.4",
     "esbuild": "^0.25.0",
     "postcss": "^8.4.47",
+    "puppeteer-core": "^25.16.0",
     "tailwindcss": "^3.4.17",
     "tsx": "^4.19.1",
     "typescript": "5.6.3",

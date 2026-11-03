@@ -34,7 +34,7 @@ interface CartCtx extends CartState {
 }
 
 const EMPTY: CartState = { storeId: null, storeName: "", lines: [] };
-const STORAGE_KEY = "bazzar.cart.v2";
+const STORAGE_KEY = "pedeai.cart.v2";
 const Ctx = createContext<CartCtx | null>(null);
 
 const keyOf = (l: Omit<CartLine, "key">) =>

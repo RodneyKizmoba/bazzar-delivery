@@ -48,7 +48,7 @@ function HistoryContent() {
               <div className="min-w-0">
                 <p className="truncate font-medium">{o.store.name} → {o.deliveryAddress.zone}</p>
                 <p className="text-xs text-neutral-500"><span className="font-mono">{o.orderNumber}</span> · {dateTime(o.createdAt, lang)}</p>
-                {o.paymentMethod === "cash" && <p className="text-xs text-orange-700">{t({ pt: "Numerário", en: "Cash", fr: "Espèces" })}: {kz(o.total)}</p>}
+                {o.paymentMethod === "cash" && <p className="text-xs text-teal-700">{t({ pt: "Numerário", en: "Cash", fr: "Espèces" })}: {kz(o.total)}</p>}
               </div>
               <p className="shrink-0 font-semibold text-green-700">+{kz(o.deliveryFee)}</p>
             </li>

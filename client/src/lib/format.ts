@@ -89,7 +89,7 @@ export function initials(name: string): string {
 
 /** Cor estável a partir de um texto (para capas sem imagem). */
 export function colorFor(text: string): string {
-  const palette = ["#C2410C", "#B45309", "#15803D", "#0E7490", "#7C3AED", "#BE185D", "#1D4ED8", "#A16207"];
+  const palette = ["#3F7A72", "#C2410C", "#B45309", "#15803D", "#0E7490", "#7C3AED", "#BE185D", "#1D4ED8", "#A16207"];
   let h = 0;
   for (const ch of text) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   return palette[h % palette.length];

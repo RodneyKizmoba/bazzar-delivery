@@ -2,7 +2,7 @@ import type { Order, Store } from "@shared/schema";
 import { config } from "../config";
 
 /**
- * Integração opcional com um portal externo de estafetas (ex.: BazzarDriver/MotoPortal).
+ * Integração opcional com um portal externo de estafetas (ex.: PedeAí Rider).
  * Só é usada se DRIVER_PORTAL_URL e DRIVER_PORTAL_API_KEY estiverem definidos.
  * Uma falha aqui NUNCA cancela a encomenda: a encomenda continua visível na app de estafetas interna.
  */

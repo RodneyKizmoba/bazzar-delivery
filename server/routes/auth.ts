@@ -115,7 +115,7 @@ authRouter.post("/login", authLimiter, ah(async (req, res) => {
 authRouter.post("/logout", (req, res, next) => {
   req.session.destroy((err) => {
     if (err) return next(err);
-    res.clearCookie("bazzar.sid");
+    res.clearCookie("pedeai.sid");
     res.json({ ok: true });
   });
 });

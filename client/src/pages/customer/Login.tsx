@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useLocation } from "wouter";
 import { Eye, EyeOff, ChevronDown, AlertCircle } from "lucide-react";
-import logo from "@/assets/bazzardelivery-logo.svg";
+import logo from "@/assets/pedeai-logo.png";
 import { CustomerShell, LanguageSwitch } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,10 +54,10 @@ export default function Login() {
   const next = safeNext();
 
   return (
-    <CustomerShell hideNav>
+    <CustomerShell hideNav hideHeader>
       <div className="flex min-h-screen flex-col px-6 py-6">
         <div className="flex items-center justify-between">
-          <Link href="/" aria-label="BazzarDelivery"><img src={logo} alt="BazzarDelivery" className="h-9 w-auto" /></Link>
+          <Link href="/" aria-label="PedeAí Delivery"><img src={logo} alt="PedeAí Delivery" className="h-20 w-auto" /></Link>
           <LanguageSwitch />
         </div>
 
@@ -108,7 +108,7 @@ export default function Login() {
             <CollapsibleContent className="mt-3 space-y-1.5">
               {DEMO.map((d) => (
                 <button key={d.u} type="button" onClick={() => { setUsername(d.u); setPassword(d.p); setError(null); }}
-                  className="flex w-full items-center justify-between rounded-lg bg-white px-3 py-2 text-left text-xs hover:bg-orange-50">
+                  className="flex w-full items-center justify-between rounded-lg bg-white px-3 py-2 text-left text-xs hover:bg-teal-50">
                   <span className="font-semibold">{t(d.role)}</span>
                   <code className="text-neutral-600">{d.u} / {d.p}</code>
                 </button>

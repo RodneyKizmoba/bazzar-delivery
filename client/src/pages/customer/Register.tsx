@@ -2,7 +2,7 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Eye, EyeOff, AlertCircle, User as UserIcon, Store as StoreIcon, Bike, Gift, Info } from "lucide-react";
-import logo from "@/assets/bazzardelivery-logo.svg";
+import logo from "@/assets/pedeai-logo.png";
 import { CustomerShell, LanguageSwitch } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -141,15 +141,15 @@ export default function Register() {
   const inputCls = (k: string) => cn("h-11 rounded-xl", err(k) && "border-red-400 focus-visible:ring-red-400");
 
   return (
-    <CustomerShell hideNav>
+    <CustomerShell hideNav hideHeader>
       <div className="px-6 py-6">
         <div className="flex items-center justify-between">
-          <Link href="/" aria-label="BazzarDelivery"><img src={logo} alt="BazzarDelivery" className="h-9 w-auto" /></Link>
+          <Link href="/" aria-label="PedeAí Delivery"><img src={logo} alt="PedeAí Delivery" className="h-20 w-auto" /></Link>
           <LanguageSwitch />
         </div>
 
         <h1 className="mt-8 text-3xl font-extrabold tracking-tight text-neutral-900">{t(T.register)}</h1>
-        <p className="mt-1 text-neutral-500">{t({ pt: "Junte-se à BazzarDelivery em Luanda.", en: "Join BazzarDelivery in Luanda.", fr: "Rejoignez BazzarDelivery à Luanda." })}</p>
+        <p className="mt-1 text-neutral-500">{t({ pt: "Junte-se à PedeAí Delivery em Luanda.", en: "Join PedeAí Delivery in Luanda.", fr: "Rejoignez PedeAí Delivery à Luanda." })}</p>
 
         <form onSubmit={submit} noValidate className="mt-6 space-y-5">
           <fieldset>
@@ -158,7 +158,7 @@ export default function Register() {
               {types.map(({ id, icon: Icon, label, sub }) => (
                 <button key={id} type="button" role="radio" aria-checked={type === id} onClick={() => setType(id)}
                   className={cn("flex flex-col items-center gap-1 rounded-2xl border-2 px-2 py-3 text-center transition-colors",
-                    type === id ? "border-primary bg-orange-50 text-primary" : "border-neutral-200 text-neutral-700 hover:bg-neutral-50")}>
+                    type === id ? "border-primary bg-teal-50 text-primary" : "border-neutral-200 text-neutral-700 hover:bg-neutral-50")}>
                   <Icon className="h-6 w-6" aria-hidden />
                   <span className="text-xs font-semibold leading-tight">{t(label)}</span>
                   <span className="text-[10px] text-neutral-500">{t(sub)}</span>
@@ -230,7 +230,7 @@ export default function Register() {
                 ].map((o) => (
                   <button key={String(o.home)} type="button" role="radio" aria-checked={biz.isHomeBusiness === o.home}
                     onClick={() => setBiz((b) => ({ ...b, isHomeBusiness: o.home, storeType: o.home && b.storeType === "restaurant" ? "bakery" : b.storeType, minNoticeHours: o.home ? (b.minNoticeHours || 24) : 0 }))}
-                    className={cn("rounded-xl border-2 p-3 text-left text-sm", biz.isHomeBusiness === o.home ? "border-primary bg-orange-50" : "border-neutral-200")}>
+                    className={cn("rounded-xl border-2 p-3 text-left text-sm", biz.isHomeBusiness === o.home ? "border-primary bg-teal-50" : "border-neutral-200")}>
                     <span className="text-xl" aria-hidden>{o.icon}</span>
                     <span className="block font-semibold">{t(o.label)}</span>
                     <span className="block text-xs text-neutral-500">{t(o.hint)}</span>

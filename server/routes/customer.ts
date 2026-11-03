@@ -236,7 +236,7 @@ customerRouter.post("/orders/:id/review", requireAuth, ah(async (req, res) => {
 }));
 
 // ---------------------------------------------------------------------------
-// Bazzar Plus
+// PedeAí Plus
 // ---------------------------------------------------------------------------
 customerRouter.get("/plus", requireAuth, ah(async (req, res) => {
   const [sub] = await db.select().from(subscriptions).where(eq(subscriptions.userId, req.user!.id))
@@ -260,7 +260,7 @@ customerRouter.get("/plus", requireAuth, ah(async (req, res) => {
 
 customerRouter.post("/plus/subscribe", requireAuth, ah(async (req, res) => {
   const { paymentMethod } = parse(z.object({ paymentMethod: z.enum(PAYMENT_METHODS) }), req.body);
-  if (await hasActivePlus(db, req.user!.id)) throw conflict("Já é membro Bazzar Plus.", "ALREADY_PLUS");
+  if (await hasActivePlus(db, req.user!.id)) throw conflict("Já é membro PedeAí Plus.", "ALREADY_PLUS");
   const sub = await db.transaction(async (tx) => {
     const [s] = await tx.insert(subscriptions).values({ userId: req.user!.id, status: "pending_payment" }).returning();
     await chargeSubscription(tx, req.user!.id, s.id, paymentMethod);

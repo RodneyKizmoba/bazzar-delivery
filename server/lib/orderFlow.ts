@@ -33,7 +33,7 @@ export function canTransition(actor: Actor["kind"], from: OrderStatus, to: Order
 function newOrderNumber() {
   const d = new Date();
   const ymd = `${String(d.getUTCFullYear()).slice(2)}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`;
-  return `BZ-${ymd}-${randomBytes(3).toString("hex").toUpperCase()}`;
+  return `PA-${ymd}-${randomBytes(3).toString("hex").toUpperCase()}`;
 }
 
 async function addPoints(tx: DbOrTx, userId: number, delta: number, reason: string, orderId?: number) {
