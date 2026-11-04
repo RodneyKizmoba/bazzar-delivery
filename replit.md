@@ -7,13 +7,23 @@ Plataforma de entregas para Angola (estilo Talabat/Deliveroo): clientes, lojas (
 2. **Tools → Secrets**: adicionar `SESSION_SECRET` (texto aleatório longo).
 3. Carregar em **Run**. Na primeira vez a app cria as tabelas e os dados de demonstração.
 
-## Publicar (Deploy)
-Deployments → Autoscale. Segredos de produção:
-- `DATABASE_URL`, `SESSION_SECRET` (obrigatórios)
-- `SEED_DEMO=true` para carregar as lojas e contas de demonstração (retirar no lançamento real)
-- `PAYMENTS_MODE=sandbox` para testar pagamentos online simulados; `disabled` = só numerário
-- `ADMIN_USERNAME` / `ADMIN_PASSWORD` (≥ 12 caracteres) para criar o administrador real
-- Opcionais: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` (SMS)
+## Publicar (lançamento real)
+Publish → **Reserved VM** (não Autoscale: a app tem um relógio interno que liberta as encomendas agendadas e precisa de estar sempre ligada).
+
+Segredos de produção (Publish → Secrets):
+| Segredo | Valor |
+|---|---|
+| `DATABASE_URL` | criado pelo Replit (Database) |
+| `SESSION_SECRET` | texto aleatório com 40+ caracteres |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | a sua conta de administrador (palavra-passe com 12+ caracteres) |
+| `SEED_LAUNCH` | `true` → cria o Mariato (com o menu completo, fechado até à inauguração) e os anúncios |
+| `MARIATO_PASSWORD` | palavra-passe da gerência do Mariato (12+ caracteres); utilizador `mariato` |
+| `PAYMENTS_MODE` | `disabled` (só numerário) até haver gateway real |
+| `SEED_DEMO` | não definir (ou `false`) para não aparecerem lojas de teste |
+
+Opcionais: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` (SMS).
+
+Domínio próprio: Tools → Domains → introduzir o domínio e copiar os registos **A** e **TXT** para o fornecedor do domínio (manter o TXT para sempre).
 
 ## Contas de demonstração (só com SEED_DEMO)
 | Papel | Utilizador | Palavra-passe |

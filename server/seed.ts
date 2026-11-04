@@ -258,6 +258,54 @@ const DEMO_USERS = [
   { username: "mariato", password: "Loja#2026demo", fullName: "Gerência Mariato", phone: "+244927671480", userType: "supplier" as const },
 ];
 
+// Publicidade: fotos livres da Wikimedia Commons (licença em imageCredit) + autocolante de comida desenhado
+const BANNERS: (typeof banners.$inferInsert)[] = [
+  {
+    title: "Até a Palanca pede já!", subtitle: "Hambúrgueres quentinhos em menos de 40 minutos.",
+    imageUrl: "https://commons.wikimedia.org/wiki/Special:FilePath/Sable_(Hippotragus_niger)_female_crossing_the_road_(16635641913),_crop.jpg?width=900",
+    imageCredit: "Foto: Bernard Dupont, CC BY-SA 2.0, via Wikimedia Commons",
+    sticker: "burger", ctaLabel: "Ver hambúrgueres", linkUrl: "/pesquisa?q=hamb%C3%BArguer", bgColor: "#FF7B00", sortOrder: 1,
+  },
+  {
+    title: "Fome de elefante?", subtitle: "Pizzas e pratos para partilhar, entregues em Luanda.",
+    imageUrl: "https://commons.wikimedia.org/wiki/Special:FilePath/African_Bush_Elephants.jpg?width=900",
+    imageCredit: "Foto: Gorgo, domínio público, via Wikimedia Commons",
+    sticker: "pizza", ctaLabel: "Pedir pizza", linkUrl: "/pesquisa?q=pizza", bgColor: "#920054", sortOrder: 2,
+  },
+  {
+    title: "Doce como um hipopótamo", subtitle: "Bolos caseiros feitos por quem sabe. Encomende com antecedência.",
+    imageUrl: "https://commons.wikimedia.org/wiki/Special:FilePath/Rusizi_NP_hippopotamus.jpg?width=900",
+    imageCredit: "Foto: d_proffer, CC BY 2.0, via Wikimedia Commons",
+    sticker: "cake", ctaLabel: "Ver bolos caseiros", linkUrl: "/pesquisa?homeBusiness=1", bgColor: "#004D40", sortOrder: 3,
+  },
+];
+
+/** Cria uma loja com o seu menu (secções, produtos e opções). */
+async function insertStore(tx: any, s: StoreSeed, ownerId: number | null, opts: { isOpen?: boolean } = {}) {
+    const [store] = await tx.insert(stores).values({
+      ownerId, name: s.name, storeType: s.storeType, description: s.description,
+      cuisines: s.cuisines, isChain: !!s.isChain, phone: s.phone ?? "+244923100100", street: s.street, zone: s.zone,
+      latitude: s.lat, longitude: s.lng, zonesServed: s.zonesServed, openingTime: s.open ?? "00:00", closingTime: s.close ?? "00:00",
+      isOpen: opts.isOpen ?? true, isApproved: s.approved ?? true, isHomeBusiness: !!s.home, minNoticeMin: s.noticeMin ?? 0, maxOrdersPerDay: s.maxPerDay ?? null, deliveryFee: s.deliveryFee, minOrder: s.minOrder ?? 0,
+      deliveryTimeMin: s.time, prepTimeMin: Math.round(s.time / 2),
+      // sem avaliações inventadas: a média nasce das avaliações reais dos clientes
+    }).returning();
+    let order = 0;
+    for (const [sectionName, items] of Object.entries(s.menu)) {
+      const [section] = await tx.insert(menuSections).values({ storeId: store.id, name: sectionName, sortOrder: order++ }).returning();
+      for (const it of items) {
+        const [mi] = await tx.insert(menuItems).values({
+          storeId: store.id, sectionId: section.id, name: it.name, description: it.description ?? null, price: it.price,
+          dietaryTags: it.dietary ?? [], allergens: it.allergens ?? [], isPopular: !!it.popular,
+        }).returning();
+        for (const [gi, g] of (it.groups ?? []).entries()) {
+          const [grp] = await tx.insert(optionGroups).values({ menuItemId: mi.id, name: g.name, minSelect: g.min, maxSelect: g.max, sortOrder: gi }).returning();
+          await tx.insert(options).values(g.options.map(([name, priceDelta]) => ({ groupId: grp.id, name, priceDelta })));
+        }
+      }
+    }
+}
+
 /** Dados de demonstração (só se a base de dados ainda não tiver lojas). */
 export async function seedDemoData() {
   const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(stores);
@@ -280,53 +328,10 @@ export async function seedDemoData() {
       { userId: ids.cliente2, label: "Casa", street: "Centralidade do Kilamba, Bloco T, 3ºB", zone: "Kilamba", latitude: -8.9950, longitude: 13.2690, isDefault: true },
     ]);
 
-    for (const s of STORES) {
-      const [store] = await tx.insert(stores).values({
-        ownerId: s.owner ? ids[s.owner] : null, name: s.name, storeType: s.storeType, description: s.description,
-        cuisines: s.cuisines, isChain: !!s.isChain, phone: s.phone ?? "+244923100100", street: s.street, zone: s.zone,
-        latitude: s.lat, longitude: s.lng, zonesServed: s.zonesServed, openingTime: s.open ?? "00:00", closingTime: s.close ?? "00:00",
-        isOpen: true, isApproved: s.approved ?? true, isHomeBusiness: !!s.home, minNoticeMin: s.noticeMin ?? 0, maxOrdersPerDay: s.maxPerDay ?? null, deliveryFee: s.deliveryFee, minOrder: s.minOrder ?? 0,
-        deliveryTimeMin: s.time, prepTimeMin: Math.round(s.time / 2),
-        // sem avaliações inventadas: a média nasce das avaliações reais dos clientes
-      }).returning();
-      let order = 0;
-      for (const [sectionName, items] of Object.entries(s.menu)) {
-        const [section] = await tx.insert(menuSections).values({ storeId: store.id, name: sectionName, sortOrder: order++ }).returning();
-        for (const it of items) {
-          const [mi] = await tx.insert(menuItems).values({
-            storeId: store.id, sectionId: section.id, name: it.name, description: it.description ?? null, price: it.price,
-            dietaryTags: it.dietary ?? [], allergens: it.allergens ?? [], isPopular: !!it.popular,
-          }).returning();
-          for (const [gi, g] of (it.groups ?? []).entries()) {
-            const [grp] = await tx.insert(optionGroups).values({ menuItemId: mi.id, name: g.name, minSelect: g.min, maxSelect: g.max, sortOrder: gi }).returning();
-            await tx.insert(options).values(g.options.map(([name, priceDelta]) => ({ groupId: grp.id, name, priceDelta })));
-          }
-        }
-      }
-    }
+    for (const s of STORES) await insertStore(tx, s, s.owner ? ids[s.owner] : null);
 
 
-    // Publicidade: fotos livres da Wikimedia Commons (licença indicada em imageCredit) + autocolante de comida desenhado
-    await tx.insert(banners).values([
-      {
-        title: "Até a Palanca pede já!", subtitle: "Hambúrgueres quentinhos em menos de 40 minutos.",
-        imageUrl: "https://commons.wikimedia.org/wiki/Special:FilePath/Sable_(Hippotragus_niger)_female_crossing_the_road_(16635641913),_crop.jpg?width=900",
-        imageCredit: "Foto: Bernard Dupont, CC BY-SA 2.0, via Wikimedia Commons",
-        sticker: "burger", ctaLabel: "Ver hambúrgueres", linkUrl: "/pesquisa?q=hamb%C3%BArguer", bgColor: "#FF7B00", sortOrder: 1,
-      },
-      {
-        title: "Fome de elefante?", subtitle: "Pizzas e pratos para partilhar, entregues em Luanda.",
-        imageUrl: "https://commons.wikimedia.org/wiki/Special:FilePath/African_Bush_Elephants.jpg?width=900",
-        imageCredit: "Foto: Gorgo, domínio público, via Wikimedia Commons",
-        sticker: "pizza", ctaLabel: "Pedir pizza", linkUrl: "/pesquisa?q=pizza", bgColor: "#920054", sortOrder: 2,
-      },
-      {
-        title: "Doce como um hipopótamo", subtitle: "Bolos caseiros feitos por quem sabe. Encomende com antecedência.",
-        imageUrl: "https://commons.wikimedia.org/wiki/Special:FilePath/Rusizi_NP_hippopotamus.jpg?width=900",
-        imageCredit: "Foto: d_proffer, CC BY 2.0, via Wikimedia Commons",
-        sticker: "cake", ctaLabel: "Ver bolos caseiros", linkUrl: "/pesquisa?homeBusiness=1", bgColor: "#004D40", sortOrder: 3,
-      },
-    ]);
+    await tx.insert(banners).values(BANNERS);
     await tx.insert(promoCodes).values([
       { code: "BEMVINDO", description: "20% na primeira encomenda (máx. 2.000 Kz)", discountType: "percent", value: 20, maxDiscount: 2000, firstOrderOnly: true },
       { code: "ENTREGAGRATIS", description: "Entrega grátis em encomendas a partir de 5.000 Kz", discountType: "free_delivery", value: 0, minOrder: 5000, maxUsesPerUser: 3 },
@@ -334,4 +339,37 @@ export async function seedDemoData() {
     ]);
   });
   console.log("[seed] pronto. Contas de teste em replit.md");
+}
+
+/**
+ * Dados reais para o lançamento (SEED_LAUNCH=true): Mariato Restaurante Grill com o menu completo e os anúncios.
+ * A conta da gerência do Mariato usa MARIATO_USERNAME (por defeito "mariato") e MARIATO_PASSWORD (>= 12 caracteres).
+ * A loja nasce FECHADA: a gerência abre-a no Portal da loja no dia da inauguração.
+ * Só cria o que ainda não existe, por isso pode ficar ligado sem duplicar nada.
+ */
+export async function seedLaunchData() {
+  const [{ nb }] = await db.select({ nb: sql<number>`count(*)::int` }).from(banners);
+  if (nb === 0) {
+    await db.insert(banners).values(BANNERS);
+    console.log("[launch] anúncios criados.");
+  }
+  const [existing] = await db.select({ id: stores.id }).from(stores).where(eq(stores.name, MARIATO.name));
+  if (existing) return;
+  const username = (process.env.MARIATO_USERNAME || "mariato").toLowerCase();
+  const password = process.env.MARIATO_PASSWORD;
+  if (!password || password.length < 12) {
+    console.warn("[launch] MARIATO_PASSWORD em falta ou com menos de 12 caracteres: Mariato não criado.");
+    return;
+  }
+  await db.transaction(async (tx) => {
+    let [owner] = await tx.select().from(users).where(eq(users.username, username));
+    if (!owner) {
+      [owner] = await tx.insert(users).values({
+        username, passwordHash: await bcrypt.hash(password, 12), fullName: "Gerência Mariato", phone: MARIATO.phone ?? "+244927671480",
+        userType: "supplier", referralCode: code(),
+      }).returning();
+    }
+    await insertStore(tx, MARIATO, owner.id, { isOpen: false });
+  });
+  console.log(`[launch] Mariato criado (conta "${username}"), fechado até a gerência o abrir.`);
 }

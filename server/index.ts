@@ -18,7 +18,7 @@ import { partnerRouter } from "./routes/partner";
 import { driverRouter } from "./routes/driver";
 import { adminRouter } from "./routes/admin";
 import { webhookRouter } from "./routes/webhooks";
-import { ensureAdmin, seedDemoData } from "./seed";
+import { ensureAdmin, seedDemoData, seedLaunchData } from "./seed";
 import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
@@ -106,6 +106,7 @@ app.use(errorHandler);
 (async () => {
   await runMigrations();
   await ensureAdmin();
+  if (process.env.SEED_LAUNCH === "true") await seedLaunchData();
   if (process.env.SEED_DEMO === "true" || (!config.isProd && process.env.SEED_DEMO !== "false")) {
     await seedDemoData();
   }
