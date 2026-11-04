@@ -305,7 +305,7 @@ function OrderCard({ order }: { order: PartnerOrder }) {
 
       <div className="mt-2 flex items-center justify-between border-t pt-2 text-sm">
         <span className="font-semibold">{kz(order.total)}</span>
-        <span className={cn("flex items-center gap-1 text-xs", isCash ? "font-semibold text-teal-700" : "text-neutral-600")}>
+        <span className={cn("flex items-center gap-1 text-xs", isCash ? "font-semibold text-brand-700" : "text-neutral-600")}>
           {isCash && <Banknote className="h-3 w-3" />}
           {isCash ? t({ pt: "Cobrar na entrega", en: "Collect on delivery", fr: "À encaisser à la livraison" }) : (PAYMENT[order.paymentMethod] ? t(PAYMENT[order.paymentMethod]) : order.paymentMethod)}
         </span>

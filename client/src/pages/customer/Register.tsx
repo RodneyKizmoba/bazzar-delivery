@@ -158,7 +158,7 @@ export default function Register() {
               {types.map(({ id, icon: Icon, label, sub }) => (
                 <button key={id} type="button" role="radio" aria-checked={type === id} onClick={() => setType(id)}
                   className={cn("flex flex-col items-center gap-1 rounded-2xl border-2 px-2 py-3 text-center transition-colors",
-                    type === id ? "border-primary bg-teal-50 text-primary" : "border-neutral-200 text-neutral-700 hover:bg-neutral-50")}>
+                    type === id ? "border-primary bg-brand-50 text-primary" : "border-neutral-200 text-neutral-700 hover:bg-neutral-50")}>
                   <Icon className="h-6 w-6" aria-hidden />
                   <span className="text-xs font-semibold leading-tight">{t(label)}</span>
                   <span className="text-[10px] text-neutral-500">{t(sub)}</span>
@@ -230,7 +230,7 @@ export default function Register() {
                 ].map((o) => (
                   <button key={String(o.home)} type="button" role="radio" aria-checked={biz.isHomeBusiness === o.home}
                     onClick={() => setBiz((b) => ({ ...b, isHomeBusiness: o.home, storeType: o.home && b.storeType === "restaurant" ? "bakery" : b.storeType, minNoticeHours: o.home ? (b.minNoticeHours || 24) : 0 }))}
-                    className={cn("rounded-xl border-2 p-3 text-left text-sm", biz.isHomeBusiness === o.home ? "border-primary bg-teal-50" : "border-neutral-200")}>
+                    className={cn("rounded-xl border-2 p-3 text-left text-sm", biz.isHomeBusiness === o.home ? "border-primary bg-brand-50" : "border-neutral-200")}>
                     <span className="text-xl" aria-hidden>{o.icon}</span>
                     <span className="block font-semibold">{t(o.label)}</span>
                     <span className="block text-xs text-neutral-500">{t(o.hint)}</span>

@@ -83,7 +83,7 @@ function About() {
   ];
   return (
     <>
-      <div className="mb-6 rounded-2xl bg-gradient-to-br from-primary to-teal-500 p-5 text-white">
+      <div className="mb-6 rounded-2xl bg-gradient-to-br from-primary to-pop p-5 text-white">
         <p className="text-3xl" aria-hidden>🛵</p>
         <p className="mt-2 text-xl font-extrabold">PedeAí Delivery</p>
         <p className="text-sm text-white/90">{t({ pt: "Tudo o que precisa, entregue em Luanda.", en: "Everything you need, delivered in Luanda.", fr: "Tout ce qu'il vous faut, livré à Luanda." })}</p>
@@ -236,7 +236,7 @@ function Support() {
   const t = useT();
   const contacts: { href: string; icon: typeof Phone; label: string; value: string; cls: string }[] = [
     { href: `https://wa.me/${SUPPORT_WHATSAPP}`, icon: MessageCircle, label: "WhatsApp", value: SUPPORT_PHONE, cls: "bg-green-50 text-green-800" },
-    { href: `tel:${SUPPORT_PHONE.replace(/\s/g, "")}`, icon: Phone, label: t({ pt: "Telefone", en: "Phone", fr: "Téléphone" }), value: SUPPORT_PHONE, cls: "bg-teal-50 text-teal-800" },
+    { href: `tel:${SUPPORT_PHONE.replace(/\s/g, "")}`, icon: Phone, label: t({ pt: "Telefone", en: "Phone", fr: "Téléphone" }), value: SUPPORT_PHONE, cls: "bg-brand-50 text-brand-800" },
     { href: `mailto:${SUPPORT_EMAIL}`, icon: Mail, label: "Email", value: SUPPORT_EMAIL, cls: "bg-sky-50 text-sky-800" },
   ];
   return (

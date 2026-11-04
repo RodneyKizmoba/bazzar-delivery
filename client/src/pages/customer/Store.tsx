@@ -331,7 +331,7 @@ export default function StorePage() {
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-1.5">
                               <h3 className="font-semibold text-neutral-900">{it.name}</h3>
-                              {it.isPopular && <span className="rounded-full bg-teal-100 px-2 py-0.5 text-[10px] font-semibold text-teal-800">🔥 {t({ pt: "Popular", en: "Popular", fr: "Populaire" })}</span>}
+                              {it.isPopular && <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[10px] font-semibold text-brand-800">🔥 {t({ pt: "Popular", en: "Popular", fr: "Populaire" })}</span>}
                               {!it.isAvailable && <span className="rounded-full bg-neutral-200 px-2 py-0.5 text-[10px] font-semibold text-neutral-700">{t({ pt: "Esgotado", en: "Sold out", fr: "Épuisé" })}</span>}
                             </div>
                             {it.description && <p className="mt-0.5 line-clamp-2 text-sm text-neutral-500">{it.description}</p>}
@@ -371,7 +371,7 @@ export default function StorePage() {
                   <li key={r.id} className="py-4">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-100 text-sm font-bold text-teal-800" aria-hidden>{r.author.charAt(0).toUpperCase()}</span>
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-sm font-bold text-brand-800" aria-hidden>{r.author.charAt(0).toUpperCase()}</span>
                         <span className="font-medium">{r.author}</span>
                       </div>
                       <time className="text-xs text-neutral-500" dateTime={r.createdAt}>{dateTime(r.createdAt, lang)}</time>
@@ -379,7 +379,7 @@ export default function StorePage() {
                     <div className="mt-1.5"><Stars value={r.rating} /></div>
                     {r.comment && <p className="mt-1.5 text-sm text-neutral-700">{r.comment}</p>}
                     {r.reply && (
-                      <div className="mt-2 rounded-xl border-l-4 border-primary bg-teal-50/60 px-3 py-2 text-sm">
+                      <div className="mt-2 rounded-xl border-l-4 border-primary bg-brand-50/60 px-3 py-2 text-sm">
                         <p className="text-xs font-semibold text-neutral-800">{t({ pt: "Resposta da loja", en: "Store reply", fr: "Réponse du magasin" })}</p>
                         <p className="text-neutral-700">{r.reply}</p>
                       </div>

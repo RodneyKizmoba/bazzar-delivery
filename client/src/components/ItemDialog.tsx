@@ -131,7 +131,7 @@ export function ItemDialog({ item, open, onOpenChange, onConfirm, confirmLabel, 
                         <input
                           type={g.maxSelect === 1 ? "radio" : "checkbox"}
                           name={`g-${g.id}`}
-                          className="h-4 w-4 accent-[hsl(var(--primary))]"
+                          className="h-4 w-4 accent-primary"
                           checked={checked}
                           disabled={disabled}
                           onChange={() => toggle(g.id, o.id, g.maxSelect)}

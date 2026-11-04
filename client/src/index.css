@@ -3,6 +3,18 @@
 @tailwind utilities;
 
 :root {
+  /* Marca PedeAí: escala de cor (R G B). Ver docs/CORES.md */
+  --brand-50: 243 247 247;
+  --brand-100: 227 237 236;
+  --brand-200: 200 219 216;
+  --brand-300: 160 193 188;
+  --brand-400: 117 165 158;
+  --brand-500: 82 142 134;
+  --brand-600: 74 128 121;
+  --brand-700: 61 105 99;
+  --brand-800: 48 83 79;
+  --brand-900: 37 64 60;
+  --pop: 43 179 163;
   --background: 0 0% 100%;
   --foreground: 20 14.3% 4.1%;
   --muted: 60 4.8% 95.9%;

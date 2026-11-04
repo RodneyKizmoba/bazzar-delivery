@@ -198,7 +198,7 @@ export function WhenPicker({ mode, onModeChange, value, onChange, hours, allowNo
 
   const optionCls = (active: boolean, disabled?: boolean) => cn(
     "flex flex-1 items-center gap-2 rounded-xl border-2 px-3 py-3 text-left text-sm transition",
-    active ? "border-primary bg-teal-50" : "border-neutral-200 hover:border-neutral-300",
+    active ? "border-primary bg-brand-50" : "border-neutral-200 hover:border-neutral-300",
     disabled && "opacity-50 cursor-not-allowed",
   );
 
@@ -284,7 +284,7 @@ export function PaymentPicker({ value, onChange, excludeCash }: { value: string;
         return (
           <label key={m.id} htmlFor={id}
             className={cn("flex min-h-[52px] items-center gap-3 rounded-xl border-2 px-3 py-2.5",
-              value === m.id ? "border-primary bg-teal-50" : "border-neutral-200",
+              value === m.id ? "border-primary bg-brand-50" : "border-neutral-200",
               m.available ? "cursor-pointer" : "cursor-not-allowed opacity-55")}>
             <RadioGroupItem id={id} value={m.id} disabled={!m.available} />
             <span className="text-lg" aria-hidden>{PAYMENT_ICON[m.id] ?? "💳"}</span>
@@ -379,7 +379,7 @@ export function AddressForm({ address, onDone, onCancel, submitLabel }: {
         <div className="flex flex-wrap gap-1.5">
           {LABEL_PRESETS.map((p) => (
             <button key={p.pt} type="button" onClick={() => setLabel(t(p))}
-              className={cn("rounded-full border px-3 py-1.5 text-xs font-medium", label === t(p) ? "border-primary bg-teal-50 text-primary" : "bg-white")}>
+              className={cn("rounded-full border px-3 py-1.5 text-xs font-medium", label === t(p) ? "border-primary bg-brand-50 text-primary" : "bg-white")}>
               {t(p)}
             </button>
           ))}
@@ -456,7 +456,7 @@ export function AddressPicker({ value, onChange, zonesServed }: { value: number 
             const ok = served(a.zone);
             return (
               <label key={a.id} htmlFor={id}
-                className={cn("flex cursor-pointer items-start gap-3 rounded-xl border-2 px-3 py-3", value === a.id ? "border-primary bg-teal-50" : "border-neutral-200")}>
+                className={cn("flex cursor-pointer items-start gap-3 rounded-xl border-2 px-3 py-3", value === a.id ? "border-primary bg-brand-50" : "border-neutral-200")}>
                 <RadioGroupItem id={id} value={String(a.id)} className="mt-0.5" />
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2 text-sm font-semibold">

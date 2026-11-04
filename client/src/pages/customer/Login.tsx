@@ -108,7 +108,7 @@ export default function Login() {
             <CollapsibleContent className="mt-3 space-y-1.5">
               {DEMO.map((d) => (
                 <button key={d.u} type="button" onClick={() => { setUsername(d.u); setPassword(d.p); setError(null); }}
-                  className="flex w-full items-center justify-between rounded-lg bg-white px-3 py-2 text-left text-xs hover:bg-teal-50">
+                  className="flex w-full items-center justify-between rounded-lg bg-white px-3 py-2 text-left text-xs hover:bg-brand-50">
                   <span className="font-semibold">{t(d.role)}</span>
                   <code className="text-neutral-600">{d.u} / {d.p}</code>
                 </button>

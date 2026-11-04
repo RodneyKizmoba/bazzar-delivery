@@ -58,9 +58,9 @@ function ShareBox({ link, storeName }: { link: string; storeName: string }) {
     catch { toast({ variant: "destructive", title: t({ pt: "Não foi possível copiar", en: "Couldn't copy", fr: "Copie impossible" }) }); }
   };
   return (
-    <div className="rounded-2xl border border-teal-200 bg-teal-50 p-4">
-      <p className="flex items-center gap-2 text-sm font-semibold text-teal-900"><Share2 className="h-4 w-4" />{t({ pt: "Convide amigos para o cesto", en: "Invite friends to the basket", fr: "Invitez vos amis" })}</p>
-      <p className="mt-0.5 text-xs text-teal-800">{t({ pt: "Cada pessoa escolhe o que quer — não precisam de conta.", en: "Everyone picks their own — no account needed.", fr: "Chacun choisit — sans compte." })}</p>
+    <div className="rounded-2xl border border-brand-200 bg-brand-50 p-4">
+      <p className="flex items-center gap-2 text-sm font-semibold text-brand-900"><Share2 className="h-4 w-4" />{t({ pt: "Convide amigos para o cesto", en: "Invite friends to the basket", fr: "Invitez vos amis" })}</p>
+      <p className="mt-0.5 text-xs text-brand-800">{t({ pt: "Cada pessoa escolhe o que quer — não precisam de conta.", en: "Everyone picks their own — no account needed.", fr: "Chacun choisit — sans compte." })}</p>
       <div className="mt-3 flex gap-2">
         <Input readOnly value={link} aria-label={t({ pt: "Link do grupo", en: "Group link", fr: "Lien du groupe" })} className="bg-white text-xs" onFocus={(e) => e.target.select()} />
         <Button variant="outline" className="bg-white" onClick={copy} aria-label={t({ pt: "Copiar link", en: "Copy link", fr: "Copier le lien" })}>
@@ -377,7 +377,7 @@ export default function GroupOrder() {
                           <div className="mt-1"><DietaryBadges tags={it.dietaryTags} small /></div>
                         </div>
                         {it.imageUrl ? <img src={it.imageUrl} alt="" className="h-16 w-16 rounded-lg object-cover" loading="lazy" /> : null}
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-50 text-primary"><Plus className="h-4 w-4" /></span>
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-50 text-primary"><Plus className="h-4 w-4" /></span>
                       </button>
                     </li>
                   ))}

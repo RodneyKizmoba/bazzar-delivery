@@ -158,7 +158,7 @@ export default function Plus() {
     <CustomerShell>
       <div className="px-4 pb-8 pt-4">
         {/* Hero */}
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-700 via-fuchsia-700 to-teal-600 p-6 text-white shadow-lg">
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-700 via-fuchsia-700 to-brand-600 p-6 text-white shadow-lg">
           <Sparkles className="absolute -right-4 -top-4 h-28 w-28 text-white/10" aria-hidden />
           <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold"><Crown className="h-3.5 w-3.5" />PedeAí Plus</span>
           <h1 className="mt-3 text-3xl font-extrabold leading-tight">{t({ pt: "Entregas grátis, todos os dias.", en: "Free delivery, every day.", fr: "Livraison gratuite, tous les jours." })}</h1>

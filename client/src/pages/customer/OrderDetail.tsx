@@ -332,7 +332,7 @@ function OrderDetailInner({ id }: { id: string }) {
     <div className="space-y-4 px-4 pb-10 pt-4">
       {/* Cabeçalho de estado */}
       <div className={cn("rounded-2xl p-5 text-white shadow-sm",
-        order.status === "cancelled" || order.status === "rejected" ? "bg-neutral-700" : order.status === "delivered" ? "bg-green-700" : "bg-gradient-to-br from-teal-600 to-teal-800")}>
+        order.status === "cancelled" || order.status === "rejected" ? "bg-neutral-700" : order.status === "delivered" ? "bg-green-700" : "bg-gradient-to-br from-brand-600 to-brand-800")}>
         <div className="flex items-start justify-between gap-2">
           <p className="text-xs font-medium uppercase tracking-wide text-white/80">#{order.orderNumber}</p>
           {!isFinal && <span className="flex items-center gap-1 text-[11px] text-white/80"><span className="h-2 w-2 animate-pulse rounded-full bg-white" />{t({ pt: "Ao vivo", en: "Live", fr: "En direct" })}</span>}
@@ -359,7 +359,7 @@ function OrderDetailInner({ id }: { id: string }) {
               <li key={s} className="relative flex gap-3 pb-4 last:pb-0">
                 {i < STEPS.length - 1 && <span className={cn("absolute left-[11px] top-6 h-[calc(100%-16px)] w-0.5", currentIdx > i ? "bg-primary" : "bg-neutral-200")} aria-hidden />}
                 <span className={cn("relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2",
-                  done ? "border-primary bg-primary text-white" : "border-neutral-300 bg-white", current && !isFinal && "ring-4 ring-teal-100")}>
+                  done ? "border-primary bg-primary text-white" : "border-neutral-300 bg-white", current && !isFinal && "ring-4 ring-brand-100")}>
                   {done && <Check className="h-3.5 w-3.5" />}
                 </span>
                 <div className="flex flex-1 items-baseline justify-between gap-2">

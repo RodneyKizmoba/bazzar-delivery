@@ -163,7 +163,7 @@ function CurrentDelivery({ order, myPos }: { order: CurrentOrder; myPos: { latit
       </div>
 
       {order.collectCash > 0 && (
-        <div className="flex items-center gap-2 rounded-lg bg-teal-100 p-3 text-teal-900" role="alert">
+        <div className="flex items-center gap-2 rounded-lg bg-brand-100 p-3 text-brand-900" role="alert">
           <Banknote className="h-6 w-6 shrink-0" />
           <p className="text-lg font-bold">{t({ pt: `Cobrar ${kz(order.collectCash)} em numerário`, en: `Collect ${kz(order.collectCash)} in cash`, fr: `Encaisser ${kz(order.collectCash)} en espèces` })}</p>
         </div>
@@ -304,7 +304,7 @@ function AvailableList({ onClaimError }: { onClaimError: (e: Error) => void }) {
                 <StatusBadge status={o.status} />
                 <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />{time(o.createdAt, lang)}</span>
                 {o.collectCash > 0 && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-teal-100 px-2 py-0.5 font-semibold text-teal-800">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-brand-100 px-2 py-0.5 font-semibold text-brand-800">
                     <Banknote className="h-3 w-3" />{t({ pt: "Cobrar", en: "Collect", fr: "Encaisser" })} {kz(o.collectCash)}
                   </span>
                 )}
