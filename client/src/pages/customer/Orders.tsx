@@ -155,7 +155,7 @@ function OrdersInner() {
       <Tabs defaultValue={current.length ? "current" : "past"} className="px-4">
         <TabsList className="grid w-full grid-cols-2 rounded-full">
           <TabsTrigger value="current" className="rounded-full">
-            {t({ pt: "Em curso", en: "Active", fr: "En cours" })}{current.length > 0 && <span className="ml-1.5 rounded-full bg-primary px-1.5 text-[10px] text-white">{current.length}</span>}
+            {t({ pt: "Em curso", en: "Active", fr: "En cours" })}{current.length > 0 && <span className="ml-1.5 rounded-full bg-primary px-1.5 text-[10px] text-on-brand">{current.length}</span>}
           </TabsTrigger>
           <TabsTrigger value="past" className="rounded-full">{t({ pt: "Anteriores", en: "Past", fr: "Précédentes" })}</TabsTrigger>
         </TabsList>

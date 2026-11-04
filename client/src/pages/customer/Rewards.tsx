@@ -68,7 +68,7 @@ function RewardsBody() {
 
   return (
     <div className="space-y-4 p-4">
-      <section className="rounded-2xl bg-gradient-to-br from-primary to-pop p-5 text-white">
+      <section className="rounded-2xl bg-gradient-to-br from-primary to-pop p-5 text-on-brand">
         <p className="text-sm opacity-90">{t({ pt: "O seu saldo", en: "Your balance", fr: "Votre solde" })}</p>
         <p className="text-4xl font-bold">{data.balance} <span className="text-lg font-medium">{t({ pt: "pontos", en: "points", fr: "points" })}</span></p>
         <p className="mt-1 text-sm opacity-90">≈ {kz(data.balance * data.pointValueKz)} {t({ pt: "de desconto", en: "off your orders", fr: "de réduction" })}</p>

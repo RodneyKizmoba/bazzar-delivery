@@ -3,18 +3,20 @@
 @tailwind utilities;
 
 :root {
-  /* Marca PedeAí: escala de cor (R G B). Ver docs/CORES.md */
-  --brand-50: 243 247 247;
-  --brand-100: 227 237 236;
-  --brand-200: 200 219 216;
-  --brand-300: 160 193 188;
-  --brand-400: 117 165 158;
-  --brand-500: 82 142 134;
-  --brand-600: 74 128 121;
-  --brand-700: 61 105 99;
-  --brand-800: 48 83 79;
-  --brand-900: 37 64 60;
-  --pop: 43 179 163;
+  /* Marca PedeAí: Teal #00CCBC + Outer Space #2E3333 + cores de comida (ver lib/format.ts). Valores R G B. */
+  --brand-50: 237 251 250;
+  --brand-100: 214 247 244;
+  --brand-200: 173 239 234;
+  --brand-300: 115 227 218;
+  --brand-400: 51 214 201;
+  --brand-500: 0 204 188;
+  --brand-600: 0 131 120;
+  --brand-700: 0 107 98;
+  --brand-800: 0 85 78;
+  --brand-900: 0 66 60;
+  --pop: 255 213 79; /* Lemon #FFD54F (destaque) */
+  --on-brand: 46 51 51; /* Outer Space #2E3333: texto escuro sobre o turquesa */
+  --brand-ink: 0 120 110; /* texto turquesa sobre branco (contraste >= 4.5:1) */
   --background: 0 0% 100%;
   --foreground: 20 14.3% 4.1%;
   --muted: 60 4.8% 95.9%;
@@ -25,7 +27,7 @@
   --card-foreground: 20 14.3% 4.1%;
   --border: 20 5.9% 90%;
   --input: 20 5.9% 90%;
-  --primary: 172 32% 36%; /* Verde PedeAí (logótipo #528E86, escurecido para contraste AA) */
+  --primary: 175 100% 40%;
   --primary-foreground: 60 9.1% 97.8%;
   --secondary: 142 70% 49%; /* Green */
   --secondary-foreground: 24 9.8% 10%;
@@ -88,4 +90,9 @@
 /* Custom shadows */
 .custom-shadow {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* Texto na cor da marca sobre fundo claro: usar o tom escuro para ser legível */
+@layer utilities {
+  .text-primary { color: rgb(var(--brand-ink)); }
 }

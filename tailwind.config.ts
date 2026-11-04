@@ -22,8 +22,8 @@ export default {
           foreground: "hsl(var(--popover-foreground))",
         },
         primary: {
-          DEFAULT: "rgb(var(--brand-600) / <alpha-value>)",
-          foreground: "hsl(var(--primary-foreground))",
+          DEFAULT: "rgb(var(--brand-500) / <alpha-value>)",
+          foreground: "rgb(var(--on-brand) / <alpha-value>)",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
@@ -47,6 +47,7 @@ export default {
         // Cor da marca (definida em index.css; trocar a paleta = trocar só as variáveis)
         brand: Object.fromEntries([50, 100, 200, 300, 400, 500, 600, 700, 800, 900].map((n) => [n, `rgb(var(--brand-${n}) / <alpha-value>)`])),
         pop: "rgb(var(--pop) / <alpha-value>)",
+        "on-brand": "rgb(var(--on-brand) / <alpha-value>)",
         chart: {
           "1": "hsl(var(--chart-1))",
           "2": "hsl(var(--chart-2))",

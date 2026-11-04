@@ -265,7 +265,7 @@ export default function Home() {
         {(meta.data?.storeTypes ?? Object.keys(STORE_TYPE)).map((type) => STORE_TYPE[type] && (
           <Link key={type} href={`/pesquisa?type=${type}${zq}`}
             className="flex min-w-[4.75rem] flex-col items-center gap-1.5 rounded-2xl px-1 py-2 hover:bg-neutral-50">
-            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-50 text-2xl" aria-hidden>{STORE_TYPE[type].icon}</span>
+            <span className="flex h-14 w-14 items-center justify-center rounded-2xl text-2xl" style={{ backgroundColor: `${STORE_TYPE[type].color}2E` }} aria-hidden>{STORE_TYPE[type].icon}</span>
             <span className="text-center text-xs font-medium leading-tight text-neutral-700">{t(STORE_TYPE[type])}</span>
           </Link>
         ))}
@@ -273,11 +273,11 @@ export default function Home() {
 
       {/* PedeAí Plus */}
       <div className="px-4 pt-4">
-        <Link href="/plus" className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-primary to-pop p-4 text-white shadow-md">
+        <Link href="/plus" className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-primary to-pop p-4 text-on-brand shadow-md">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/20"><Crown className="h-6 w-6" aria-hidden /></span>
           <div className="min-w-0 flex-1">
             <p className="font-bold">PedeAí Plus</p>
-            <p className="text-sm text-white/90">
+            <p className="text-sm opacity-90">
               {meta.data
                 ? t({
                   pt: `Entregas grátis acima de ${kz(meta.data.plus.freeDeliveryMinOrder)} por ${kz(meta.data.plus.monthlyPrice)}/mês`,

@@ -11,7 +11,7 @@ const icon = (emoji: string, bg: string) => L.divIcon({
   iconSize: [34, 34],
   iconAnchor: [17, 17],
 });
-const STORE = icon("🏪", "#3F7A72");
+const STORE = icon("🏪", "#00A99C");
 const HOME = icon("🏠", "#15803D");
 const RIDER = icon("🛵", "#1D4ED8");
 

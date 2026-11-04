@@ -41,11 +41,11 @@ function PlusMember({ info }: { info: PlusInfo }) {
   return (
     <div className="space-y-3">
       <div className="rounded-2xl border bg-white p-5 shadow-sm">
-        <p className="flex items-center gap-2 text-sm font-semibold text-violet-700"><Check className="h-4 w-4" />{t({ pt: "É membro PedeAí Plus", en: "You're a PedeAí Plus member", fr: "Vous êtes membre PedeAí Plus" })}</p>
+        <p className="flex items-center gap-2 text-sm font-semibold text-brand-700"><Check className="h-4 w-4" />{t({ pt: "É membro PedeAí Plus", en: "You're a PedeAí Plus member", fr: "Vous êtes membre PedeAí Plus" })}</p>
         <div className="mt-4 grid grid-cols-2 gap-3">
-          <div className="rounded-xl bg-violet-50 p-3">
-            <p className="text-xs text-violet-700">{t({ pt: "Poupança estimada", en: "Estimated savings", fr: "Économies estimées" })}</p>
-            <p className="text-xl font-bold text-violet-900">{kz(info.estimatedSavings)}</p>
+          <div className="rounded-xl bg-brand-50 p-3">
+            <p className="text-xs text-brand-700">{t({ pt: "Poupança estimada", en: "Estimated savings", fr: "Économies estimées" })}</p>
+            <p className="text-xl font-bold text-brand-900">{kz(info.estimatedSavings)}</p>
           </div>
           <div className="rounded-xl bg-neutral-50 p-3">
             <p className="text-xs text-neutral-600">{sub.autoRenew ? t({ pt: "Renova a", en: "Renews on", fr: "Renouvelé le" }) : t({ pt: "Termina a", en: "Ends on", fr: "Se termine le" })}</p>
@@ -125,7 +125,7 @@ function Subscribe({ price }: { price: number }) {
         </Alert>
       )}
       <PaymentPicker value={method} onChange={setMethod} excludeCash />
-      <Button className="h-12 w-full rounded-xl bg-violet-700 text-base hover:bg-violet-800" disabled={!method || subscribe.isPending || !anyOnline} onClick={() => subscribe.mutate()}>
+      <Button className="h-12 w-full rounded-xl bg-on-brand text-base text-white hover:bg-on-brand/90" disabled={!method || subscribe.isPending || !anyOnline} onClick={() => subscribe.mutate()}>
         {subscribe.isPending && <Loader2 className="mr-2 h-5 w-5 animate-spin" />}
         {t({ pt: `Aderir por ${kz(price)}/mês`, en: `Join for ${kz(price)}/month`, fr: `S'abonner pour ${kz(price)}/mois` })}
       </Button>
@@ -158,7 +158,7 @@ export default function Plus() {
     <CustomerShell>
       <div className="px-4 pb-8 pt-4">
         {/* Hero */}
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-700 via-fuchsia-700 to-brand-600 p-6 text-white shadow-lg">
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-on-brand via-on-brand to-brand-800 p-6 text-white shadow-lg">
           <Sparkles className="absolute -right-4 -top-4 h-28 w-28 text-white/10" aria-hidden />
           <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold"><Crown className="h-3.5 w-3.5" />PedeAí Plus</span>
           <h1 className="mt-3 text-3xl font-extrabold leading-tight">{t({ pt: "Entregas grátis, todos os dias.", en: "Free delivery, every day.", fr: "Livraison gratuite, tous les jours." })}</h1>
@@ -172,7 +172,7 @@ export default function Plus() {
         <ul className="mt-5 space-y-3">
           {perks.map(({ icon: Icon, title, text }) => (
             <li key={title.pt} className="flex gap-3 rounded-2xl border bg-white p-4 shadow-sm">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-700"><Icon className="h-5 w-5" /></span>
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-100 text-brand-700"><Icon className="h-5 w-5" /></span>
               <div>
                 <p className="font-semibold">{t(title)}</p>
                 <p className="text-sm text-neutral-600">{t(text)}</p>

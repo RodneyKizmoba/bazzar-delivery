@@ -44,14 +44,26 @@ export const STATUS_COLOR: Record<string, string> = {
   rejected: "bg-red-100 text-red-800",
 };
 
-export const STORE_TYPE: Record<string, Tr & { icon: string }> = {
-  restaurant: { pt: "Restaurantes", en: "Restaurants", fr: "Restaurants", icon: "🍽️" },
-  bakery: { pt: "Pastelaria e bolos", en: "Bakery & cakes", fr: "Pâtisserie", icon: "🎂" },
-  grocery: { pt: "Supermercado", en: "Grocery", fr: "Épicerie", icon: "🛒" },
-  pharmacy: { pt: "Farmácia", en: "Pharmacy", fr: "Pharmacie", icon: "💊" },
-  beauty: { pt: "Beleza", en: "Beauty", fr: "Beauté", icon: "💄" },
-  flowers: { pt: "Flores", en: "Flowers", fr: "Fleurs", icon: "💐" },
-  retail: { pt: "Casa e presentes", en: "Home & gifts", fr: "Maison et cadeaux", icon: "🎁" },
+
+/** Cores de comida (secundárias). Usadas nos tipos de loja e nas imagens de reserva. */
+export const FOOD_COLORS = {
+  pumpkin: "#FF7B00", // pizzas, massas, fritos
+  beetroot: "#920054", // carnes, sobremesas de bagas, sumos
+  lime: "#89D900", // frescura, citrinos
+  seaweed: "#004D40", // sushi, saudável, saladas
+  burgerSauce: "#FF5252", // fast food, hambúrgueres, picante
+  lemon: "#FFD54F", // sobremesas, pequenos-almoços
+  ancho: "#5D4037", // grelhados, churrasco, fumo
+} as const;
+
+export const STORE_TYPE: Record<string, Tr & { icon: string; color: string }> = {
+  restaurant: { pt: "Restaurantes", en: "Restaurants", fr: "Restaurants", icon: "🍽️", color: FOOD_COLORS.pumpkin },
+  bakery: { pt: "Pastelaria e bolos", en: "Bakery & cakes", fr: "Pâtisserie", icon: "🎂", color: FOOD_COLORS.lemon },
+  grocery: { pt: "Supermercado", en: "Grocery", fr: "Épicerie", icon: "🛒", color: FOOD_COLORS.lime },
+  pharmacy: { pt: "Farmácia", en: "Pharmacy", fr: "Pharmacie", icon: "💊", color: FOOD_COLORS.seaweed },
+  beauty: { pt: "Beleza", en: "Beauty", fr: "Beauté", icon: "💄", color: FOOD_COLORS.beetroot },
+  flowers: { pt: "Flores", en: "Flowers", fr: "Fleurs", icon: "💐", color: FOOD_COLORS.burgerSauce },
+  retail: { pt: "Casa e presentes", en: "Home & gifts", fr: "Maison et cadeaux", icon: "🎁", color: FOOD_COLORS.ancho },
 };
 
 export const DIETARY: Record<string, Tr & { icon: string }> = {
@@ -89,7 +101,7 @@ export function initials(name: string): string {
 
 /** Cor estável a partir de um texto (para capas sem imagem). */
 export function colorFor(text: string): string {
-  const palette = ["#3F7A72", "#C2410C", "#B45309", "#15803D", "#0E7490", "#7C3AED", "#BE185D", "#1D4ED8", "#A16207"];
+  const palette = ["#00897E", "#FF7B00", "#920054", "#004D40", "#FF5252", "#5D4037", "#D35400"];
   let h = 0;
   for (const ch of text) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   return palette[h % palette.length];

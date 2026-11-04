@@ -268,7 +268,7 @@ export const PAYMENT_ICON: Record<string, string> = { cash: "💵", multicaixa_e
 
 export function SandboxBadge() {
   const t = useT();
-  return <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-800">{t({ pt: "modo de teste", en: "test mode", fr: "mode test" })}</span>;
+  return <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-800">{t({ pt: "modo de teste", en: "test mode", fr: "mode test" })}</span>;
 }
 
 export function PaymentPicker({ value, onChange, excludeCash }: { value: string; onChange: (v: string) => void; excludeCash?: boolean }) {
@@ -512,7 +512,7 @@ export function QuoteBreakdown({ quote }: { quote: Pick<Quote, "subtotal" | "del
         quote.plusSavings > 0 ? (
           <span className="flex flex-col items-end">
             <span><span className="mr-1.5 text-neutral-400 line-through">{kz(quote.baseDeliveryFee)}</span><span className="font-semibold text-green-700">{t(T.free)}</span></span>
-            <span className="text-[11px] font-semibold text-violet-700">{t({ pt: "Grátis com Plus", en: "Free with Plus", fr: "Gratuit avec Plus" })}</span>
+            <span className="text-[11px] font-semibold text-brand-700">{t({ pt: "Grátis com Plus", en: "Free with Plus", fr: "Gratuit avec Plus" })}</span>
           </span>
         ) : quote.deliveryFee === 0 ? <span className="font-semibold text-green-700">{t(T.free)}</span> : kz(quote.deliveryFee)
       } />

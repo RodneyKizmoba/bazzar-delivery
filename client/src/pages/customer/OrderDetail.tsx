@@ -359,7 +359,7 @@ function OrderDetailInner({ id }: { id: string }) {
               <li key={s} className="relative flex gap-3 pb-4 last:pb-0">
                 {i < STEPS.length - 1 && <span className={cn("absolute left-[11px] top-6 h-[calc(100%-16px)] w-0.5", currentIdx > i ? "bg-primary" : "bg-neutral-200")} aria-hidden />}
                 <span className={cn("relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2",
-                  done ? "border-primary bg-primary text-white" : "border-neutral-300 bg-white", current && !isFinal && "ring-4 ring-brand-100")}>
+                  done ? "border-primary bg-primary text-on-brand" : "border-neutral-300 bg-white", current && !isFinal && "ring-4 ring-brand-100")}>
                   {done && <Check className="h-3.5 w-3.5" />}
                 </span>
                 <div className="flex flex-1 items-baseline justify-between gap-2">

@@ -145,7 +145,7 @@ export default function Search() {
             aria-label={t({ pt: "Filtros", en: "Filters", fr: "Filtres" })}>
             <SlidersHorizontal className="h-5 w-5" />
             {activeCount > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[11px] text-white">{activeCount}</span>
+              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[11px] text-on-brand">{activeCount}</span>
             )}
           </Button>
         </div>

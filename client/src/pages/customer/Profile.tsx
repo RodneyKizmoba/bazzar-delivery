@@ -166,7 +166,7 @@ function ProfileInner() {
           <p className="truncate text-lg font-bold">{u.fullName}</p>
           <p className="truncate text-sm text-neutral-500">{u.phone}</p>
           {u.email && <p className="truncate text-xs text-neutral-500">{u.email}</p>}
-          {plusQ.data?.active && <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-800"><Crown className="h-3 w-3" />Plus</span>}
+          {plusQ.data?.active && <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-brand-100 px-2 py-0.5 text-xs font-semibold text-brand-800"><Crown className="h-3 w-3" />Plus</span>}
         </div>
         <Button variant="outline" size="icon" onClick={() => setEditOpen(true)} aria-label={t({ pt: "Editar perfil", en: "Edit profile", fr: "Modifier le profil" })}><Pencil className="h-4 w-4" /></Button>
       </div>
@@ -177,11 +177,11 @@ function ProfileInner() {
 
       {/* Pontos */}
       {isCustomer && (
-        <Link href="/perfil/pontos" className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-amber-500 to-brand-600 p-4 text-white shadow-sm">
+        <Link href="/perfil/pontos" className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-primary to-pop p-4 text-on-brand shadow-sm">
           <Coins className="h-7 w-7" />
           <div className="flex-1">
             <p className="text-2xl font-extrabold leading-none">{u.loyaltyPoints}</p>
-            <p className="text-xs text-white/85">{t({ pt: "pontos · convide amigos e ganhe mais", en: "points · invite friends to earn more", fr: "points · invitez des amis" })}</p>
+            <p className="text-xs opacity-80">{t({ pt: "pontos · convide amigos e ganhe mais", en: "points · invite friends to earn more", fr: "points · invitez des amis" })}</p>
           </div>
           <ChevronRight className="h-5 w-5" />
         </Link>
@@ -194,7 +194,7 @@ function ProfileInner() {
         {isCustomer && <Row href="/favoritos" icon={<Heart className="h-5 w-5" />} label={t({ pt: "Favoritos", en: "Favourites", fr: "Favoris" })} />}
         {isCustomer && <Row href="/perfil/pontos" icon={<Coins className="h-5 w-5" />} label={t({ pt: "Pontos e convites", en: "Points & referrals", fr: "Points et parrainage" })} />}
         {isCustomer && <Row href="/plus" icon={<Crown className="h-5 w-5" />} label="PedeAí Plus"
-          hint={plusQ.data?.active ? <span className="text-xs font-semibold text-violet-700">{t({ pt: "Activo", en: "Active", fr: "Actif" })}</span> : undefined} />}
+          hint={plusQ.data?.active ? <span className="text-xs font-semibold text-brand-700">{t({ pt: "Activo", en: "Active", fr: "Actif" })}</span> : undefined} />}
       </nav>
 
       {/* Preferências */}

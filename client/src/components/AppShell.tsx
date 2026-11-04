@@ -102,7 +102,7 @@ export function CustomerShell({ children, hideHeader, hideNav }: { children: Rea
                   <span className="relative">
                     <Icon className="h-5 w-5" />
                     {!!badge && (
-                      <span className="absolute -right-2.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] text-white">{badge}</span>
+                      <span className="absolute -right-2.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] text-on-brand">{badge}</span>
                     )}
                   </span>
                   {label}
