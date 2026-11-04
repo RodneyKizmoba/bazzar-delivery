@@ -203,7 +203,7 @@ export default function Cart() {
           <Link href="/plus" className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-on-brand to-brand-800 p-4 text-white shadow-sm">
             <Crown className="h-6 w-6 shrink-0" />
             <div className="flex-1">
-              <p className="text-sm font-bold">{t({ pt: "Entrega grátis com PedeAí Plus", en: "Free delivery with PedeAí Plus", fr: "Livraison gratuite avec PedeAí Plus" })}</p>
+              <p className="text-sm font-bold">{t({ pt: "Entrega grátis com PedeJá Plus", en: "Free delivery with PedeJá Plus", fr: "Livraison gratuite avec PedeJá Plus" })}</p>
               {meta.data && (
                 <p className="text-xs text-white/85">
                   {t({ pt: `Em encomendas acima de ${kz(meta.data.plus.freeDeliveryMinOrder)} · ${kz(meta.data.plus.monthlyPrice)}/mês`, en: `On orders over ${kz(meta.data.plus.freeDeliveryMinOrder)} · ${kz(meta.data.plus.monthlyPrice)}/month`, fr: `Dès ${kz(meta.data.plus.freeDeliveryMinOrder)} · ${kz(meta.data.plus.monthlyPrice)}/mois` })}

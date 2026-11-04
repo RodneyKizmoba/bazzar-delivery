@@ -169,7 +169,7 @@ async function validatePromo(db: DbOrTx, code: string, user: User | null, store:
   if (promo.expiresAt && promo.expiresAt < new Date()) throw badRequest("Este código promocional expirou.", "PROMO_EXPIRED");
   if (promo.maxUses != null && promo.usedCount >= promo.maxUses) throw badRequest("Este código já atingiu o limite de utilizações.", "PROMO_EXHAUSTED");
   if (promo.storeId && promo.storeId !== store.id) throw badRequest("Este código não é válido nesta loja.", "PROMO_WRONG_STORE");
-  if (promo.plusOnly && !isPlus) throw badRequest("Este código é exclusivo para membros PedeAí Plus.", "PROMO_PLUS_ONLY");
+  if (promo.plusOnly && !isPlus) throw badRequest("Este código é exclusivo para membros PedeJá Plus.", "PROMO_PLUS_ONLY");
   if (subtotal < promo.minOrder) throw badRequest(`Este código exige um mínimo de ${promo.minOrder} Kz.`, "PROMO_MIN_ORDER");
   if (user) {
     const [{ used }] = await db.select({ used: sql<number>`count(*)::int` }).from(orders)

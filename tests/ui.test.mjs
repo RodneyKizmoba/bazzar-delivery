@@ -1,4 +1,4 @@
-// PedeAí Delivery — headless-browser UI journey test.
+// PedeJá — headless-browser UI journey test.
 // Run: node tests/ui.test.mjs   (server on BASE, fresh seeded DB recommended)
 import puppeteer from "puppeteer-core";
 import fs from "fs";
@@ -357,8 +357,8 @@ try {
   await clickText(gp, /(Adicionar ao cesto|Adicionar)/, { selector: '[role="dialog"] button' }); await sleep(1500);
   a = await audit(gp, "31-group-guest-added");
   check("guest added item to group basket", addedA && /Zé Convidado/.test(a.text) && /Água/.test(a.text), a.text.slice(0, 500));
-  const ls = await gp.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("pedeai.group.")));
-  check("guest credentials stored in localStorage pedeai.group.<token>", ls.length === 1, ls);
+  const ls = await gp.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("pedeja.group.")));
+  check("guest credentials stored in localStorage pedeja.group.<token>", ls.length === 1, ls);
   // host adds Frango and checks out
   await go(cp, groupUrl.replace(BASE, ""), "32-group-host-refresh");
   await clickText(cp, /Frango grelhado/, { selector: "button" }); await sleep(700);

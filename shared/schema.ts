@@ -272,7 +272,7 @@ export const groupItems = pgTable("group_items", {
 export type GroupItem = typeof groupItems.$inferSelect;
 
 // ---------------------------------------------------------------------------
-// PedeAí Plus (subscrição)
+// PedeJá Plus (subscrição)
 // ---------------------------------------------------------------------------
 export const subscriptions = pgTable("subscriptions", {
   id: serial("id").primaryKey(),
@@ -484,5 +484,39 @@ export const promoInputSchema = z.object({
   maxUses: z.number().int().positive().nullable().optional(),
   maxUsesPerUser: z.number().int().positive().default(1),
   expiresAt: z.string().datetime().nullable().optional(),
+  isActive: z.boolean().default(true),
+});
+
+// ---------------------------------------------------------------------------
+// Publicidade (carrossel da página inicial)
+// ---------------------------------------------------------------------------
+export const BANNER_STICKERS = ["burger", "pizza", "cake", "none"] as const;
+
+export const banners = pgTable("banners", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  subtitle: text("subtitle"),
+  imageUrl: text("image_url"), // foto de fundo (https)
+  imageCredit: text("image_credit"), // crédito/licença exigido pela foto
+  sticker: text("sticker").$type<(typeof BANNER_STICKERS)[number]>().notNull().default("none"),
+  ctaLabel: text("cta_label"),
+  linkUrl: text("link_url"), // caminho interno (/pesquisa?...) ou https
+  bgColor: text("bg_color").notNull().default("#00CCBC"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+export type Banner = typeof banners.$inferSelect;
+
+export const bannerInputSchema = z.object({
+  title: z.string().trim().min(2).max(60),
+  subtitle: z.string().trim().max(120).nullable().optional(),
+  imageUrl: z.string().trim().url().max(600).refine((u) => u.startsWith("https://"), "A imagem tem de ser https").nullable().optional(),
+  imageCredit: z.string().trim().max(200).nullable().optional(),
+  sticker: z.enum(BANNER_STICKERS).default("none"),
+  ctaLabel: z.string().trim().max(30).nullable().optional(),
+  linkUrl: z.string().trim().max(300).refine((u) => /^\/(?!\/)/.test(u) || u.startsWith("https://"), "Use um caminho interno (/...) ou um link https").nullable().optional(),
+  bgColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).default("#00CCBC"),
+  sortOrder: z.number().int().min(0).max(1000).default(0),
   isActive: z.boolean().default(true),
 });

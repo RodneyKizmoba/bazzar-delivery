@@ -3,7 +3,7 @@ import { and, asc, desc, eq, ilike, inArray, or, sql, type SQL } from "drizzle-o
 import { z } from "zod";
 import { db } from "../db";
 import {
-  favorites, menuItems, menuSections, optionGroups, options, reviews, stores, users,
+  banners, favorites, menuItems, menuSections, optionGroups, options, reviews, stores, users,
   ALLERGENS, DIETARY_TAGS, STORE_TYPES, type Store,
 } from "@shared/schema";
 import { config } from "../config";
@@ -192,4 +192,9 @@ catalogRouter.get("/popular-items", ah(async (_req, res) => {
     .where(and(eq(menuItems.isPopular, true), eq(menuItems.isAvailable, true), eq(stores.isApproved, true)))
     .orderBy(desc(stores.ratingAvg)).limit(12);
   res.json({ items: rows });
+}));
+
+catalogRouter.get("/banners", ah(async (_req, res) => {
+  const rows = await db.select().from(banners).where(eq(banners.isActive, true)).orderBy(asc(banners.sortOrder), asc(banners.id)).limit(10);
+  res.json({ banners: rows });
 }));

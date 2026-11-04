@@ -1,5 +1,5 @@
 /**
- * PedeAí Delivery — API end-to-end + security test suite.
+ * PedeJá — API end-to-end + security test suite.
  * Run against a FRESH seeded DB:  npx tsx tests/api.test.ts
  * BASE env var overrides the server URL (default http://localhost:5055).
  */
@@ -26,7 +26,7 @@ class Client {
       if (body !== undefined || raw !== undefined) h["Content-Type"] = "application/json";
       const res = await fetch(BASE + path, { method, headers: h, body: raw ?? (body !== undefined ? JSON.stringify(body) : undefined) });
       const sc = res.headers.getSetCookie?.() ?? [];
-      for (const c of sc) if (c.startsWith("pedeai.sid=")) this.cookie = c.split(";")[0];
+      for (const c of sc) if (c.startsWith("pedeja.sid=")) this.cookie = c.split(";")[0];
       const text = await res.text();
       let parsed: any = null;
       try { parsed = text ? JSON.parse(text) : null; } catch { parsed = text; }
@@ -697,7 +697,7 @@ async function main() {
   });
 
   // =========================================================================
-  await section("PedeAí Plus", async () => {
+  await section("PedeJá Plus", async () => {
     const n = await newCustomer("plus");
     let r = await n.c.get("/api/plus");
     check("GET /plus inactive by default", r.status === 200 && r.body.active === false && r.body.monthlyPrice > 0, r.body);

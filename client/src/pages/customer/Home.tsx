@@ -1,4 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from "react";
+import { PromoCarousel } from "@/components/PromoCarousel";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Search as SearchIcon, MapPin, Star, Clock, Bike, Crown, ChevronRight } from "lucide-react";
@@ -49,7 +50,7 @@ export interface Meta {
   points: { pointValueKz: number; kzPerPointEarned: number; maxDiscountPct: number };
 }
 
-const ZONE_KEY = "pedeai.zone";
+const ZONE_KEY = "pedeja.zone";
 
 /** Zona guardada no dispositivo (para visitantes). */
 export function readStoredZone(): string {
@@ -260,6 +261,9 @@ export default function Home() {
         </form>
       </div>
 
+      {/* Publicidade */}
+      <PromoCarousel />
+
       {/* Tipos de loja */}
       <div className="flex gap-3 overflow-x-auto px-4 py-1 scrollbar-hide">
         {(meta.data?.storeTypes ?? Object.keys(STORE_TYPE)).map((type) => STORE_TYPE[type] && (
@@ -271,12 +275,12 @@ export default function Home() {
         ))}
       </div>
 
-      {/* PedeAí Plus */}
+      {/* PedeJá Plus */}
       <div className="px-4 pt-4">
         <Link href="/plus" className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-primary to-pop p-4 text-on-brand shadow-md">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/20"><Crown className="h-6 w-6" aria-hidden /></span>
           <div className="min-w-0 flex-1">
-            <p className="font-bold">PedeAí Plus</p>
+            <p className="font-bold">PedeJá Plus</p>
             <p className="text-sm opacity-90">
               {meta.data
                 ? t({

@@ -4,7 +4,7 @@ import { randomBytes } from "crypto";
 import { eq, sql } from "drizzle-orm";
 import { db } from "./db";
 import {
-  addresses, menuItems, menuSections, optionGroups, options, promoCodes, stores, users,
+  addresses, banners, menuItems, menuSections, optionGroups, options, promoCodes, stores, users,
 } from "@shared/schema";
 
 function code() { return randomBytes(4).toString("hex").toUpperCase().slice(0, 7); }
@@ -305,10 +305,32 @@ export async function seedDemoData() {
       }
     }
 
+
+    // Publicidade: fotos livres da Wikimedia Commons (licença indicada em imageCredit) + autocolante de comida desenhado
+    await tx.insert(banners).values([
+      {
+        title: "Até a Palanca pede já!", subtitle: "Hambúrgueres quentinhos em menos de 40 minutos.",
+        imageUrl: "https://commons.wikimedia.org/wiki/Special:FilePath/Sable_(Hippotragus_niger)_female_crossing_the_road_(16635641913),_crop.jpg?width=900",
+        imageCredit: "Foto: Bernard Dupont, CC BY-SA 2.0, via Wikimedia Commons",
+        sticker: "burger", ctaLabel: "Ver hambúrgueres", linkUrl: "/pesquisa?q=hamb%C3%BArguer", bgColor: "#FF7B00", sortOrder: 1,
+      },
+      {
+        title: "Fome de elefante?", subtitle: "Pizzas e pratos para partilhar, entregues em Luanda.",
+        imageUrl: "https://commons.wikimedia.org/wiki/Special:FilePath/African_Bush_Elephants.jpg?width=900",
+        imageCredit: "Foto: Gorgo, domínio público, via Wikimedia Commons",
+        sticker: "pizza", ctaLabel: "Pedir pizza", linkUrl: "/pesquisa?q=pizza", bgColor: "#920054", sortOrder: 2,
+      },
+      {
+        title: "Doce como um hipopótamo", subtitle: "Bolos caseiros feitos por quem sabe. Encomende com antecedência.",
+        imageUrl: "https://commons.wikimedia.org/wiki/Special:FilePath/Rusizi_NP_hippopotamus.jpg?width=900",
+        imageCredit: "Foto: d_proffer, CC BY 2.0, via Wikimedia Commons",
+        sticker: "cake", ctaLabel: "Ver bolos caseiros", linkUrl: "/pesquisa?homeBusiness=1", bgColor: "#004D40", sortOrder: 3,
+      },
+    ]);
     await tx.insert(promoCodes).values([
       { code: "BEMVINDO", description: "20% na primeira encomenda (máx. 2.000 Kz)", discountType: "percent", value: 20, maxDiscount: 2000, firstOrderOnly: true },
       { code: "ENTREGAGRATIS", description: "Entrega grátis em encomendas a partir de 5.000 Kz", discountType: "free_delivery", value: 0, minOrder: 5000, maxUsesPerUser: 3 },
-      { code: "PLUS10", description: "10% exclusivo PedeAí Plus", discountType: "percent", value: 10, maxDiscount: 3000, plusOnly: true, maxUsesPerUser: 5 },
+      { code: "PLUS10", description: "10% exclusivo PedeJá Plus", discountType: "percent", value: 10, maxDiscount: 3000, plusOnly: true, maxUsesPerUser: 5 },
     ]);
   });
   console.log("[seed] pronto. Contas de teste em replit.md");

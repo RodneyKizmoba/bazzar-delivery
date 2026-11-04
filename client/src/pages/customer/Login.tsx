@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useLocation } from "wouter";
 import { Eye, EyeOff, ChevronDown, AlertCircle } from "lucide-react";
-import logo from "@/assets/pedeai-logo.png";
+import logo from "@/assets/pedeja-logo.png";
 import { CustomerShell, LanguageSwitch } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,7 +57,7 @@ export default function Login() {
     <CustomerShell hideNav hideHeader>
       <div className="flex min-h-screen flex-col px-6 py-6">
         <div className="flex items-center justify-between">
-          <Link href="/" aria-label="PedeAí Delivery"><img src={logo} alt="PedeAí Delivery" className="h-20 w-auto" /></Link>
+          <Link href="/" aria-label="PedeJá"><img src={logo} alt="PedeJá" className="h-20 w-auto" /></Link>
           <LanguageSwitch />
         </div>
 

@@ -14,6 +14,21 @@ CREATE TABLE "addresses" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "banners" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"title" text NOT NULL,
+	"subtitle" text,
+	"image_url" text,
+	"image_credit" text,
+	"sticker" text DEFAULT 'none' NOT NULL,
+	"cta_label" text,
+	"link_url" text,
+	"bg_color" text DEFAULT '#00CCBC' NOT NULL,
+	"sort_order" integer DEFAULT 0 NOT NULL,
+	"is_active" boolean DEFAULT true NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE "favorites" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,

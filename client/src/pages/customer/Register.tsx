@@ -2,7 +2,7 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Eye, EyeOff, AlertCircle, User as UserIcon, Store as StoreIcon, Bike, Gift, Info } from "lucide-react";
-import logo from "@/assets/pedeai-logo.png";
+import logo from "@/assets/pedeja-logo.png";
 import { CustomerShell, LanguageSwitch } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -144,12 +144,12 @@ export default function Register() {
     <CustomerShell hideNav hideHeader>
       <div className="px-6 py-6">
         <div className="flex items-center justify-between">
-          <Link href="/" aria-label="PedeAí Delivery"><img src={logo} alt="PedeAí Delivery" className="h-20 w-auto" /></Link>
+          <Link href="/" aria-label="PedeJá"><img src={logo} alt="PedeJá" className="h-20 w-auto" /></Link>
           <LanguageSwitch />
         </div>
 
         <h1 className="mt-8 text-3xl font-extrabold tracking-tight text-neutral-900">{t(T.register)}</h1>
-        <p className="mt-1 text-neutral-500">{t({ pt: "Junte-se à PedeAí Delivery em Luanda.", en: "Join PedeAí Delivery in Luanda.", fr: "Rejoignez PedeAí Delivery à Luanda." })}</p>
+        <p className="mt-1 text-neutral-500">{t({ pt: "Junte-se à PedeJá em Luanda.", en: "Join PedeJá in Luanda.", fr: "Rejoignez PedeJá à Luanda." })}</p>
 
         <form onSubmit={submit} noValidate className="mt-6 space-y-5">
           <fieldset>

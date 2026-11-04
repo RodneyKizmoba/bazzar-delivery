@@ -51,9 +51,9 @@ function RewardsBody() {
 
   const link = `${window.location.origin}/registar?ref=${data.referralCode}`;
   const shareText = t({
-    pt: `Experimenta a PedeAí Delivery! Regista-te com o meu código ${data.referralCode} e ganha ${data.welcomeBonusPoints} pontos: ${link}`,
-    en: `Try PedeAí Delivery! Sign up with my code ${data.referralCode} and get ${data.welcomeBonusPoints} points: ${link}`,
-    fr: `Essaie PedeAí Delivery ! Inscris-toi avec mon code ${data.referralCode} et gagne ${data.welcomeBonusPoints} points : ${link}`,
+    pt: `Experimenta a PedeJá! Regista-te com o meu código ${data.referralCode} e ganha ${data.welcomeBonusPoints} pontos: ${link}`,
+    en: `Try PedeJá! Sign up with my code ${data.referralCode} and get ${data.welcomeBonusPoints} points: ${link}`,
+    fr: `Essaie PedeJá ! Inscris-toi avec mon code ${data.referralCode} et gagne ${data.welcomeBonusPoints} points : ${link}`,
   });
   const maxPct = meta.data?.points?.maxDiscountPct ?? 50;
 

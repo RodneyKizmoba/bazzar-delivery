@@ -39,5 +39,5 @@ export async function sendSms(to: string, body: string): Promise<boolean> {
 export function notifyOrderStatus(phone: string, orderNumber: string, status: string) {
   const text = STATUS_TEXT[status];
   if (!text) return;
-  void sendSms(phone, `PedeAí Delivery: a sua encomenda ${orderNumber} ${text}`);
+  void sendSms(phone, `PedeJá: a sua encomenda ${orderNumber} ${text}`);
 }

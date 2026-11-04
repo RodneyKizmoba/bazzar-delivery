@@ -70,7 +70,7 @@ const PgSession = connectPgSimple(session);
 app.use(session({
   store: new PgSession({ pool, tableName: "sessions", createTableIfMissing: true }),
   secret: config.sessionSecret,
-  name: "pedeai.sid",
+  name: "pedeja.sid",
   resave: false,
   saveUninitialized: false,
   rolling: true,
@@ -115,7 +115,7 @@ app.use(errorHandler);
   else await setupVite(app, server);
 
   server.listen({ port: config.port, host: "0.0.0.0" }, () => {
-    log(`PedeAí Delivery a correr na porta ${config.port} (pagamentos: ${config.paymentsMode})`);
+    log(`PedeJá a correr na porta ${config.port} (pagamentos: ${config.paymentsMode})`);
   });
 
   // libertar encomendas agendadas a cada minuto

@@ -193,7 +193,7 @@ function ProfileInner() {
         <Row href="/perfil/moradas" icon={<MapPin className="h-5 w-5" />} label={t({ pt: "Moradas", en: "Addresses", fr: "Adresses" })} />
         {isCustomer && <Row href="/favoritos" icon={<Heart className="h-5 w-5" />} label={t({ pt: "Favoritos", en: "Favourites", fr: "Favoris" })} />}
         {isCustomer && <Row href="/perfil/pontos" icon={<Coins className="h-5 w-5" />} label={t({ pt: "Pontos e convites", en: "Points & referrals", fr: "Points et parrainage" })} />}
-        {isCustomer && <Row href="/plus" icon={<Crown className="h-5 w-5" />} label="PedeAí Plus"
+        {isCustomer && <Row href="/plus" icon={<Crown className="h-5 w-5" />} label="PedeJá Plus"
           hint={plusQ.data?.active ? <span className="text-xs font-semibold text-brand-700">{t({ pt: "Activo", en: "Active", fr: "Actif" })}</span> : undefined} />}
       </nav>
 

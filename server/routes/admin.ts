@@ -2,7 +2,7 @@ import { Router } from "express";
 import { and, desc, eq, gte, ilike, inArray, ne, or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
-import { orders, promoCodes, promoInputSchema, stores, subscriptions, users, ORDER_STATUSES } from "@shared/schema";
+import { bannerInputSchema, banners, orders, promoCodes, promoInputSchema, stores, subscriptions, users, ORDER_STATUSES } from "@shared/schema";
 import { ah, badRequest, conflict, idParam, notFound, parse } from "../lib/http";
 import { publicUser, requireRole } from "../lib/auth";
 import { changeStatus } from "../lib/orderFlow";
@@ -154,4 +154,29 @@ adminRouter.patch("/promos/:id", ah(async (req, res) => {
   const [p] = await db.update(promoCodes).set({ isActive }).where(eq(promoCodes.id, idParam(req))).returning();
   if (!p) throw notFound("Código não encontrado");
   res.json({ promo: p });
+}));
+
+// ---------------------------------------------------------------------------
+// Publicidade (carrossel da página inicial)
+// ---------------------------------------------------------------------------
+adminRouter.get("/banners", ah(async (_req, res) => {
+  res.json({ banners: await db.select().from(banners).orderBy(banners.sortOrder, banners.id) });
+}));
+
+adminRouter.post("/banners", ah(async (req, res) => {
+  const input = parse(bannerInputSchema, req.body);
+  const [b] = await db.insert(banners).values(input).returning();
+  res.status(201).json({ banner: b });
+}));
+
+adminRouter.put("/banners/:id", ah(async (req, res) => {
+  const input = parse(bannerInputSchema, req.body);
+  const [b] = await db.update(banners).set(input).where(eq(banners.id, idParam(req))).returning();
+  if (!b) throw notFound("Anúncio não encontrado");
+  res.json({ banner: b });
+}));
+
+adminRouter.delete("/banners/:id", ah(async (req, res) => {
+  await db.delete(banners).where(eq(banners.id, idParam(req)));
+  res.status(204).end();
 }));

@@ -41,7 +41,7 @@ function PlusMember({ info }: { info: PlusInfo }) {
   return (
     <div className="space-y-3">
       <div className="rounded-2xl border bg-white p-5 shadow-sm">
-        <p className="flex items-center gap-2 text-sm font-semibold text-brand-700"><Check className="h-4 w-4" />{t({ pt: "É membro PedeAí Plus", en: "You're a PedeAí Plus member", fr: "Vous êtes membre PedeAí Plus" })}</p>
+        <p className="flex items-center gap-2 text-sm font-semibold text-brand-700"><Check className="h-4 w-4" />{t({ pt: "É membro PedeJá Plus", en: "You're a PedeJá Plus member", fr: "Vous êtes membre PedeJá Plus" })}</p>
         <div className="mt-4 grid grid-cols-2 gap-3">
           <div className="rounded-xl bg-brand-50 p-3">
             <p className="text-xs text-brand-700">{t({ pt: "Poupança estimada", en: "Estimated savings", fr: "Économies estimées" })}</p>
@@ -103,7 +103,7 @@ function Subscribe({ price }: { price: number }) {
     mutationFn: () => post("/api/plus/subscribe", { paymentMethod: method }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/plus"] });
-      toast({ title: t({ pt: "Bem-vindo ao PedeAí Plus! 👑", en: "Welcome to PedeAí Plus! 👑", fr: "Bienvenue dans PedeAí Plus ! 👑" }) });
+      toast({ title: t({ pt: "Bem-vindo ao PedeJá Plus! 👑", en: "Welcome to PedeJá Plus! 👑", fr: "Bienvenue dans PedeJá Plus ! 👑" }) });
     },
     onError: (e: Error) => {
       const code = e instanceof ApiError ? e.code : undefined;
@@ -160,7 +160,7 @@ export default function Plus() {
         {/* Hero */}
         <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-on-brand via-on-brand to-brand-800 p-6 text-white shadow-lg">
           <Sparkles className="absolute -right-4 -top-4 h-28 w-28 text-white/10" aria-hidden />
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold"><Crown className="h-3.5 w-3.5" />PedeAí Plus</span>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold"><Crown className="h-3.5 w-3.5" />PedeJá Plus</span>
           <h1 className="mt-3 text-3xl font-extrabold leading-tight">{t({ pt: "Entregas grátis, todos os dias.", en: "Free delivery, every day.", fr: "Livraison gratuite, tous les jours." })}</h1>
           <p className="mt-2 text-sm text-white/85">{t({ pt: "A forma mais barata de pedir comida, compras e muito mais em Luanda.", en: "The cheapest way to get food, groceries and more in Luanda.", fr: "Le moyen le moins cher de vous faire livrer à Luanda." })}</p>
           {price != null && (

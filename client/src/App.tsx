@@ -44,6 +44,7 @@ const AdminOrders = lazy(() => import("@/pages/admin/AdminOrders"));
 const AdminStores = lazy(() => import("@/pages/admin/AdminStores"));
 const AdminUsers = lazy(() => import("@/pages/admin/AdminUsers"));
 const AdminPromos = lazy(() => import("@/pages/admin/AdminPromos"));
+const AdminBanners = lazy(() => import("@/pages/admin/AdminBanners"));
 
 const NotFound = lazy(() => import("@/pages/info/NotFound"));
 
@@ -82,6 +83,7 @@ function Routes() {
         <Route path="/admin/lojas" component={AdminStores} />
         <Route path="/admin/utilizadores" component={AdminUsers} />
         <Route path="/admin/promocoes" component={AdminPromos} />
+        <Route path="/admin/publicidade" component={AdminBanners} />
 
         <Route component={NotFound} />
       </Switch>

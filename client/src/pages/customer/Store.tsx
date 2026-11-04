@@ -85,7 +85,7 @@ export default function StorePage() {
   const group = useMutation({
     mutationFn: () => post<{ token: string; participantId: number; secret: string }>("/api/groups", { storeId: Number(id) }),
     onSuccess: (r) => {
-      try { localStorage.setItem(`pedeai.group.${r.token}`, JSON.stringify({ participantId: r.participantId, secret: r.secret })); } catch { /* ignore */ }
+      try { localStorage.setItem(`pedeja.group.${r.token}`, JSON.stringify({ participantId: r.participantId, secret: r.secret })); } catch { /* ignore */ }
       navigate(`/grupo/${r.token}`);
     },
     onError: (err: Error) => toast({ variant: "destructive", title: t(T.error), description: err.message }),

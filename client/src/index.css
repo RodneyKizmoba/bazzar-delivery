@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 :root {
-  /* Marca PedeAí: Teal #00CCBC + Outer Space #2E3333 + cores de comida (ver lib/format.ts). Valores R G B. */
+  /* Marca PedeJá: Teal #00CCBC + Outer Space #2E3333 + cores de comida (ver lib/format.ts). Valores R G B. */
   --brand-50: 237 251 250;
   --brand-100: 214 247 244;
   --brand-200: 173 239 234;

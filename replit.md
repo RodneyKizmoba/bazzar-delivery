@@ -1,4 +1,4 @@
-# PedeAí Delivery
+# PedeJá
 
 Plataforma de entregas para Angola (estilo Talabat/Deliveroo): clientes, lojas (incluindo negócios caseiros), estafetas e administração.
 

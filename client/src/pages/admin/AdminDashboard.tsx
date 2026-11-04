@@ -15,6 +15,7 @@ export function useAdminTabs() {
     { href: "/admin/lojas", label: t({ pt: "Lojas", en: "Stores", fr: "Magasins" }) },
     { href: "/admin/utilizadores", label: t({ pt: "Utilizadores", en: "Users", fr: "Utilisateurs" }) },
     { href: "/admin/promocoes", label: t({ pt: "Promoções", en: "Promotions", fr: "Promotions" }) },
+    { href: "/admin/publicidade", label: t({ pt: "Publicidade", en: "Ads", fr: "Publicité" }) },
   ];
 }
 export function useAdminTitle() {

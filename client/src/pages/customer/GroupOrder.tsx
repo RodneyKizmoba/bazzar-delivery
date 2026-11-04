@@ -37,7 +37,7 @@ interface GroupView {
 }
 interface Creds { participantId: number; secret: string }
 
-const credKey = (token: string) => `pedeai.group.${token}`;
+const credKey = (token: string) => `pedeja.group.${token}`;
 function readCreds(token: string): Creds | null {
   try {
     const v = JSON.parse(localStorage.getItem(credKey(token)) || "null");
@@ -52,7 +52,7 @@ function ShareBox({ link, storeName }: { link: string; storeName: string }) {
   const t = useT();
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
-  const msg = t({ pt: `Junta-te à minha encomenda de grupo em ${storeName} no PedeAí Delivery: ${link}`, en: `Join my group order from ${storeName} on PedeAí Delivery: ${link}`, fr: `Rejoins ma commande groupée chez ${storeName} sur PedeAí Delivery : ${link}` });
+  const msg = t({ pt: `Junta-te à minha encomenda de grupo em ${storeName} no PedeJá: ${link}`, en: `Join my group order from ${storeName} on PedeJá: ${link}`, fr: `Rejoins ma commande groupée chez ${storeName} sur PedeJá : ${link}` });
   const copy = async () => {
     try { await navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 2000); }
     catch { toast({ variant: "destructive", title: t({ pt: "Não foi possível copiar", en: "Couldn't copy", fr: "Copie impossible" }) }); }

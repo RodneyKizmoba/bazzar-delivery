@@ -104,7 +104,7 @@ export function useQuote(body: QuoteBody | null, ms = 400) {
 // ---------------------------------------------------------------------------
 // Preferências de checkout (promo / pontos) partilhadas entre carrinho e checkout
 // ---------------------------------------------------------------------------
-const PREFS_KEY = "pedeai.checkout";
+const PREFS_KEY = "pedeja.checkout";
 export interface CheckoutPrefs { promoCode: string | null; usePoints: boolean }
 export function readCheckoutPrefs(): CheckoutPrefs {
   try {
