@@ -78,7 +78,7 @@ function StoreForm() {
   const zones = metaQ.data?.zones ?? [];
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((p) => (p ? { ...p, [k]: v } : p));
 
-  const isUrl = (s: string) => !s.trim() || /^https?:\/\/\S+$/i.test(s.trim());
+  const isUrl = (s: string) => !s.trim() || /^https?:\/\/\S+$/i.test(s.trim()) || /^\/(?!\/)\S*$/.test(s.trim());
   const isInt = (s: string, min: number, max: number) => s !== "" && Number.isInteger(Number(s)) && Number(s) >= min && Number(s) <= max;
   const err: Tr | null =
     form.name.trim().length < 2 ? { pt: "Nome demasiado curto.", en: "Name too short.", fr: "Nom trop court." }
@@ -207,10 +207,10 @@ function StoreForm() {
       <Card title={{ pt: "Imagens", en: "Images", fr: "Images" }}>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field id="st-logo" label={{ pt: "URL do logótipo", en: "Logo URL", fr: "URL du logo" }}>
-            <Input id="st-logo" type="url" placeholder="https://…" value={form.logoUrl} onChange={(e) => set("logoUrl", e.target.value)} />
+            <Input id="st-logo" type="text" inputMode="url" placeholder="https://… ou /caminho/local" value={form.logoUrl} onChange={(e) => set("logoUrl", e.target.value)} />
           </Field>
           <Field id="st-cover" label={{ pt: "URL da capa", en: "Cover URL", fr: "URL de couverture" }}>
-            <Input id="st-cover" type="url" placeholder="https://…" value={form.coverUrl} onChange={(e) => set("coverUrl", e.target.value)} />
+            <Input id="st-cover" type="text" inputMode="url" placeholder="https://… ou /caminho/local" value={form.coverUrl} onChange={(e) => set("coverUrl", e.target.value)} />
           </Field>
         </div>
         <div className="mt-3 flex items-center gap-3">
