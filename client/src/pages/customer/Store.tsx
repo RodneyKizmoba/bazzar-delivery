@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { HScroll } from "@/components/HScroll";
 import { useLocation, useParams } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Heart, Star, Clock, Bike, ShoppingBag, Users, Search as SearchIcon, Info, Phone, MapPin } from "lucide-react";
@@ -286,7 +287,7 @@ export default function StorePage() {
                 <Input id="menu-search" value={search} onChange={(e) => setSearch(e.target.value)} className="h-10 rounded-full bg-neutral-50 pl-9"
                   placeholder={t({ pt: `Pesquisar em ${store.name}`, en: `Search ${store.name}`, fr: `Rechercher chez ${store.name}` })} />
               </div>
-              <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 scrollbar-hide">
+              <div className="-mx-4"><HScroll className="flex gap-1.5 px-4" arrowSize="sm" label="Dieta">
                 {Object.keys(DIETARY).map((tag) => {
                   const on = diet.includes(tag);
                   return (
@@ -297,11 +298,11 @@ export default function StorePage() {
                     </button>
                   );
                 })}
-              </div>
+              </HScroll></div>
             </div>
             {groups.length > 1 && (
-              <nav ref={navRef} aria-label={t({ pt: "Secções do menu", en: "Menu sections", fr: "Sections du menu" })}
-                className="flex gap-1 overflow-x-auto px-3 scrollbar-hide">
+              <HScroll arrowSize="sm"><nav ref={navRef} aria-label={t({ pt: "Secções do menu", en: "Menu sections", fr: "Sections du menu" })}
+                className="flex w-max gap-1 px-3">
                 {groups.map((g) => (
                   <button key={g.key} data-sec={g.key} type="button" onClick={() => scrollTo(g.key)}
                     className={cn("shrink-0 whitespace-nowrap border-b-2 px-2.5 py-2 text-sm",
@@ -309,7 +310,7 @@ export default function StorePage() {
                     {g.name}
                   </button>
                 ))}
-              </nav>
+              </nav></HScroll>
             )}
           </div>
 

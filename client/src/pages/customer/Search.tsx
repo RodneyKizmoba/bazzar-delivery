@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { HScroll } from "@/components/HScroll";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Search as SearchIcon, SlidersHorizontal, X } from "lucide-react";
@@ -151,7 +152,7 @@ export default function Search() {
         </div>
 
         {/* chips rápidos */}
-        <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 scrollbar-hide">
+        <div className="-mx-4 mt-3"><HScroll className="flex gap-2 px-4 py-0.5" arrowSize="sm" label="Filtros rápidos">
           {types.map((ty) => STORE_TYPE[ty] && (
             <Chip key={ty} active={f.type === ty} onClick={() => set("type", f.type === ty ? "" : ty)}>
               <span aria-hidden>{STORE_TYPE[ty].icon}</span> {t(STORE_TYPE[ty])}
@@ -161,7 +162,7 @@ export default function Search() {
           <Chip active={f.freeDelivery} onClick={() => set("freeDelivery", !f.freeDelivery)}>{t({ pt: "Entrega grátis", en: "Free delivery", fr: "Livraison gratuite" })}</Chip>
           <Chip active={f.minRating === "4.5"} onClick={() => set("minRating", f.minRating === "4.5" ? "" : "4.5")}>★ 4.5+</Chip>
           <Chip active={f.maxDeliveryTime === "30"} onClick={() => set("maxDeliveryTime", f.maxDeliveryTime === "30" ? "" : "30")}>≤ 30 min</Chip>
-        </div>
+        </HScroll></div>
       </div>
 
       <div className="px-4 pt-3">

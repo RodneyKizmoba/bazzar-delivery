@@ -1,4 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from "react";
+import { HScroll } from "@/components/HScroll";
 import { PromoCarousel } from "@/components/PromoCarousel";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
@@ -180,9 +181,9 @@ function StoreRow({ url, emptyText }: { url: string; emptyText: string }) {
   const stores = q.data?.stores ?? [];
   if (!stores.length) return <p className="px-4 text-sm text-neutral-500">{emptyText}</p>;
   return (
-    <div className="flex snap-x gap-4 overflow-x-auto px-4 pb-2 scrollbar-hide">
-      {stores.slice(0, 10).map((s) => <StoreCard key={s.id} store={s} compact />)}
-    </div>
+    <HScroll snap className="flex gap-4 scroll-px-4 px-4 pb-2" label="Lojas">
+      {stores.slice(0, 10).map((s) => <div key={s.id} className="snap-start"><StoreCard store={s} compact /></div>)}
+    </HScroll>
   );
 }
 
@@ -265,7 +266,7 @@ export default function Home() {
       <PromoCarousel />
 
       {/* Tipos de loja */}
-      <div className="flex gap-3 overflow-x-auto px-4 py-1 scrollbar-hide">
+      <HScroll className="flex gap-3 px-4 py-1" arrowSize="sm" label="Categorias">
         {(meta.data?.storeTypes ?? Object.keys(STORE_TYPE)).map((type) => STORE_TYPE[type] && (
           <Link key={type} href={`/pesquisa?type=${type}${zq}`}
             className="flex min-w-[4.75rem] flex-col items-center gap-1.5 rounded-2xl px-1 py-2 hover:bg-neutral-50">
@@ -273,11 +274,11 @@ export default function Home() {
             <span className="text-center text-xs font-medium leading-tight text-neutral-700">{t(STORE_TYPE[type])}</span>
           </Link>
         ))}
-      </div>
+      </HScroll>
 
       {/* PedeJá Plus */}
       <div className="px-4 pt-4">
-        <Link href="/plus" className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-primary to-pop p-4 text-on-brand shadow-md">
+        <Link href="/plus" className="flex items-center gap-3 rounded-2xl brand-grad p-4 shadow-md">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/20"><Crown className="h-6 w-6" aria-hidden /></span>
           <div className="min-w-0 flex-1">
             <p className="font-bold">PedeJá Plus</p>
@@ -298,11 +299,11 @@ export default function Home() {
       {/* Populares */}
       {(popular.isLoading || (popular.data?.items.length ?? 0) > 0) && (
         <Section title={t({ pt: "Populares", en: "Popular", fr: "Populaires" })}>
-          <div className="flex gap-3 overflow-x-auto px-4 pb-2 scrollbar-hide">
+          <HScroll snap className="flex gap-3 scroll-px-4 px-4 pb-2" label="Populares">
             {popular.isLoading
               ? [0, 1, 2].map((i) => <Skeleton key={i} className="h-40 w-36 shrink-0 rounded-2xl" />)
               : popular.data!.items.map((it) => (
-                <Link key={it.id} href={`/loja/${it.storeId}`} className="w-36 shrink-0 rounded-2xl border bg-white p-2 shadow-sm hover:shadow-md transition-shadow">
+                <Link key={it.id} href={`/loja/${it.storeId}`} className="w-36 shrink-0 snap-start rounded-2xl border bg-white p-2 shadow-sm hover:shadow-md transition-shadow">
                   {it.imageUrl
                     ? <img src={it.imageUrl} alt="" loading="lazy" className="h-24 w-full rounded-xl object-cover" />
                     : <StoreImage name={it.name} className="h-24 w-full text-xl" rounded="rounded-xl" />}
@@ -311,7 +312,7 @@ export default function Home() {
                   <p className="text-sm font-semibold text-primary">{kz(it.price)}</p>
                 </Link>
               ))}
-          </div>
+          </HScroll>
         </Section>
       )}
       {popular.error && <ErrorState error={popular.error} onRetry={() => popular.refetch()} />}
@@ -348,8 +349,8 @@ function NonRestaurantRow({ zone, types, emptyText }: { zone?: string; types: st
     .sort((a, b) => Number(b.storeType === "grocery") - Number(a.storeType === "grocery"));
   if (!list.length) return <p className="px-4 text-sm text-neutral-500">{emptyText}</p>;
   return (
-    <div className="flex snap-x gap-4 overflow-x-auto px-4 pb-2 scrollbar-hide">
-      {list.slice(0, 10).map((s) => <StoreCard key={s.id} store={s} compact />)}
-    </div>
+    <HScroll snap className="flex gap-4 scroll-px-4 px-4 pb-2" label="Lojas">
+      {list.slice(0, 10).map((s) => <div key={s.id} className="snap-start"><StoreCard store={s} compact /></div>)}
+    </HScroll>
   );
 }

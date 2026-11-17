@@ -1,30 +1,32 @@
 import type { ReactNode } from "react";
+import { HScroll } from "@/components/HScroll";
 import { Link, useLocation } from "wouter";
 import { Home, Search, ShoppingBag, Receipt, User, ChevronLeft } from "lucide-react";
 import mark from "@/assets/pedeja-mark.png";
+import markWhite from "@/assets/pedeja-mark-white.png";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useLang, useT, type Lang } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 /** Logótipo PedeJá: símbolo + nome (compacto, para cabeçalhos). */
-export function BrandLogo({ size = "md" }: { size?: "sm" | "md" }) {
+export function BrandLogo({ size = "md", light }: { size?: "sm" | "md"; light?: boolean }) {
   return (
     <span className="flex items-center gap-2">
-      <img src={mark} alt="" className={size === "sm" ? "h-7 w-7" : "h-9 w-9"} />
-      <span className={cn("font-extrabold leading-none tracking-tight text-on-brand", size === "sm" ? "text-lg" : "text-[22px]")}>PedeJá</span>
+      <img src={light ? markWhite : mark} alt="" className={size === "sm" ? "h-7 w-7" : "h-9 w-9"} />
+      <span className={cn("font-extrabold leading-none tracking-tight", light ? "text-white" : "text-neutral-800", size === "sm" ? "text-lg" : "text-[22px]")}>PedeJá</span>
     </span>
   );
 }
 
-export function LanguageSwitch({ className }: { className?: string }) {
+export function LanguageSwitch({ className, onColor }: { className?: string; onColor?: boolean }) {
   const { lang, setLang } = useLang();
   return (
     <select
       aria-label="Idioma / Language"
       value={lang}
       onChange={(e) => setLang(e.target.value as Lang)}
-      className={cn("rounded-md border bg-white px-1.5 py-1 text-xs", className)}
+      className={cn("rounded-md border px-1.5 py-1 text-xs", onColor ? "border-white/40 bg-white/15 text-white [&>option]:text-neutral-900" : "bg-white", className)}
     >
       <option value="pt">PT</option>
       <option value="en">EN</option>
@@ -72,19 +74,19 @@ export function CustomerShell({ children, hideHeader, hideNav }: { children: Rea
   return (
     <div className="mx-auto min-h-screen max-w-md bg-white shadow-sm">
       {!hideHeader && (
-        <header className="sticky top-0 z-30 flex items-center justify-between border-b bg-white/95 px-4 py-2.5 backdrop-blur">
+        <header className="brand-bar sticky top-0 z-30 flex items-center justify-between px-4 py-2.5 shadow-sm">
           <Link href="/" className="flex items-center gap-2" aria-label="PedeJá">
-            <BrandLogo />
+            <BrandLogo light />
           </Link>
           <div className="flex items-center gap-2">
             {user && user.userType !== "customer" && (
               <Link href={user.userType === "supplier" ? "/parceiro" : user.userType === "driver" ? "/estafeta" : "/admin"}
-                className="rounded-full bg-neutral-900 px-3 py-1 text-xs font-medium text-white">
+                className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-primary">
                 {user.userType === "supplier" ? t({ pt: "Portal da loja", en: "Store portal", fr: "Portail" })
                   : user.userType === "driver" ? t({ pt: "App estafeta", en: "Rider app", fr: "Livreur" }) : "Admin"}
               </Link>
             )}
-            <LanguageSwitch />
+            <LanguageSwitch onColor />
           </div>
         </header>
       )}
@@ -122,20 +124,22 @@ export function PanelShell({ title, tabs, children }: { title: string; tabs: { h
   return (
     <div className="min-h-screen bg-neutral-50">
       <header className="sticky top-0 z-30 border-b bg-white">
+        <div className="brand-bar">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2.5">
           <div className="flex items-center gap-3 min-w-0">
-            <Link href="/" aria-label="PedeJá"><BrandLogo size="sm" /></Link>
-            <span className="truncate font-semibold text-neutral-800">{title}</span>
+            <Link href="/" aria-label="PedeJá"><BrandLogo size="sm" light /></Link>
+            <span className="truncate font-semibold text-white/95">{title}</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="hidden text-sm text-neutral-500 sm:inline">{user?.fullName}</span>
-            <LanguageSwitch />
-            <button className="rounded-md border px-2 py-1 text-xs" onClick={async () => { await logout(); navigate("/entrar"); }}>
+            <span className="hidden text-sm text-white/85 sm:inline">{user?.fullName}</span>
+            <LanguageSwitch onColor />
+            <button className="rounded-md border border-white/40 bg-white/15 px-2 py-1 text-xs text-white" onClick={async () => { await logout(); navigate("/entrar"); }}>
               {t({ pt: "Sair", en: "Log out", fr: "Déconnexion" })}
             </button>
           </div>
         </div>
-        <nav className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-2 scrollbar-hide">
+        </div>
+        <div className="mx-auto max-w-6xl"><HScroll arrowSize="sm"><nav className="flex w-max gap-1 px-2">
           {tabs.map((tab) => {
             const active = location === tab.href;
             return (
@@ -145,7 +149,7 @@ export function PanelShell({ title, tabs, children }: { title: string; tabs: { h
               </Link>
             );
           })}
-        </nav>
+        </nav></HScroll></div>
       </header>
       <main className="mx-auto max-w-6xl p-4">{children}</main>
     </div>

@@ -83,7 +83,7 @@ function About() {
   ];
   return (
     <>
-      <div className="mb-6 rounded-2xl bg-gradient-to-br from-primary to-pop p-5 text-on-brand">
+      <div className="mb-6 rounded-2xl brand-grad p-5">
         <p className="text-3xl" aria-hidden>🛵</p>
         <p className="mt-2 text-xl font-extrabold">PedeJá</p>
         <p className="text-sm opacity-90">{t({ pt: "Tudo o que precisa, entregue em Luanda.", en: "Everything you need, delivered in Luanda.", fr: "Tout ce qu'il vous faut, livré à Luanda." })}</p>

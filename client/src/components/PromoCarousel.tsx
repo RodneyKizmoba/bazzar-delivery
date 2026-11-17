@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface Banner {
@@ -44,7 +44,7 @@ export function FoodSticker({ kind, className }: { kind: Banner["sticker"]; clas
       )}
       {kind === "cake" && (
         <g transform="translate(22 20)">
-          <rect x="34" y="0" width="5" height="16" rx="2" fill="#00CCBC" />
+          <rect x="34" y="0" width="5" height="16" rx="2" fill="#7B1FFF" />
           <path d="M36.5 -6 C40 -1 40 2 36.5 4 C33 2 33 -1 36.5 -6 Z" fill="#FF7B00" />
           <rect x="6" y="18" width="64" height="26" rx="6" fill="#FFF3D6" stroke="#5D4037" strokeWidth="2" />
           <path d="M6 26 Q14 34 22 26 Q30 34 38 26 Q46 34 54 26 Q62 34 70 26 L70 22 L6 22 Z" fill="#920054" />
@@ -68,11 +68,11 @@ function BannerCard({ b }: { b: Banner }) {
       {/* escurecer à esquerda para o texto ler-se sobre qualquer foto */}
       <div className="absolute inset-0" style={{ background: `linear-gradient(90deg, ${b.bgColor}F2 0%, ${b.bgColor}B3 45%, ${b.bgColor}00 75%)` }} />
       <div className="absolute inset-0 bg-gradient-to-r from-black/30 via-black/10 to-transparent" />
-      <div className="relative flex h-full max-w-[64%] flex-col justify-center gap-1 p-4">
+      <div className="relative flex h-full max-w-[64%] flex-col justify-center gap-1 py-4 pl-12 pr-2">
         <p className="text-xl font-extrabold leading-tight drop-shadow-sm">{b.title}</p>
         {b.subtitle && <p className="text-sm leading-snug text-white/95">{b.subtitle}</p>}
         {b.ctaLabel && (
-          <span className="mt-2 inline-flex w-fit items-center gap-1 rounded-full bg-white px-3 py-1.5 text-xs font-bold text-on-brand">
+          <span className="mt-2 inline-flex w-fit items-center gap-1 rounded-full bg-white px-3 py-1.5 text-xs font-bold text-neutral-900">
             {b.ctaLabel} <ChevronRight className="h-3.5 w-3.5" />
           </span>
         )}
@@ -107,18 +107,40 @@ export function PromoCarousel() {
     return () => clearInterval(id);
   }, [list.length, active]);
 
+  // vai para o anúncio i (dá a volta no fim e no início)
+  const go = (i: number) => {
+    const el = ref.current;
+    if (!el || !list.length) return;
+    const n = (i + list.length) % list.length;
+    el.scrollTo({ left: n * el.clientWidth, behavior: "smooth" });
+  };
+
   if (!list.length) return null;
   return (
     <div className="px-4 pt-4">
-      <div ref={ref} className="flex snap-x snap-mandatory overflow-x-auto scrollbar-hide"
-        onScroll={(e) => { const el = e.currentTarget; setActive(Math.round(el.scrollLeft / el.clientWidth)); }}>
-        {list.map((b) => <div key={b.id} className="w-full shrink-0 snap-center">{<BannerCard b={b} />}</div>)}
+      <div className="relative">
+        <div ref={ref} className="flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain scrollbar-hide"
+          onScroll={(e) => { const el = e.currentTarget; setActive(Math.round(el.scrollLeft / el.clientWidth)); }}>
+          {list.map((b) => <div key={b.id} className="w-full shrink-0 snap-center">{<BannerCard b={b} />}</div>)}
+        </div>
+        {list.length > 1 && (
+          <>
+            <button type="button" aria-label="Anúncio anterior" onClick={() => go(active - 1)}
+              className="absolute left-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-neutral-800 shadow-md transition hover:scale-105 active:scale-95">
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <button type="button" aria-label="Anúncio seguinte" onClick={() => go(active + 1)}
+              className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-neutral-800 shadow-md transition hover:scale-105 active:scale-95">
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          </>
+        )}
       </div>
       {list.length > 1 && (
         <div className="mt-2 flex justify-center gap-1.5">
           {list.map((b, i) => (
             <button key={b.id} type="button" aria-label={`Anúncio ${i + 1}`}
-              onClick={() => ref.current?.scrollTo({ left: i * ref.current.clientWidth, behavior: "smooth" })}
+              onClick={() => go(i)}
               className={cn("h-1.5 rounded-full transition-all", i === active ? "w-5 bg-primary" : "w-1.5 bg-neutral-300")} />
           ))}
         </div>

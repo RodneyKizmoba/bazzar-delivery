@@ -177,7 +177,7 @@ function ProfileInner() {
 
       {/* Pontos */}
       {isCustomer && (
-        <Link href="/perfil/pontos" className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-primary to-pop p-4 text-on-brand shadow-sm">
+        <Link href="/perfil/pontos" className="flex items-center gap-3 rounded-2xl brand-grad p-4 shadow-sm">
           <Coins className="h-7 w-7" />
           <div className="flex-1">
             <p className="text-2xl font-extrabold leading-none">{u.loyaltyPoints}</p>
