@@ -97,7 +97,7 @@ function CheckoutInner() {
   const canPlace = !!q && !missing && !place.isPending && !quote.isUpdating;
 
   return (
-    <div className="flow pb-40">
+    <div className="space-y-4 px-4 pb-40 pt-4">
       <div className="flex items-center gap-3">
         <StoreImage name={cart.storeName} url={store?.logoUrl} className="h-11 w-11 text-sm" rounded="rounded-xl" />
         <div className="min-w-0">

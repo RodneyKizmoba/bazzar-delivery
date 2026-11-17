@@ -96,10 +96,10 @@ export function Guard({ roles, children }: { roles?: User["userType"][]; childre
 export function PageTitle({ title, subtitle, right }: { title: string | Tr; subtitle?: string; right?: ReactNode }) {
   const t = useT();
   return (
-    <div className="flow-plain flow-title flex items-start justify-between gap-3 px-4 pt-4 pb-1">
+    <div className="flex items-start justify-between gap-3 px-4 pt-4 pb-2">
       <div>
-        <h1 className="text-2xl font-extrabold tracking-tight">{typeof title === "string" ? title : t(title)}</h1>
-        {subtitle && <p className="flow-sub mt-0.5 text-sm">{subtitle}</p>}
+        <h1 className="text-xl font-bold text-neutral-900">{typeof title === "string" ? title : t(title)}</h1>
+        {subtitle && <p className="text-sm text-neutral-500 mt-0.5">{subtitle}</p>}
       </div>
       {right}
     </div>

@@ -41,7 +41,7 @@ export function TopBar({ title, back, right }: { title: string; back?: string | 
   const [, navigate] = useLocation();
   const t = useT();
   return (
-    <div className="flow-plain sticky top-0 z-20 flex items-center gap-2 border-b bg-white/95 px-2 py-2 backdrop-blur">
+    <div className="sticky top-0 z-20 flex items-center gap-2 border-b bg-white/95 px-2 py-2 backdrop-blur">
       {back && (
         <button
           className="rounded-full p-2 hover:bg-neutral-100"
@@ -98,7 +98,9 @@ export function CustomerShell({ children, hideHeader, hideNav, bare }: { childre
       )}
       <main className={cn(!hideNav && "pb-20")}>
         {bare ? children : (
-          <div className="flow">{children}</div>
+          <div className={cn("mx-2.5 mt-2.5 rounded-3xl bg-white shadow-xl [overflow:clip]", hideNav ? "mb-2.5 min-h-[calc(100vh-1.25rem)]" : "mb-3 min-h-[calc(100vh-10rem)]")}>
+            {children}
+          </div>
         )}
       </main>
       {!hideNav && (
@@ -132,7 +134,7 @@ export function PanelShell({ title, tabs, children }: { title: string; tabs: { h
   const [, navigate] = useLocation();
   const t = useT();
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-white/75">
       <header className="sticky top-0 z-30 border-b bg-white">
         <div className="brand-bar">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2.5">
@@ -161,7 +163,7 @@ export function PanelShell({ title, tabs, children }: { title: string; tabs: { h
           })}
         </nav></HScroll></div>
       </header>
-      <main className="on-color mx-auto max-w-6xl p-4">{children}</main>
+      <main className="mx-auto max-w-6xl p-4">{children}</main>
     </div>
   );
 }

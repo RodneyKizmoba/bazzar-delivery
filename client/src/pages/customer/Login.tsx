@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link, useLocation } from "wouter";
 import { Eye, EyeOff, ChevronDown, AlertCircle } from "lucide-react";
 import logo from "@/assets/pedeja-logo.png";
-import { BrandLogo, CustomerShell, LanguageSwitch } from "@/components/AppShell";
+import { CustomerShell, LanguageSwitch } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -55,15 +55,13 @@ export default function Login() {
 
   return (
     <CustomerShell hideNav hideHeader>
-      <div className="flow flex min-h-[calc(100vh-1rem)] flex-col">
-        <div className="flow-plain flex items-center justify-between px-5 pt-5">
-          <Link href="/" aria-label="PedeJá"><BrandLogo light /></Link>
-          <LanguageSwitch onColor />
+      <div className="flex min-h-screen flex-col px-6 py-6">
+        <div className="flex items-center justify-between">
+          <Link href="/" aria-label="PedeJá"><img src={logo} alt="PedeJá" className="h-20 w-auto" /></Link>
+          <LanguageSwitch />
         </div>
 
-        <div className="!mt-6 p-6">
-        <img src={logo} alt="" aria-hidden className="mx-auto mb-4 h-20 w-auto" />
-        <div>
+        <div className="mt-10">
           <h1 className="text-3xl font-extrabold tracking-tight text-neutral-900">{t({ pt: "Bem-vindo de volta", en: "Welcome back", fr: "Bon retour" })}</h1>
           <p className="mt-1 text-neutral-500">{t({ pt: "Entre para encomendar em Luanda.", en: "Log in to order across Luanda.", fr: "Connectez-vous pour commander à Luanda." })}</p>
         </div>
@@ -118,9 +116,8 @@ export default function Login() {
             </CollapsibleContent>
           </Collapsible>
         )}
-        </div>
 
-        <div className="flow-plain mt-auto flex justify-center gap-4 pb-2 pt-10 text-xs font-medium text-white">
+        <div className="mt-auto flex justify-center gap-4 pt-10 text-xs text-neutral-500">
           <Link href="/info/termos" className="hover:underline">{t({ pt: "Termos", en: "Terms", fr: "Conditions" })}</Link>
           <Link href="/info/privacidade" className="hover:underline">{t({ pt: "Privacidade", en: "Privacy", fr: "Confidentialité" })}</Link>
           <Link href="/info/suporte" className="hover:underline">{t({ pt: "Ajuda", en: "Help", fr: "Aide" })}</Link>

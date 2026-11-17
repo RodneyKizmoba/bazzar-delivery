@@ -99,31 +99,6 @@
 }
 
 /* Texto na cor da marca sobre fundo claro: usar o tom escuro para ser legível */
-/* Páginas em "cartões a flutuar" sobre o fundo colorido (como o Início):
-   cada bloco directo de .flow vira um cartão branco; .flow-plain fica sobre a cor; .flow dentro de .flow só passa os filhos. */
-@layer components {
-  .flow { padding-bottom: 0.75rem; }
-  .flow > :where(:not(.flow-plain, .flow, .fixed, :empty, script, style, [hidden], [role="dialog"])) {
-    margin: 0.75rem 0.75rem 0;
-    border-radius: 1.5rem;
-    background-color: #fff;
-    box-shadow: 0 10px 25px -8px rgb(15 23 42 / 0.25);
-    overflow: clip;
-    padding-block: 0.25rem;
-    max-width: calc(100% - 1.5rem);
-    min-inline-size: 0;
-  }
-  .flow > :where(:not(.flow-plain, .flow, .fixed, [class^="p-"], [class*=" p-"], [class^="px-"], [class*=" px-"])) { padding: 0.75rem 1rem; }
-  .flow > .flow { padding-bottom: 0; }
-  /* Painéis: texto que fica directamente sobre o fundo colorido (fora dos cartões) passa a branco */
-  .on-color :is(h1, h2, h3, h4, p, label, span, small, li, dt, dd, svg):not([class*="bg-"]):not(:is(.bg-white, .bg-card, .bg-background, .bg-neutral-50, .bg-popover, [role="dialog"], button, a, input, textarea, select, table, [class*="bg-"]) *) {
-    color: #fff;
-  }
-  .on-color :is(h1, h2, h3):not(:is(.bg-white, .bg-card, .bg-background, [class*="bg-"]) *) { text-shadow: 0 1px 2px rgb(0 0 0 / 0.18); }
-  .flow-title { color: #fff; text-shadow: 0 1px 2px rgb(0 0 0 / 0.18); }
-  .flow-title .flow-sub { color: rgb(255 255 255 / 0.9); }
-}
-
 @layer utilities {
   .text-primary { color: rgb(var(--brand-ink)); }
   /* Barra de marca: degradê vivo usado nos cabeçalhos da app e dos painéis */
