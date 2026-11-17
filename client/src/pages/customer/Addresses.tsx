@@ -70,7 +70,7 @@ function AddressList() {
   }
 
   return (
-    <div className="space-y-3 p-4">
+    <div className="flow">
       {list.length === 0 ? (
         <EmptyState icon="📍" title={t({ pt: "Ainda não tem moradas", en: "No addresses yet", fr: "Aucune adresse" })}
           text={t({ pt: "Adicione onde quer receber as suas encomendas.", en: "Add where you want your orders delivered.", fr: "Ajoutez où vous souhaitez être livré." })} />

@@ -156,7 +156,7 @@ export default function Plus() {
 
   return (
     <CustomerShell>
-      <div className="px-4 pb-8 pt-4">
+      <div className="flow pb-8">
         {/* Hero */}
         <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-ink via-ink to-brand2 p-6 text-white shadow-lg">
           <Sparkles className="absolute -right-4 -top-4 h-28 w-28 text-white/10" aria-hidden />
@@ -169,7 +169,7 @@ export default function Plus() {
         </div>
 
         {/* Benefícios */}
-        <ul className="mt-5 space-y-3">
+        <ul className="flow">
           {perks.map(({ icon: Icon, title, text }) => (
             <li key={title.pt} className="flex gap-3 rounded-2xl border bg-white p-4 shadow-sm">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-100 text-brand-700"><Icon className="h-5 w-5" /></span>

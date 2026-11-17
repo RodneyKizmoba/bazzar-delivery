@@ -94,7 +94,7 @@ export default function Cart() {
     <CustomerShell>
       <PageTitle title={{ pt: "Carrinho", en: "Basket", fr: "Panier" }} />
 
-      <div className="space-y-4 px-4 pb-36">
+      <div className="flow pb-36">
         {/* Loja */}
         <Link href={`/loja/${cart.storeId}`} className="flex items-center gap-3 rounded-2xl border bg-white p-3 shadow-sm hover:bg-neutral-50">
           <StoreImage name={cart.storeName} className="h-12 w-12 text-sm" rounded="rounded-xl" />

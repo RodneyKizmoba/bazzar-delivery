@@ -67,7 +67,7 @@ function RewardsBody() {
   };
 
   return (
-    <div className="space-y-4 p-4">
+    <div className="flow">
       <section className="rounded-2xl brand-grad p-5">
         <p className="text-sm opacity-90">{t({ pt: "O seu saldo", en: "Your balance", fr: "Votre solde" })}</p>
         <p className="text-4xl font-bold">{data.balance} <span className="text-lg font-medium">{t({ pt: "pontos", en: "points", fr: "points" })}</span></p>

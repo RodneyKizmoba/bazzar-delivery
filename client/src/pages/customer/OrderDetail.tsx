@@ -329,7 +329,7 @@ function OrderDetailInner({ id }: { id: string }) {
   const groupedByPerson = items.some((i) => i.addedBy);
 
   return (
-    <div className="space-y-4 px-4 pb-10 pt-4">
+    <div className="flow pb-10">
       {/* Cabeçalho de estado */}
       <div className={cn("rounded-2xl p-5 text-white shadow-sm",
         order.status === "cancelled" || order.status === "rejected" ? "bg-neutral-700" : order.status === "delivered" ? "bg-green-700" : "bg-gradient-to-br from-brand-600 to-brand-800")}>

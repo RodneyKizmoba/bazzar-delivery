@@ -280,7 +280,7 @@ export default function Info() {
   return (
     <CustomerShell hideHeader>
       <TopBar title={t(PAGES[page])} back />
-      <article className="px-4 py-5">
+      <article className="px-5 py-5">
         <Content />
         <nav className="mt-10 flex flex-wrap gap-x-4 gap-y-2 border-t pt-4 text-sm" aria-label={t({ pt: "Mais informação", en: "More info", fr: "Plus d'infos" })}>
           {Object.entries(PAGES).filter(([k]) => k !== page).map(([k, v]) => (

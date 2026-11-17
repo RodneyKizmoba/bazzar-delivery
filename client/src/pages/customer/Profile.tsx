@@ -158,7 +158,7 @@ function ProfileInner() {
       : t({ pt: "Abrir painel de administração", en: "Open admin panel", fr: "Ouvrir l'administration" });
 
   return (
-    <div className="space-y-5 px-4 pb-8 pt-4">
+    <div className="flow pb-8">
       {/* Cabeçalho */}
       <div className="flex items-center gap-4 rounded-2xl border bg-white p-4 shadow-sm">
         <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-xl font-bold text-white" style={{ background: colorFor(u.fullName) }} aria-hidden>{initials(u.fullName)}</span>
