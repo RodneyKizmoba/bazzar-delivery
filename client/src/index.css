@@ -18,6 +18,9 @@
   --pop: 255 213 79; /* Lemon #FFD54F (destaque) */
   --on-brand: 255 255 255; /* texto branco sobre rosa/roxo */
   --brand-ink: 190 11 68; /* texto rosa sobre branco (contraste >= 4.5:1) */
+  --sky-1: 103 194 159; /* #67C29F */
+  --sky-2: 56 191 195;  /* #38BFC3 */
+  --sky-3: 33 150 217;  /* #2196D9 */
   --ink: 42 10 61; /* Ameixa #2A0A3D: fundos escuros premium (Plus) */
   --background: 0 0% 100%;
   --foreground: 20 14.3% 4.1%;
@@ -75,7 +78,8 @@
   }
 
   body {
-    @apply font-sans antialiased bg-neutral-50 text-foreground;
+    @apply font-sans antialiased text-foreground;
+    background: linear-gradient(135deg, rgb(var(--sky-1)) 0%, rgb(var(--sky-2)) 45%, rgb(var(--sky-3)) 100%) fixed;
   }
 }
 
@@ -99,5 +103,7 @@
   .text-primary { color: rgb(var(--brand-ink)); }
   /* Barra de marca: degradê vivo usado nos cabeçalhos da app e dos painéis */
   .brand-bar { background-image: linear-gradient(100deg, rgb(var(--brand-500)) 0%, rgb(var(--brand-2)) 100%); color: #fff; }
+  /* Céu PedeJá: verde-água → azul (fundo da app) */
+  .sky-bg { background-image: linear-gradient(135deg, rgb(var(--sky-1)) 0%, rgb(var(--sky-2)) 45%, rgb(var(--sky-3)) 100%); }
   .brand-grad { background-image: linear-gradient(120deg, rgb(var(--brand-500)) 0%, rgb(var(--brand-2)) 100%); color: #fff; }
 }

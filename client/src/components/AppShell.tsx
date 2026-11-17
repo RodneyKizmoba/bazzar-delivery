@@ -92,7 +92,7 @@ export function CustomerShell({ children, hideHeader, hideNav }: { children: Rea
       )}
       <main className={cn(!hideNav && "pb-20")}>{children}</main>
       {!hideNav && (
-        <nav className="fixed bottom-0 left-0 right-0 z-30 border-t bg-white" aria-label="Navegação principal">
+        <nav className="fixed bottom-0 left-1/2 z-30 w-full max-w-md -translate-x-1/2 border-t bg-white" aria-label="Navegação principal">
           <div className="mx-auto flex h-16 max-w-md items-center justify-around">
             {nav.map(({ href, icon: Icon, label, badge }) => {
               const active = href === "/" ? location === "/" : location.startsWith(href);
@@ -122,7 +122,7 @@ export function PanelShell({ title, tabs, children }: { title: string; tabs: { h
   const [, navigate] = useLocation();
   const t = useT();
   return (
-    <div className="min-h-screen bg-neutral-50">
+    <div className="min-h-screen bg-white/75">
       <header className="sticky top-0 z-30 border-b bg-white">
         <div className="brand-bar">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2.5">

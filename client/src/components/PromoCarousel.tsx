@@ -90,7 +90,7 @@ function BannerCard({ b }: { b: Banner }) {
 }
 
 /** Carrossel de publicidade (geridos em Admin → Publicidade). Desliza sozinho a cada 6 s. */
-export function PromoCarousel() {
+export function PromoCarousel({ onSky }: { onSky?: boolean } = {}) {
   const { data } = useQuery<{ banners: Banner[] }>({ queryKey: ["/api/banners"], staleTime: 5 * 60_000 });
   const list = data?.banners ?? [];
   const ref = useRef<HTMLDivElement>(null);
@@ -141,7 +141,7 @@ export function PromoCarousel() {
           {list.map((b, i) => (
             <button key={b.id} type="button" aria-label={`Anúncio ${i + 1}`}
               onClick={() => go(i)}
-              className={cn("h-1.5 rounded-full transition-all", i === active ? "w-5 bg-primary" : "w-1.5 bg-neutral-300")} />
+              className={cn("h-1.5 rounded-full transition-all", i === active ? (onSky ? "w-5 bg-white" : "w-5 bg-primary") : (onSky ? "w-1.5 bg-white/50" : "w-1.5 bg-neutral-300"))} />
           ))}
         </div>
       )}

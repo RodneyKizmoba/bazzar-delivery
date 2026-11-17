@@ -233,17 +233,17 @@ export default function Home() {
   return (
     <CustomerShell>
       {/* Cabeçalho com saudação, zona e pesquisa */}
-      <div className="bg-gradient-to-b from-brand-50 to-white px-4 pb-4 pt-4">
-        <p className="text-sm text-neutral-600">{greet}{firstName ? `, ${firstName}` : ""} 👋</p>
-        <h1 className="mt-0.5 text-2xl font-extrabold tracking-tight text-neutral-900">
+      <div className="sky-bg rounded-b-[2rem] px-4 pb-4 pt-4 text-white shadow-md">
+        <p className="text-sm text-white/90">{greet}{firstName ? `, ${firstName}` : ""} 👋</p>
+        <h1 className="mt-0.5 text-2xl font-extrabold tracking-tight text-white drop-shadow-sm">
           {t({ pt: "O que lhe apetece hoje?", en: "What are you craving today?", fr: "Qu'est-ce qui vous ferait plaisir ?" })}
         </h1>
 
         <div className="mt-3 flex items-center gap-2">
-          <MapPin className="h-4 w-4 shrink-0 text-primary" aria-hidden />
-          <span id="zone-label" className="text-xs font-medium text-neutral-600">{t({ pt: "Entregar em", en: "Deliver to", fr: "Livrer à" })}</span>
+          <MapPin className="h-4 w-4 shrink-0 text-white" aria-hidden />
+          <span id="zone-label" className="text-xs font-medium text-white/90">{t({ pt: "Entregar em", en: "Deliver to", fr: "Livrer à" })}</span>
           <Select value={zone || "__all"} onValueChange={chooseZone}>
-            <SelectTrigger aria-labelledby="zone-label" className="h-8 w-auto min-w-[9rem] rounded-full border-neutral-200 bg-white text-sm font-semibold">
+            <SelectTrigger aria-labelledby="zone-label" className="h-8 w-auto min-w-[9rem] rounded-full border-white/0 bg-white text-sm font-semibold text-neutral-900">
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="max-h-72">
@@ -260,13 +260,13 @@ export default function Home() {
             placeholder={t({ pt: "Restaurantes, pratos, farmácias…", en: "Restaurants, dishes, pharmacies…", fr: "Restaurants, plats, pharmacies…" })}
             className="h-12 rounded-full border-neutral-200 bg-white pl-12 text-base shadow-sm" />
         </form>
+
+        {/* Publicidade */}
+        <div className="-mx-4"><PromoCarousel onSky /></div>
       </div>
 
-      {/* Publicidade */}
-      <PromoCarousel />
-
       {/* Tipos de loja */}
-      <HScroll className="flex gap-3 px-4 py-1" arrowSize="sm" label="Categorias">
+      <HScroll className="mt-3 flex gap-3 px-4 py-1" arrowSize="sm" label="Categorias">
         {(meta.data?.storeTypes ?? Object.keys(STORE_TYPE)).map((type) => STORE_TYPE[type] && (
           <Link key={type} href={`/pesquisa?type=${type}${zq}`}
             className="flex min-w-[4.75rem] flex-col items-center gap-1.5 rounded-2xl px-1 py-2 hover:bg-neutral-50">
