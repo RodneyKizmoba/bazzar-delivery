@@ -8,6 +8,7 @@ import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useLang, useT, type Lang } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { PageBackdrop } from "@/components/StoreThemeArt";
 
 /** Logótipo PedeJá: símbolo + nome (compacto, para cabeçalhos). */
 export function BrandLogo({ size = "md", light }: { size?: "sm" | "md"; light?: boolean }) {
@@ -57,7 +58,11 @@ export function TopBar({ title, back, right }: { title: string; back?: string | 
 }
 
 /** Layout das páginas de cliente: largura de telemóvel, cabeçalho e navegação inferior. */
-export function CustomerShell({ children, hideHeader, hideNav }: { children: ReactNode; hideHeader?: boolean; hideNav?: boolean }) {
+/**
+ * `bare`: a página desenha os seus próprios cartões sobre o fundo colorido (Início, Loja).
+ * Sem `bare`, o conteúdo fica numa folha branca arredondada a flutuar sobre o fundo.
+ */
+export function CustomerShell({ children, hideHeader, hideNav, bare }: { children: ReactNode; hideHeader?: boolean; hideNav?: boolean; bare?: boolean }) {
   const [location] = useLocation();
   const { itemCount } = useCart();
   const { user } = useAuth();
@@ -72,7 +77,8 @@ export function CustomerShell({ children, hideHeader, hideNav }: { children: Rea
   ];
 
   return (
-    <div className="mx-auto min-h-screen max-w-md bg-white shadow-sm">
+    <div className="relative mx-auto min-h-screen max-w-md">
+      <PageBackdrop />
       {!hideHeader && (
         <header className="brand-bar sticky top-0 z-30 flex items-center justify-between px-4 py-2.5 shadow-sm">
           <Link href="/" className="flex items-center gap-2" aria-label="PedeJá">
@@ -90,7 +96,13 @@ export function CustomerShell({ children, hideHeader, hideNav }: { children: Rea
           </div>
         </header>
       )}
-      <main className={cn(!hideNav && "pb-20")}>{children}</main>
+      <main className={cn(!hideNav && "pb-20")}>
+        {bare ? children : (
+          <div className={cn("mx-2.5 mt-2.5 rounded-3xl bg-white shadow-xl [overflow:clip]", hideNav ? "mb-2.5 min-h-[calc(100vh-1.25rem)]" : "mb-3 min-h-[calc(100vh-10rem)]")}>
+            {children}
+          </div>
+        )}
+      </main>
       {!hideNav && (
         <nav className="fixed bottom-0 left-1/2 z-30 w-full max-w-md -translate-x-1/2 border-t bg-white" aria-label="Navegação principal">
           <div className="mx-auto flex h-16 max-w-md items-center justify-around">

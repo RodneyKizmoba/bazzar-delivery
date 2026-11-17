@@ -167,7 +167,7 @@ function storesUrl(params: Record<string, string | undefined>) {
 function Section({ title, href, children }: { title: string; href?: string; children: ReactNode }) {
   const t = useT();
   return (
-    <section className="mt-7">
+    <section className="mx-3 mt-3 overflow-hidden rounded-3xl bg-white pb-3 pt-4 shadow-lg">
       <div className="mb-3 flex items-center justify-between px-4">
         <h2 className="text-lg font-bold text-neutral-900">{title}</h2>
         {href && (
@@ -240,9 +240,9 @@ export default function Home() {
   const empty = t({ pt: "Ainda não há lojas nesta zona.", en: "No stores in this area yet.", fr: "Pas encore de magasins dans cette zone." });
 
   return (
-    <CustomerShell>
+    <CustomerShell bare>
       {/* Cabeçalho com saudação, zona e pesquisa */}
-      <div className="sky-bg rounded-b-[2rem] px-4 pb-4 pt-4 text-white shadow-md">
+      <div className="px-4 pb-2 pt-4 text-white">
         <p className="text-sm text-white/90">{greet}{firstName ? `, ${firstName}` : ""} 👋</p>
         <h1 className="mt-0.5 text-2xl font-extrabold tracking-tight text-white drop-shadow-sm">
           {t({ pt: "O que lhe apetece hoje?", en: "What are you craving today?", fr: "Qu'est-ce qui vous ferait plaisir ?" })}
@@ -275,7 +275,8 @@ export default function Home() {
       </div>
 
       {/* Tipos de loja */}
-      <HScroll className="mt-3 flex gap-3 px-4 py-1" arrowSize="sm" label="Categorias">
+      <div className="mx-3 mt-3 overflow-hidden rounded-3xl bg-white py-2 shadow-lg">
+      <HScroll className="flex gap-3 px-3 py-1" arrowSize="sm" label="Categorias">
         {(meta.data?.storeTypes ?? Object.keys(STORE_TYPE)).map((type) => STORE_TYPE[type] && (
           <Link key={type} href={`/pesquisa?type=${type}${zq}`}
             className="flex min-w-[4.75rem] flex-col items-center gap-1.5 rounded-2xl px-1 py-2 hover:bg-neutral-50">
@@ -284,9 +285,10 @@ export default function Home() {
           </Link>
         ))}
       </HScroll>
+      </div>
 
       {/* PedeJá Plus */}
-      <div className="px-4 pt-4">
+      <div className="px-3 pt-3">
         <Link href="/plus" className="flex items-center gap-3 rounded-2xl brand-grad p-4 shadow-md">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/20"><Crown className="h-6 w-6" aria-hidden /></span>
           <div className="min-w-0 flex-1">
