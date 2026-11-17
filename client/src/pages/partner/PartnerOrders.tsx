@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useBeep } from "@/hooks/useBeep";
 import { useToast } from "@/hooks/use-toast";
 import { patch, post, queryClient } from "@/lib/api";
 import { useLang, useT, T } from "@/lib/i18n";
@@ -51,46 +52,6 @@ function minutesSince(d: string) {
   return Math.max(0, Math.floor((Date.now() - new Date(d).getTime()) / 60_000));
 }
 
-/** Bip curto com WebAudio, só depois de interacção do utilizador (política dos browsers). */
-function useBeep() {
-  const ctxRef = useRef<AudioContext | null>(null);
-  useEffect(() => {
-    const unlock = () => {
-      if (ctxRef.current) return;
-      try {
-        const AC = window.AudioContext || (window as any).webkitAudioContext;
-        if (AC) ctxRef.current = new AC();
-      } catch { /* sem áudio */ }
-    };
-    window.addEventListener("pointerdown", unlock, { once: true });
-    window.addEventListener("keydown", unlock, { once: true });
-    return () => {
-      window.removeEventListener("pointerdown", unlock);
-      window.removeEventListener("keydown", unlock);
-    };
-  }, []);
-  return () => {
-    const ctx = ctxRef.current;
-    if (!ctx) return;
-    try {
-      if (ctx.state === "suspended") void ctx.resume();
-      const play = (start: number) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = "sine";
-        osc.frequency.value = 880;
-        gain.gain.setValueAtTime(0.0001, ctx.currentTime + start);
-        gain.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime + start + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + start + 0.25);
-        osc.connect(gain).connect(ctx.destination);
-        osc.start(ctx.currentTime + start);
-        osc.stop(ctx.currentTime + start + 0.3);
-      };
-      play(0);
-      play(0.35);
-    } catch { /* ignore */ }
-  };
-}
 
 export default function PartnerOrders() {
   const tabs = usePartnerTabs();
@@ -228,6 +189,31 @@ function ActiveBoard() {
   );
 }
 
+/** Talão para impressora térmica de 80 mm (abre a janela de impressão do navegador). */
+function printKitchenTicket(order: PartnerOrder, lang: string) {
+  const esc = (v: string) => v.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
+  const w = window.open("", "_blank", "width=380,height=640");
+  if (!w) return;
+  const items = order.items.map((it) => `
+    <div class="it"><b>${it.quantity}×</b> ${esc(it.name)}</div>
+    ${it.selectedOptions?.length ? `<div class="sub">${esc(it.selectedOptions.map((o) => o.name).join(", "))}</div>` : ""}
+    ${it.specialInstructions ? `<div class="warn">⚠ ${esc(it.specialInstructions)}</div>` : ""}`).join("");
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(order.orderNumber)}</title>
+    <style>@page{size:80mm auto;margin:3mm}body{font:14px/1.35 system-ui,sans-serif;width:72mm;margin:0;color:#000}
+    h1{font-size:22px;margin:0 0 2px}.big{font-size:16px;font-weight:700}.it{font-size:16px;margin-top:6px}.sub{margin-left:18px;font-size:13px}
+    .warn{margin-left:18px;font-weight:700}.box{border:2px solid #000;padding:4px 6px;margin:6px 0;font-weight:700}hr{border:0;border-top:1px dashed #000}</style></head>
+    <body><h1>${esc(order.orderNumber)}</h1>
+    <div>${new Date(order.createdAt).toLocaleString(lang === "en" ? "en-GB" : lang === "fr" ? "fr-FR" : "pt-PT")}</div>
+    <div class="big">${esc(order.customerName.split(" ")[0])}</div>
+    ${order.priorityFee ? `<div class="box">⚡ PRIORITÁRIA</div>` : ""}
+    ${order.scheduledFor ? `<div class="box">Para ${new Date(order.scheduledFor).toLocaleString("pt-PT")}</div>` : ""}
+    <hr>${items}<hr>
+    <div class="big">${order.cutlery ? "🍴 ENVIAR TALHERES" : "Sem talheres"}</div>
+    ${order.notes ? `<div class="warn">Nota: ${esc(order.notes)}</div>` : ""}
+    <script>window.onload=function(){window.print();setTimeout(function(){window.close()},500)}<\/script></body></html>`);
+  w.document.close();
+}
+
 function OrderCard({ order }: { order: PartnerOrder }) {
   const t = useT();
   const { lang } = useLang();
@@ -281,6 +267,12 @@ function OrderCard({ order }: { order: PartnerOrder }) {
         <p className="mt-2 flex items-center gap-1 text-xs text-neutral-600"><Users className="h-3 w-3" />{t({ pt: "Encomenda de grupo", en: "Group order", fr: "Commande de groupe" })}</p>
       )}
 
+      <div className="mt-2 flex justify-end">
+        <button type="button" onClick={() => printKitchenTicket(order, lang)}
+          className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium text-neutral-700 hover:bg-neutral-50">
+          🖨 {t({ pt: "Imprimir talão da cozinha", en: "Print kitchen ticket", fr: "Imprimer le ticket cuisine" })}
+        </button>
+      </div>
       <ul className="mt-2 space-y-1.5 border-t pt-2 text-sm">
         {order.items.map((it) => (
           <li key={it.id}>

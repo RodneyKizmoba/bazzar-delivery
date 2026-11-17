@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { HScroll } from "@/components/HScroll";
-import { useLocation, useParams } from "wouter";
+import { Link, useLocation, useParams } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Heart, Star, Clock, Bike, ShoppingBag, Users, Search as SearchIcon, Info, Phone, MapPin, ArrowLeft, Share2, Plus } from "lucide-react";
 import { CustomerShell, TopBar } from "@/components/AppShell";
@@ -464,6 +464,13 @@ export default function StorePage() {
           )}
         </TabsContent>
       </Tabs>
+      {/* aviso das fotos de exemplo + créditos (licenças CC exigem atribuição) */}
+      {groups.some((g) => g.items.some((it) => it.imageUrl)) && (
+        <p className="px-4 pb-28 pt-2 text-center text-[11px] text-neutral-400">
+          {t({ pt: "Fotos ilustrativas.", en: "Illustrative photos.", fr: "Photos illustratives." })}{" "}
+          <Link href="/info/creditos" className="underline hover:text-neutral-600">{t({ pt: "Créditos das fotos", en: "Photo credits", fr: "Crédits photo" })}</Link>
+        </p>
+      )}
 
       {/* Barra do carrinho */}
       {cartHere && (

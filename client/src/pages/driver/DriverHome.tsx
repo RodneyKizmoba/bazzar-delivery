@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Phone, MapPin, Navigation, Store as StoreIcon, Banknote, StickyNote, Clock } from "lucide-react";
+import { Phone, MapPin, Navigation, Store as StoreIcon, Banknote, StickyNote, Clock, Bell } from "lucide-react";
+import { useBeep } from "@/hooks/useBeep";
 import { Guard, Loading, ErrorState, EmptyState, StatusBadge } from "@/components/common";
 import { PanelShell } from "@/components/AppShell";
 import { OrderMap } from "@/components/OrderMap";
@@ -46,6 +47,15 @@ const CURRENT = "/api/driver/current";
 const AVAILABLE = "/api/driver/available";
 
 const pt = (lat?: number | null, lng?: number | null) => (lat != null && lng != null ? { latitude: lat, longitude: lng } : null);
+type LL = { latitude: number; longitude: number };
+/** Distância em linha recta (km); na estrada é normalmente ~1,3× mais. */
+function km(a: LL, b: LL) {
+  const R = 6371, rad = Math.PI / 180;
+  const dLat = (b.latitude - a.latitude) * rad, dLng = (b.longitude - a.longitude) * rad;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.latitude * rad) * Math.cos(b.latitude * rad) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+const fmtKm = (d: number) => (d < 1 ? `${Math.round(d * 1000)} m` : `${d.toFixed(1).replace(".", ",")} km`);
 
 export default function DriverHome() {
   const tabs = useDriverTabs();
@@ -69,10 +79,12 @@ function DriverContent() {
   const currentQ = useQuery<{ order: CurrentOrder | null }>({ queryKey: [CURRENT], refetchInterval: 5000 });
   const current = currentQ.data?.order ?? null;
   const hasCurrent = !!current;
+  const hasCurrentRef = useRef(hasCurrent);
+  hasCurrentRef.current = hasCurrent;
 
   // Partilha de localização: só com o interruptor ligado e uma entrega em curso.
   useEffect(() => {
-    if (!sharing || !hasCurrent) return;
+    if (!sharing) return;
     if (!("geolocation" in navigator)) {
       setGeoError(t({ pt: "Este dispositivo não suporta geolocalização.", en: "This device doesn't support geolocation.", fr: "Cet appareil ne prend pas en charge la géolocalisation." }));
       return;
@@ -84,7 +96,7 @@ function DriverContent() {
         setMyPos(p);
         setGeoError(null);
         const now = Date.now();
-        if (now - lastSent.current >= 10_000) {
+        if (hasCurrentRef.current && now - lastSent.current >= 10_000) {
           lastSent.current = now;
           post("/api/driver/location", p).catch(() => { /* nova tentativa na próxima posição */ });
         }
@@ -99,7 +111,7 @@ function DriverContent() {
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 20_000 },
     );
     return () => navigator.geolocation.clearWatch(id);
-  }, [sharing, hasCurrent]);
+  }, [sharing]);
 
   return (
     <div className="space-y-4">
@@ -112,7 +124,7 @@ function DriverContent() {
           {sharing
             ? hasCurrent
               ? t({ pt: "O cliente vê a sua posição durante a entrega.", en: "The customer sees your position during the delivery.", fr: "Le client voit votre position pendant la livraison." })
-              : t({ pt: "A localização será enviada quando tiver uma entrega em curso.", en: "Location will be sent once you have an active delivery.", fr: "La position sera envoyée dès que vous aurez une livraison en cours." })
+              : t({ pt: "Mostramos as entregas mais perto de si primeiro. O cliente só vê a sua posição durante uma entrega.", en: "We show the nearest deliveries first. Customers only see your position during a delivery.", fr: "Les livraisons les plus proches apparaissent en premier. Le client ne voit votre position que pendant une livraison." })
             : t({ pt: "Desligado.", en: "Off.", fr: "Désactivé." })}
         </p>
         {geoError && <p className="mt-2 rounded bg-red-50 p-2 text-sm text-red-700" role="alert">{geoError}</p>}
@@ -123,7 +135,7 @@ function DriverContent() {
       ) : current ? (
         <CurrentDelivery order={current} myPos={myPos} />
       ) : (
-        <AvailableList onClaimError={(e) => toast({ variant: "destructive", title: t(T.error), description: e.message })} />
+        <AvailableList myPos={myPos} onClaimError={(e) => toast({ variant: "destructive", title: t(T.error), description: e.message })} />
       )}
     </div>
   );
@@ -138,7 +150,16 @@ function CurrentDelivery({ order, myPos }: { order: CurrentOrder; myPos: { latit
   const dest = pt(a.latitude, a.longitude);
   const storePt = pt(order.store.latitude, order.store.longitude);
   const navTarget = order.status === "picked_up" ? dest : storePt ?? dest;
-  const mapsUrl = navTarget ? `https://www.google.com/maps/dir/?api=1&destination=${navTarget.latitude},${navTarget.longitude}` : null;
+  // Rota completa no Google Maps (escolhe o caminho mais rápido com trânsito): até à loja e depois ao cliente
+  const ll = (p: { latitude: number; longitude: number }) => `${p.latitude},${p.longitude}`;
+  const mapsUrl = !navTarget ? null
+    : order.status !== "picked_up" && storePt && dest
+      ? `https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=${ll(dest)}&waypoints=${ll(storePt)}${myPos ? `&origin=${ll(myPos)}` : ""}`
+      : `https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=${ll(navTarget)}${myPos ? `&origin=${ll(myPos)}` : ""}`;
+  const legs = [
+    myPos && storePt && order.status !== "picked_up" ? { label: t({ pt: "Até à loja", en: "To store", fr: "Jusqu'au magasin" }), km: km(myPos, storePt) } : null,
+    storePt && dest ? { label: t({ pt: "Loja → cliente", en: "Store → customer", fr: "Magasin → client" }), km: km(storePt, dest) } : null,
+  ].filter(Boolean) as { label: string; km: number }[];
 
   const setStatus = useMutation({
     mutationFn: (status: "picked_up" | "delivered") => post(`/api/driver/orders/${order.id}/status`, { status }),
@@ -220,8 +241,13 @@ function CurrentDelivery({ order, myPos }: { order: CurrentOrder; myPos: { latit
           <Navigation className="h-4 w-4" />
           {order.status === "picked_up"
             ? t({ pt: "Navegar até ao cliente (Google Maps)", en: "Navigate to customer (Google Maps)", fr: "Itinéraire vers le client (Google Maps)" })
-            : t({ pt: "Navegar até à loja (Google Maps)", en: "Navigate to store (Google Maps)", fr: "Itinéraire vers le magasin (Google Maps)" })}
+            : t({ pt: "Rota completa: loja → cliente (Google Maps)", en: "Full route: store → customer (Google Maps)", fr: "Itinéraire complet : magasin → client (Google Maps)" })}
         </a>
+      )}
+      {!!legs.length && (
+        <div className="flex flex-wrap gap-2 text-xs text-neutral-600">
+          {legs.map((l) => <span key={l.label} className="rounded-full bg-neutral-100 px-2.5 py-1">{l.label}: <strong>{fmtKm(l.km)}</strong></span>)}
+        </div>
       )}
 
       {(order.status === "accepted" || order.status === "preparing") && (
@@ -260,7 +286,7 @@ function CurrentDelivery({ order, myPos }: { order: CurrentOrder; myPos: { latit
   );
 }
 
-function AvailableList({ onClaimError }: { onClaimError: (e: Error) => void }) {
+function AvailableList({ onClaimError, myPos }: { onClaimError: (e: Error) => void; myPos: LL | null }) {
   const t = useT();
   const { lang } = useLang();
   const { toast } = useToast();
@@ -283,19 +309,55 @@ function AvailableList({ onClaimError }: { onClaimError: (e: Error) => void }) {
     },
   });
 
+  // aviso de nova entrega: bip, vibração e notificação do sistema (se autorizada)
+  const beep = useBeep();
+  const seen = useRef<Set<number> | null>(null);
+  useEffect(() => {
+    if (!data) return;
+    const ids = data.orders.map((o) => o.id);
+    if (seen.current) {
+      const fresh = data.orders.filter((o) => !seen.current!.has(o.id));
+      if (fresh.length) {
+        beep();
+        try { navigator.vibrate?.([200, 100, 200]); } catch { /* sem vibração */ }
+        try {
+          if ("Notification" in window && Notification.permission === "granted" && document.hidden) {
+            new Notification(t({ pt: "Nova entrega disponível", en: "New delivery available", fr: "Nouvelle livraison disponible" }), {
+              body: `${fresh[0].store.name} → ${fresh[0].deliveryAddress.zone} · ${kz(fresh[0].deliveryFee + (fresh[0].riderTip ?? 0))}`,
+              tag: "pedeja-delivery",
+            });
+          }
+        } catch { /* sem notificações */ }
+      }
+    }
+    seen.current = new Set(ids);
+  }, [data]);
+  const [notif, setNotif] = useState(() => ("Notification" in window ? Notification.permission : "denied"));
+
   if (isLoading) return <Loading />;
   if (error) return <ErrorState error={error} onRetry={() => refetch()} />;
-  const list = data!.orders;
+  // prioritárias primeiro, depois a loja mais perto de mim
+  const list = [...data!.orders].map((o) => {
+    const sp = pt(o.store.latitude, o.store.longitude);
+    return { o, dist: myPos && sp ? km(myPos, sp) : null };
+  }).sort((a, b) => Number(!!b.o.priority) - Number(!!a.o.priority) || (a.dist ?? 1e9) - (b.dist ?? 1e9));
   return (
     <section>
       <h1 className="mb-2 text-lg font-bold">{t({ pt: "Entregas disponíveis", en: "Available deliveries", fr: "Livraisons disponibles" })}</h1>
+      {notif === "default" && (
+        <button type="button" onClick={async () => setNotif(await Notification.requestPermission())}
+          className="mb-3 flex w-full items-center gap-2 rounded-lg border border-dashed border-primary bg-brand-50 p-3 text-left text-sm font-medium text-primary">
+          <Bell className="h-4 w-4 shrink-0" />
+          {t({ pt: "Activar avisos de novas entregas (mesmo com a app em segundo plano)", en: "Turn on new-delivery alerts (even in the background)", fr: "Activer les alertes de nouvelles livraisons (même en arrière-plan)" })}
+        </button>
+      )}
       {!list.length ? (
         <EmptyState icon="🛵" title={t({ pt: "Sem entregas de momento", en: "No deliveries right now", fr: "Aucune livraison pour le moment" })}
           text={t({ pt: "A lista actualiza automaticamente.", en: "The list refreshes automatically.", fr: "La liste se met à jour automatiquement." })} />
       ) : (
         <ul className="space-y-3">
-          {list.map((o) => (
-            <li key={o.id} className="rounded-lg border bg-white p-3">
+          {list.map(({ o, dist }) => (
+            <li key={o.id} className={cn("rounded-lg border bg-white p-3", o.priority && "border-2 border-primary")}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="truncate font-semibold">{o.store.name}</p>
@@ -309,6 +371,9 @@ function AvailableList({ onClaimError }: { onClaimError: (e: Error) => void }) {
               <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-neutral-600">
                 <StatusBadge status={o.status} />
                 <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />{time(o.createdAt, lang)}</span>
+                {dist !== null && <span className="inline-flex items-center gap-1"><Navigation className="h-3 w-3" />{t({ pt: `loja a ${fmtKm(dist)}`, en: `store ${fmtKm(dist)} away`, fr: `magasin à ${fmtKm(dist)}` })}</span>}
+                {o.priority && <span className="rounded-full bg-primary px-2 py-0.5 font-bold text-white">⚡ {t({ pt: "Prioritária", en: "Priority", fr: "Prioritaire" })}</span>}
+                {!!o.riderTip && <span className="rounded-full bg-green-100 px-2 py-0.5 font-bold text-green-800">+{kz(o.riderTip)} {t({ pt: "gorjeta", en: "tip", fr: "pourboire" })}</span>}
                 {o.collectCash > 0 && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-brand-100 px-2 py-0.5 font-semibold text-brand-800">
                     <Banknote className="h-3 w-3" />{t({ pt: "Cobrar", en: "Collect", fr: "Encaisser" })} {kz(o.collectCash)}

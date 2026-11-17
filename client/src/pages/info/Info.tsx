@@ -21,6 +21,7 @@ const PAGES: Record<string, Tr> = {
   termos: { pt: "Termos e Condições", en: "Terms and Conditions", fr: "Conditions générales" },
   privacidade: { pt: "Política de Privacidade", en: "Privacy Policy", fr: "Politique de confidentialité" },
   suporte: { pt: "Ajuda e suporte", en: "Help & support", fr: "Aide et support" },
+  creditos: { pt: "Créditos das fotos", en: "Photo credits", fr: "Crédits photo" },
 };
 
 type Block = { h: Tr; p: Tr[] };
@@ -269,7 +270,78 @@ function Support() {
   );
 }
 
-const CONTENT: Record<string, () => ReactNode> = { sobre: About, termos: Terms, privacidade: Privacy, suporte: Support };
+interface PhotoCredit {
+  key: string; title: string; sourcePage: string; author: string; authorUrl?: string;
+  license: string; licenseUrl: string; localPath: string;
+}
+
+/** Nome curto da licença a partir do endereço (ex.: CC BY-SA 2.0, CC0, Domínio público). */
+function licenseName(c: PhotoCredit): string {
+  const u = c.licenseUrl;
+  if (/publicdomain\/zero/.test(u)) return "CC0";
+  if (/publicdomain\/mark/.test(u)) return "Domínio público";
+  const m = u.match(/licenses\/([a-z-]+)\/([\d.]+)(?:\/([a-z]{2}))?/);
+  return m ? `CC ${m[1].toUpperCase()} ${m[2]}${m[3] ? ` ${m[3].toUpperCase()}` : ""}` : c.license;
+}
+
+/** Créditos das fotografias de exemplo (as licenças CC BY / BY-SA exigem atribuição visível). */
+function Credits() {
+  const t = useT();
+  const q = useQuery<PhotoCredit[]>({
+    queryKey: ["photo-credits"],
+    queryFn: async () => {
+      const r = await fetch("/photos/catalog/sources.json");
+      if (!r.ok) return [];
+      return r.json();
+    },
+    staleTime: 60 * 60_000,
+  });
+  // a mesma foto pode ter duas chaves (cópias de compatibilidade): mostrar uma vez
+  const seen = new Set<string>();
+  const list = (q.data ?? []).filter((c) => (seen.has(c.sourcePage) ? false : (seen.add(c.sourcePage), true)));
+  return (
+    <>
+      <p className="text-sm leading-relaxed text-neutral-700">
+        {t({
+          pt: "As fotografias dos pratos e das lojas de exemplo são ilustrativas: não representam o estabelecimento nem garantem a apresentação do produto. Agradecemos aos fotógrafos que as partilharam com licenças livres. Cada loja pode substituí-las pelas suas próprias fotos.",
+          en: "Photos of sample dishes and stores are illustrative: they don't represent the business or guarantee how the product looks. Thank you to the photographers who shared them under free licences. Each store can replace them with its own photos.",
+          fr: "Les photos des plats et magasins d'exemple sont illustratives : elles ne représentent pas l'établissement ni ne garantissent la présentation du produit. Merci aux photographes qui les ont partagées sous licence libre. Chaque magasin peut les remplacer par ses propres photos.",
+        })}
+      </p>
+      {q.isLoading && <p className="mt-4 text-sm text-neutral-500">{t({ pt: "A carregar…", en: "Loading…", fr: "Chargement…" })}</p>}
+      {!!list.length && (
+        <ul className="mt-5 divide-y rounded-2xl border">
+          {list.map((c) => (
+            <li key={c.key} className="flex items-center gap-3 p-3">
+              <img src={c.localPath} alt="" loading="lazy" className="h-14 w-14 shrink-0 rounded-lg bg-neutral-100 object-cover"
+                onError={(e) => { e.currentTarget.style.visibility = "hidden"; }} />
+              <div className="min-w-0 flex-1 text-sm">
+                <a href={c.sourcePage} target="_blank" rel="noreferrer" className="line-clamp-1 font-semibold text-neutral-900 hover:underline">{c.title.replace(/^File:/, "")}</a>
+                <p className="text-neutral-600">
+                  {t({ pt: "Foto", en: "Photo", fr: "Photo" })}:{" "}
+                  {c.authorUrl ? <a href={c.authorUrl} target="_blank" rel="noreferrer" className="hover:underline">{c.author}</a> : c.author}
+                  {" · "}
+                  <a href={c.licenseUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">{licenseName(c)}</a>
+                </p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      <h2 className="mb-1 mt-8 text-lg font-bold">{t({ pt: "Outras fotografias", en: "Other photos", fr: "Autres photos" })}</h2>
+      <p className="text-sm leading-relaxed text-neutral-700">
+        {t({
+          pt: "Algumas fotografias vêm do Unsplash (licença Unsplash, uso livre). As fotos de animais nos anúncios vêm do Wikimedia Commons, com o crédito no próprio anúncio. Os desenhos das categorias são originais da PedeJá.",
+          en: "Some photos come from Unsplash (Unsplash licence, free to use). Animal photos in the ads come from Wikimedia Commons, credited on each ad. Category drawings are PedeJá originals.",
+          fr: "Certaines photos viennent d'Unsplash (licence Unsplash, libre d'utilisation). Les photos d'animaux des annonces viennent de Wikimedia Commons, créditées sur chaque annonce. Les dessins des catégories sont des originaux PedeJá.",
+        })}{" "}
+        <a href="https://unsplash.com/license" target="_blank" rel="noreferrer" className="text-primary hover:underline">unsplash.com/license</a>
+      </p>
+    </>
+  );
+}
+
+const CONTENT: Record<string, () => ReactNode> = { sobre: About, termos: Terms, privacidade: Privacy, suporte: Support, creditos: Credits };
 
 export default function Info() {
   const { page } = useParams<{ page: string }>();

@@ -14,7 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { patch, queryClient } from "@/lib/api";
+import { del, patch, post, put, queryClient } from "@/lib/api";
 import { useT, T, type Tr } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { usePartnerTabs, usePartnerTitle } from "./PartnerOrders";
@@ -26,6 +26,7 @@ export default function PartnerStore() {
     <Guard roles={["supplier"]}>
       <PanelShell title={title} tabs={tabs}>
         <StoreForm />
+        <PosIntegration />
       </PanelShell>
     </Guard>
   );
@@ -328,6 +329,105 @@ function ThemePicker({ value, onChange, store }: { value: string; onChange: (v: 
           <span className="mt-2 inline-block rounded-full bg-primary px-3 py-1 text-xs font-semibold text-white">{t({ pt: "Adicionar", en: "Add", fr: "Ajouter" })}</span>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Integração com o sistema de cozinha / POS: chave de API e webhook assinado. */
+function PosIntegration() {
+  const t = useT();
+  const { toast } = useToast();
+  const q = useQuery<{ keyActive: boolean; keyHint: string | null; webhookUrl: string | null }>({ queryKey: ["/api/partner/integration"] });
+  const [shown, setShown] = useState<{ label: string; value: string } | null>(null);
+  const [url, setUrl] = useState("");
+  useEffect(() => { if (q.data) setUrl(q.data.webhookUrl ?? ""); }, [q.data?.webhookUrl]);
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ["/api/partner/integration"] });
+  const fail = (e: Error) => toast({ variant: "destructive", title: t(T.error), description: e.message });
+  const genKey = useMutation({
+    mutationFn: () => post<{ key: string }>("/api/partner/integration/key"),
+    onSuccess: (d) => { setShown({ label: t({ pt: "Chave de API", en: "API key", fr: "Clé API" }), value: d.key }); refresh(); },
+    onError: fail,
+  });
+  const revoke = useMutation({ mutationFn: () => del("/api/partner/integration/key"), onSuccess: () => { setShown(null); refresh(); }, onError: fail });
+  const saveHook = useMutation({
+    mutationFn: () => put<{ webhookUrl: string | null; secret?: string }>("/api/partner/integration/webhook", { url: url.trim() || null }),
+    onSuccess: (d) => {
+      if (d.secret) setShown({ label: t({ pt: "Segredo do webhook", en: "Webhook secret", fr: "Secret du webhook" }), value: d.secret });
+      toast({ title: t({ pt: "Webhook guardado", en: "Webhook saved", fr: "Webhook enregistré" }) });
+      refresh();
+    },
+    onError: fail,
+  });
+  const test = useMutation({
+    mutationFn: () => post<{ delivered: boolean; status: number | null }>("/api/partner/integration/webhook/test"),
+    onSuccess: (d) => toast(d.delivered
+      ? { title: t({ pt: "Teste entregue ✓", en: "Test delivered ✓", fr: "Test livré ✓" }), description: `HTTP ${d.status}` }
+      : { variant: "destructive", title: t({ pt: "O sistema não respondeu", en: "The system didn't respond", fr: "Le système n'a pas répondu" }), description: d.status ? `HTTP ${d.status}` : undefined }),
+    onError: fail,
+  });
+  if (!q.data) return null;
+  return (
+    <div className="mx-auto mt-4 max-w-3xl">
+      <Card title={{ pt: "Integração com a cozinha / POS", en: "Kitchen / POS integration", fr: "Intégration cuisine / caisse" }}>
+        <div className="space-y-4">
+        <p className="text-sm text-neutral-600">
+          {t({
+            pt: "Ligue o seu sistema de caixa ou ecrã de cozinha: ele recebe as encomendas automaticamente e pode marcá-las como aceites, em preparação ou prontas. Também pode imprimir o talão de cada encomenda no separador Encomendas.",
+            en: "Connect your till or kitchen screen: it receives orders automatically and can mark them accepted, preparing or ready. You can also print each order's ticket from the Orders tab.",
+            fr: "Connectez votre caisse ou écran de cuisine : il reçoit les commandes automatiquement et peut les marquer acceptées, en préparation ou prêtes. Vous pouvez aussi imprimer le ticket depuis l'onglet Commandes.",
+          })}
+        </p>
+        {shown && (
+          <div className="rounded-lg border-2 border-amber-400 bg-amber-50 p-3" role="alert">
+            <p className="text-sm font-semibold">{shown.label} — {t({ pt: "copie agora, não será mostrada outra vez", en: "copy it now, it won't be shown again", fr: "copiez-la maintenant, elle ne sera plus affichée" })}</p>
+            <div className="mt-2 flex gap-2">
+              <Input readOnly value={shown.value} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
+              <Button type="button" variant="outline" onClick={() => { void navigator.clipboard?.writeText(shown.value); toast({ title: t({ pt: "Copiado", en: "Copied", fr: "Copié" }) }); }}>
+                {t({ pt: "Copiar", en: "Copy", fr: "Copier" })}
+              </Button>
+            </div>
+          </div>
+        )}
+        <div className="space-y-2">
+          <p className="text-sm font-semibold">1. {t({ pt: "Chave de API", en: "API key", fr: "Clé API" })}</p>
+          <p className="text-sm text-neutral-600">
+            {q.data.keyActive
+              ? <>{t({ pt: "Activa", en: "Active", fr: "Active" })}: <span className="font-mono">{q.data.keyHint}</span></>
+              : t({ pt: "Ainda não criou uma chave.", en: "No key yet.", fr: "Pas encore de clé." })}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" disabled={genKey.isPending} onClick={() => genKey.mutate()}>
+              {q.data.keyActive ? t({ pt: "Gerar nova chave", en: "Generate new key", fr: "Nouvelle clé" }) : t({ pt: "Criar chave", en: "Create key", fr: "Créer une clé" })}
+            </Button>
+            {q.data.keyActive && (
+              <Button type="button" variant="ghost" className="text-red-700" disabled={revoke.isPending} onClick={() => revoke.mutate()}>
+                {t({ pt: "Desactivar", en: "Revoke", fr: "Révoquer" })}
+              </Button>
+            )}
+          </div>
+          <p className="text-xs text-neutral-500">
+            {t({ pt: "O seu fornecedor de POS usa:", en: "Your POS provider uses:", fr: "Votre fournisseur de caisse utilise :" })}{" "}
+            <code className="rounded bg-neutral-100 px-1">GET /api/pos/orders</code>, <code className="rounded bg-neutral-100 px-1">POST /api/pos/orders/:id/status</code>{" "}
+            {t({ pt: "com o cabeçalho", en: "with the header", fr: "avec l'en-tête" })} <code className="rounded bg-neutral-100 px-1">Authorization: Bearer &lt;chave&gt;</code>.
+          </p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="pos-webhook" className="text-sm font-semibold">2. {t({ pt: "Webhook (opcional)", en: "Webhook (optional)", fr: "Webhook (facultatif)" })}</Label>
+          <p className="text-xs text-neutral-500">
+            {t({
+              pt: "Avisamos este endereço (https) a cada encomenda nova ou mudança de estado. Cada aviso vem assinado (cabeçalho X-PedeJa-Signature, HMAC-SHA256) para o seu sistema confirmar que vem da PedeJá.",
+              en: "We notify this https address on every new order or status change. Each call is signed (X-PedeJa-Signature header, HMAC-SHA256) so your system can verify it came from PedeJá.",
+              fr: "Nous notifions cette adresse https à chaque nouvelle commande ou changement de statut. Chaque appel est signé (en-tête X-PedeJa-Signature, HMAC-SHA256).",
+            })}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Input id="pos-webhook" type="url" inputMode="url" placeholder="https://pos.exemplo.ao/pedeja" value={url} onChange={(e) => setUrl(e.target.value)} className="min-w-0 flex-1" />
+            <Button type="button" variant="outline" disabled={saveHook.isPending} onClick={() => saveHook.mutate()}>{t({ pt: "Guardar", en: "Save", fr: "Enregistrer" })}</Button>
+            {q.data.webhookUrl && <Button type="button" variant="ghost" disabled={test.isPending} onClick={() => test.mutate()}>{t({ pt: "Enviar teste", en: "Send test", fr: "Envoyer un test" })}</Button>}
+          </div>
+        </div>
+        </div>
+      </Card>
     </div>
   );
 }

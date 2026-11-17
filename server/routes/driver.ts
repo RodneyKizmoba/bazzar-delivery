@@ -80,6 +80,35 @@ driverRouter.get("/history", ah(async (req, res) => {
   res.json({ orders: rows.map((r) => summary(r.o, r.s)), last30Days: tot });
 }));
 
+/** Ganhos do estafeta (taxa de entrega + gorjetas): hoje, 7 e 30 dias, e o detalhe dos últimos 7 dias. */
+driverRouter.get("/earnings", ah(async (req, res) => {
+  // meia-noite de hoje em Luanda (UTC+1)
+  const shifted = new Date(Date.now() + 3_600_000);
+  shifted.setUTCHours(0, 0, 0, 0);
+  const startOfDay = new Date(shifted.getTime() - 3_600_000);
+  const mine = (since: Date) => and(eq(orders.driverId, req.user!.id), eq(orders.status, "delivered"), gte(orders.deliveredAt, since));
+  const sum = async (since: Date) => {
+    const [r] = await db.select({
+      deliveries: sql<number>`count(*)::int`,
+      fees: sql<number>`coalesce(sum(${orders.deliveryFee}),0)::int`,
+      tips: sql<number>`coalesce(sum(${orders.riderTip}),0)::int`,
+    }).from(orders).where(mine(since));
+    return { ...r, total: r.fees + r.tips };
+  };
+  const week = new Date(startOfDay.getTime() - 6 * 86_400_000);
+  const days = await db.select({
+    day: sql<string>`to_char((${orders.deliveredAt} at time zone 'Africa/Luanda')::date, 'YYYY-MM-DD')`,
+    deliveries: sql<number>`count(*)::int`,
+    total: sql<number>`coalesce(sum(${orders.deliveryFee} + ${orders.riderTip}),0)::int`,
+  }).from(orders).where(mine(week)).groupBy(sql`1`).orderBy(sql`1`);
+  res.json({
+    today: await sum(startOfDay),
+    last7Days: await sum(week),
+    last30Days: await sum(new Date(Date.now() - 30 * 86_400_000)),
+    daily: days,
+  });
+}));
+
 driverRouter.get("/orders/:id", ah(async (req, res) => {
   const [row] = await db.select({ o: orders, s: stores }).from(orders).innerJoin(stores, eq(stores.id, orders.storeId))
     .where(and(eq(orders.id, idParam(req)), eq(orders.driverId, req.user!.id)));

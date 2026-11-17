@@ -121,6 +121,7 @@ export default function Login() {
           <Link href="/info/termos" className="hover:underline">{t({ pt: "Termos", en: "Terms", fr: "Conditions" })}</Link>
           <Link href="/info/privacidade" className="hover:underline">{t({ pt: "Privacidade", en: "Privacy", fr: "Confidentialité" })}</Link>
           <Link href="/info/suporte" className="hover:underline">{t({ pt: "Ajuda", en: "Help", fr: "Aide" })}</Link>
+          <Link href="/info/creditos" className="hover:underline">{t({ pt: "Créditos", en: "Credits", fr: "Crédits" })}</Link>
         </div>
       </div>
     </CustomerShell>

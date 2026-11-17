@@ -2,8 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
-  ChevronRight, CircleHelp, Coins, Crown, FileText, Globe, Heart, KeyRound, LayoutDashboard, Loader2, LogOut, MapPin, Pencil, Receipt, Shield, Utensils,
-} from "lucide-react";
+  ChevronRight, CircleHelp, Coins, Crown, FileText, Globe, Heart, KeyRound, LayoutDashboard, Loader2, LogOut, MapPin, Pencil, Receipt, Shield, Utensils, Camera } from "lucide-react";
 import { CustomerShell } from "@/components/AppShell";
 import { Guard } from "@/components/common";
 import { Button } from "@/components/ui/button";
@@ -238,6 +237,7 @@ function ProfileInner() {
         <Row href="/info/suporte" icon={<CircleHelp className="h-5 w-5" />} label={t({ pt: "Suporte", en: "Support", fr: "Support" })} />
         <Row href="/info/termos" icon={<FileText className="h-5 w-5" />} label={t({ pt: "Termos e condições", en: "Terms & conditions", fr: "Conditions générales" })} />
         <Row href="/info/privacidade" icon={<Shield className="h-5 w-5" />} label={t({ pt: "Privacidade", en: "Privacy", fr: "Confidentialité" })} />
+        <Row href="/info/creditos" icon={<Camera className="h-5 w-5" />} label={t({ pt: "Créditos das fotos", en: "Photo credits", fr: "Crédits photo" })} />
       </nav>
 
       <Button variant="outline" className="h-12 w-full rounded-xl text-red-600 hover:text-red-700" onClick={doLogout}>

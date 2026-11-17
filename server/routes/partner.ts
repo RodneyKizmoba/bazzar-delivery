@@ -9,6 +9,7 @@ import {
 import { ah, forbidden, idParam, notFound, parse } from "../lib/http";
 import { requireRole } from "../lib/auth";
 import { changeStatus, confirmScheduled } from "../lib/orderFlow";
+import { assertSafeWebhookUrl, newApiKey, newWebhookSecret, sendPosWebhook, withoutSecrets } from "../lib/pos";
 
 export const partnerRouter = Router();
 partnerRouter.use(requireRole("supplier"));
@@ -20,14 +21,14 @@ async function myStore(req: Request): Promise<Store> {
 }
 
 partnerRouter.get("/store", ah(async (req, res) => {
-  res.json({ store: await myStore(req) });
+  res.json({ store: withoutSecrets(await myStore(req)) });
 }));
 
 partnerRouter.patch("/store", ah(async (req, res) => {
   const s = await myStore(req);
   const input = parse(storeUpdateSchema, req.body);
   const [updated] = await db.update(stores).set(input).where(eq(stores.id, s.id)).returning();
-  res.json({ store: updated });
+  res.json({ store: withoutSecrets(updated) });
 }));
 
 // ---------------------------------------------------------------------------
@@ -233,4 +234,70 @@ partnerRouter.get("/stats", ah(async (req, res) => {
     rating: { avg: Math.round(s.ratingAvg * 10) / 10, count: s.ratingCount },
     topItems: top,
   });
+}));
+
+
+// ---------------------------------------------------------------------------
+// Relatórios (CSV para Excel) e integração com cozinha/POS
+// ---------------------------------------------------------------------------
+const csvCell = (v: unknown) => {
+  const t = v === null || v === undefined ? "" : String(v);
+  // evita fórmulas no Excel (=, +, -, @) e escapa aspas
+  const safe = /^[=+\-@]/.test(t) ? `'${t}` : t;
+  return /[";\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
+};
+
+partnerRouter.get("/reports/orders.csv", ah(async (req, res) => {
+  const s = await myStore(req);
+  const days = Math.min(366, Math.max(1, Number(req.query.days) || 30));
+  const since = new Date(Date.now() - days * 86_400_000);
+  const rows = await db.select().from(orders).where(and(eq(orders.storeId, s.id), gte(orders.createdAt, since))).orderBy(desc(orders.createdAt));
+  const header = ["Número", "Data", "Estado", "Subtotal (Kz)", "Taxa de entrega (Kz)", "Desconto (Kz)", "Total (Kz)", "Pagamento", "Prioritária", "Talheres"];
+  const lines = rows.map((o) => [
+    o.orderNumber, o.createdAt.toISOString(), o.status, o.subtotal, o.deliveryFee, o.discount, o.total, o.paymentMethod,
+    o.priorityFee > 0 ? "sim" : "não", o.cutlery ? "sim" : "não",
+  ].map(csvCell).join(";"));
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="pedeja-encomendas-${days}d.csv"`);
+  res.send("\uFEFF" + [header.join(";"), ...lines].join("\r\n"));
+}));
+
+partnerRouter.get("/integration", ah(async (req, res) => {
+  const s = await myStore(req);
+  res.json({ keyActive: !!s.posKeyHash, keyHint: s.posKeyHint, webhookUrl: s.posWebhookUrl });
+}));
+
+/** Gera (ou substitui) a chave de API. A chave completa só é mostrada uma vez. */
+partnerRouter.post("/integration/key", ah(async (req, res) => {
+  const s = await myStore(req);
+  const k = newApiKey();
+  await db.update(stores).set({ posKeyHash: k.hash, posKeyHint: k.hint }).where(eq(stores.id, s.id));
+  res.status(201).json({ key: k.key, keyHint: k.hint });
+}));
+
+partnerRouter.delete("/integration/key", ah(async (req, res) => {
+  const s = await myStore(req);
+  await db.update(stores).set({ posKeyHash: null, posKeyHint: null }).where(eq(stores.id, s.id));
+  res.json({ ok: true });
+}));
+
+/** Define o webhook. O segredo de assinatura só é mostrado quando é criado. */
+partnerRouter.put("/integration/webhook", ah(async (req, res) => {
+  const s = await myStore(req);
+  const { url } = parse(z.object({ url: z.string().trim().max(500).nullable() }), req.body);
+  if (!url) {
+    await db.update(stores).set({ posWebhookUrl: null, posWebhookSecret: null }).where(eq(stores.id, s.id));
+    return res.json({ webhookUrl: null });
+  }
+  const safe = await assertSafeWebhookUrl(url);
+  const secret = s.posWebhookSecret ?? newWebhookSecret();
+  await db.update(stores).set({ posWebhookUrl: safe, posWebhookSecret: secret }).where(eq(stores.id, s.id));
+  res.json({ webhookUrl: safe, secret: s.posWebhookSecret ? undefined : secret });
+}));
+
+partnerRouter.post("/integration/webhook/test", ah(async (req, res) => {
+  const s = await myStore(req);
+  if (!s.posWebhookUrl) throw notFound("Ainda não definiu o webhook.");
+  const status = await sendPosWebhook(s.id, "test");
+  res.json({ delivered: status !== null && status >= 200 && status < 300, status });
 }));

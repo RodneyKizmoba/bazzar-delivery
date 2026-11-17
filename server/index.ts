@@ -18,6 +18,7 @@ import { partnerRouter } from "./routes/partner";
 import { driverRouter } from "./routes/driver";
 import { adminRouter } from "./routes/admin";
 import { webhookRouter } from "./routes/webhooks";
+import { posRouter } from "./routes/pos";
 import { ensureAdmin, seedDemoData, seedLaunchData } from "./seed";
 import { applyStockPhotos } from "./lib/stockPhotos";
 import { setupVite, serveStatic, log } from "./vite";
@@ -101,6 +102,7 @@ app.use("/api/partner", partnerRouter);
 app.use("/api/driver", driverRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/webhooks", webhookRouter);
+app.use("/api/pos", posRouter);
 app.use("/api", (_req, res) => res.status(404).json({ message: "Endpoint não encontrado", code: "NOT_FOUND" }));
 app.use(errorHandler);
 

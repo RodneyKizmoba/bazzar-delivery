@@ -7,6 +7,7 @@ import { ah, badRequest, conflict, idParam, notFound, parse } from "../lib/http"
 import { publicUser, requireRole } from "../lib/auth";
 import { changeStatus } from "../lib/orderFlow";
 import { STORE_THEME_IDS } from "@shared/themes";
+import { withoutSecrets } from "../lib/pos";
 
 export const adminRouter = Router();
 adminRouter.use(requireRole("admin"));
@@ -81,7 +82,7 @@ adminRouter.get("/stores", ah(async (req, res) => {
   const rows = await db.select({ s: stores, ownerName: users.fullName, ownerPhone: users.phone }).from(stores)
     .leftJoin(users, eq(users.id, stores.ownerId))
     .where(pendingOnly ? eq(stores.isApproved, false) : undefined).orderBy(desc(stores.createdAt)).limit(500);
-  res.json({ stores: rows.map((r) => ({ ...r.s, ownerName: r.ownerName, ownerPhone: r.ownerPhone })) });
+  res.json({ stores: rows.map((r) => ({ ...withoutSecrets(r.s), ownerName: r.ownerName, ownerPhone: r.ownerPhone })) });
 }));
 
 adminRouter.patch("/stores/:id", ah(async (req, res) => {
@@ -91,7 +92,7 @@ adminRouter.patch("/stores/:id", ah(async (req, res) => {
   }), req.body);
   const [s] = await db.update(stores).set(input).where(eq(stores.id, idParam(req))).returning();
   if (!s) throw notFound("Loja não encontrada");
-  res.json({ store: s });
+  res.json({ store: withoutSecrets(s) });
 }));
 
 adminRouter.get("/users", ah(async (req, res) => {

@@ -11,6 +11,7 @@ import { assertDailyCapacity, assertStoreCanTakeOrder, buildQuote, validateSched
 import { assertMethodAvailable, refundOrderPayment, startOrderPayment } from "./payments";
 import { notifyOrderStatus } from "./notify";
 import { notifyExternalDispatch } from "./dispatch";
+import { sendPosWebhook } from "./pos";
 
 export type Actor = { kind: "customer" | "store" | "driver" | "admin" | "system"; userId?: number };
 
@@ -139,6 +140,7 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
     return fresh;
   });
 
+  void sendPosWebhook(created.storeId, "order.created", created.id);
   return created;
 }
 
@@ -205,6 +207,7 @@ export async function changeStatus(orderId: number, to: OrderStatus, actor: Acto
   // efeitos externos (fora da transacção, nunca bloqueiam)
   const [cust] = await db.select({ phone: users.phone }).from(users).where(eq(users.id, result.customerId));
   if (cust) notifyOrderStatus(cust.phone, result.orderNumber, to);
+  void sendPosWebhook(result.storeId, "order.status_changed", result.id);
   if (to === "ready") {
     const [store] = await db.select().from(stores).where(eq(stores.id, result.storeId));
     if (store) {

@@ -46,7 +46,18 @@ function StatsContent() {
   const cancelRate = m.orders + m.cancelledOrRejected > 0 ? Math.round((m.cancelledOrRejected / (m.orders + m.cancelledOrRejected)) * 100) : 0;
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-bold">{t({ pt: "Estatísticas", en: "Statistics", fr: "Statistiques" })}</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-xl font-bold">{t({ pt: "Estatísticas", en: "Statistics", fr: "Statistiques" })}</h1>
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-neutral-600">{t({ pt: "Relatório (Excel/CSV):", en: "Report (Excel/CSV):", fr: "Rapport (Excel/CSV) :" })}</span>
+          {[7, 30, 90].map((d) => (
+            <a key={d} href={`/api/partner/reports/orders.csv?days=${d}`} download
+              className="rounded-full border bg-white px-3 py-1.5 font-medium text-neutral-800 shadow-sm hover:bg-neutral-50">
+              ⬇ {d} {t({ pt: "dias", en: "days", fr: "jours" })}
+            </a>
+          ))}
+        </div>
+      </div>
       <section>
         <h2 className="mb-2 text-sm font-semibold text-neutral-700">{t({ pt: "Hoje", en: "Today", fr: "Aujourd'hui" })}</h2>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">

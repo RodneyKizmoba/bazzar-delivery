@@ -92,6 +92,11 @@ export const stores = pgTable("stores", {
   logoUrl: text("logo_url"),
   coverUrl: text("cover_url"),
   theme: text("theme"), // cor da página da loja (ver shared/themes.ts); null = cor por defeito do tipo
+  // integração com cozinha/POS (ver server/lib/pos.ts)
+  posKeyHash: text("pos_key_hash").unique(), // sha256 da chave de API (a chave em si nunca é guardada)
+  posKeyHint: text("pos_key_hint"),
+  posWebhookUrl: text("pos_webhook_url"),
+  posWebhookSecret: text("pos_webhook_secret"),
   openingTime: text("opening_time").notNull().default("10:00"),
   closingTime: text("closing_time").notNull().default("22:00"),
   isOpen: boolean("is_open").notNull().default(true),

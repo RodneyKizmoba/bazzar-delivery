@@ -265,6 +265,50 @@ async function main() {
   });
 
   // =========================================================================
+  await section("Kitchen/POS integration, reports, rider earnings", async () => {
+    let r = await loja.get("/api/partner/store");
+    check("store payload never exposes integration secrets", r.status === 200 && !("posKeyHash" in r.body.store) && !("posWebhookSecret" in r.body.store), Object.keys(r.body.store ?? {}));
+    r = await anon.get("/api/pos/orders");
+    check("POS API without key → 401", r.status === 401, r.status);
+    r = await anon.req("GET", "/api/pos/orders", undefined, { authorization: "Bearer pj_live_" + "0".repeat(48) });
+    check("POS API with wrong key → 401", r.status === 401, r.status);
+    r = await loja.post("/api/partner/integration/key", {});
+    const key: string = r.body.key;
+    check("store creates an API key (shown once)", r.status === 201 && /^pj_live_[a-f0-9]{48}$/.test(key), r.body);
+    r = await loja.get("/api/partner/integration");
+    check("integration status shows only a hint, never the key", r.body.keyActive === true && !JSON.stringify(r.body).includes(key), r.body);
+    const pos = (path: string, body?: unknown) => (body === undefined ? anon.req("GET", path, undefined, { authorization: `Bearer ${key}` }) : anon.post(path, body, { authorization: `Bearer ${key}` }));
+    const o = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash", cutlery: true });
+    r = await pos("/api/pos/orders");
+    const mine = r.body.orders?.find((x: any) => x.id === o.body.order?.id);
+    check("POS lists the store's active orders with items", r.status === 200 && !!mine && mine.items.length > 0 && mine.cutlery === true, r.body);
+    check("POS payload has no customer phone or address", !!mine && !("customerPhone" in mine) && !("deliveryAddress" in mine), mine);
+    r = await pos(`/api/pos/orders/${o.body.order.id}/status`, { status: "accepted" });
+    check("POS accepts the order", r.status === 200 && r.body.order.status === "accepted", r.body);
+    r = await pos(`/api/pos/orders/${o.body.order.id}/status`, { status: "delivered" });
+    check("POS cannot mark delivered (400)", r.status === 400, r.status);
+    r = await pos(`/api/pos/orders/999999`);
+    check("POS cannot read unknown/other stores' orders (404)", r.status === 404, r.status);
+    r = await loja.put("/api/partner/integration/webhook", { url: "http://example.com/hook" });
+    check("webhook must be https (400)", r.status === 400, r.body);
+    r = await loja.put("/api/partner/integration/webhook", { url: "https://127.0.0.1/hook" });
+    check("webhook to a private address rejected (SSRF guard)", r.status === 400 && r.body.code === "WEBHOOK_URL_PRIVATE", r.body);
+    r = await loja.put("/api/partner/integration/webhook", { url: "https://localhost/hook" });
+    check("webhook to localhost rejected", r.status === 400, r.body);
+    r = await loja.del("/api/partner/integration/key");
+    r = await pos("/api/pos/orders");
+    check("revoked key stops working (401)", r.status === 401, r.status);
+    await cli.post(`/api/orders/${o.body.order.id}/cancel`, {});
+
+    r = await loja.get("/api/partner/reports/orders.csv?days=30");
+    check("CSV report downloads with a header row and the store's orders", r.status === 200 && r.text.includes("Número;Data;Estado") && r.text.includes(o.body.order.orderNumber), r.text?.slice(0, 200));
+
+    r = await est.get("/api/driver/earnings");
+    check("rider earnings: today / 7 / 30 days with tips and daily rows",
+      r.status === 200 && ["today", "last7Days", "last30Days"].every((k) => typeof r.body[k]?.total === "number" && typeof r.body[k]?.tips === "number") && Array.isArray(r.body.daily), r.body);
+  });
+
+  // =========================================================================
   await section("Input validation", async () => {
     const base = { storeId: 1, addressId: addrTalatona, paymentMethod: "cash" };
     const bad: [string, any][] = [
