@@ -7,6 +7,7 @@ import { Search as SearchIcon, MapPin, Star, Clock, Bike, Crown, ChevronRight } 
 import { CustomerShell } from "@/components/AppShell";
 import { ErrorState, StoreImage } from "@/components/common";
 import { StoreThemeArt, themeFor } from "@/components/StoreThemeArt";
+import { CategoryArt, CATEGORY_TILE_BG } from "@/components/CategoryArt";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -198,6 +199,15 @@ function StoreRow({ url, emptyText }: { url: string; emptyText: string }) {
 
 interface PopularItem { id: number; name: string; price: number; imageUrl: string | null; storeId: number; storeName: string; dietaryTags: string[] }
 
+/** Atalhos de cozinha (como no Deliveroo): pesquisam pelo tipo de comida. */
+const CUISINE_TILES = [
+  { key: "burger", q: "Hambúrgueres", pt: "Hambúrgueres", en: "Burgers", fr: "Burgers" },
+  { key: "pizza", q: "Pizza", pt: "Pizza", en: "Pizza", fr: "Pizza" },
+  { key: "grill", q: "Grelhados", pt: "Grelhados", en: "Grill", fr: "Grillades" },
+  { key: "angolan", q: "Angolana", pt: "Angolana", en: "Angolan", fr: "Angolaise" },
+  { key: "sushi", q: "Sushi", pt: "Sushi", en: "Sushi", fr: "Sushi" },
+];
+
 export default function Home() {
   const t = useT();
   const [, navigate] = useLocation();
@@ -276,12 +286,19 @@ export default function Home() {
 
       {/* Tipos de loja */}
       <div className="mx-3 mt-3 overflow-hidden rounded-3xl bg-white py-2 shadow-lg">
-      <HScroll className="flex gap-3 px-3 py-1" arrowSize="sm" label="Categorias">
-        {(meta.data?.storeTypes ?? Object.keys(STORE_TYPE)).map((type) => STORE_TYPE[type] && (
-          <Link key={type} href={`/pesquisa?type=${type}${zq}`}
-            className="flex min-w-[4.75rem] flex-col items-center gap-1.5 rounded-2xl px-1 py-2 hover:bg-neutral-50">
-            <span className="flex h-14 w-14 items-center justify-center rounded-2xl text-2xl" style={{ backgroundColor: `${STORE_TYPE[type].color}2E` }} aria-hidden>{STORE_TYPE[type].icon}</span>
-            <span className="text-center text-xs font-medium leading-tight text-neutral-700">{t(STORE_TYPE[type])}</span>
+      <HScroll className="flex gap-2 px-3 py-1.5" arrowSize="sm" label="Categorias">
+        {[
+          ...(meta.data?.storeTypes ?? Object.keys(STORE_TYPE)).filter((type) => STORE_TYPE[type])
+            .map((type) => ({ key: type, label: t(STORE_TYPE[type]), href: `/pesquisa?type=${type}${zq}` })),
+          ...CUISINE_TILES.map((c) => ({ key: c.key, label: t(c), href: `/pesquisa?q=${encodeURIComponent(c.q)}${zq}` })),
+        ].map((c) => (
+          <Link key={c.key} href={c.href}
+            className="group flex w-[5.25rem] shrink-0 flex-col items-center gap-1.5 rounded-2xl pb-1 pt-0.5">
+            <span className="flex h-[4.75rem] w-[4.75rem] items-center justify-center rounded-2xl transition-transform duration-200 group-hover:-translate-y-0.5 group-active:scale-95"
+              style={{ backgroundColor: CATEGORY_TILE_BG[c.key] ?? "#F1F5F9" }}>
+              <CategoryArt kind={c.key} className="h-[3.9rem] w-[3.9rem] drop-shadow-sm" />
+            </span>
+            <span className="line-clamp-2 text-center text-[13px] font-semibold leading-tight text-neutral-900">{c.label}</span>
           </Link>
         ))}
       </HScroll>
