@@ -2,10 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { HScroll } from "@/components/HScroll";
 import { useLocation, useParams } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Heart, Star, Clock, Bike, ShoppingBag, Users, Search as SearchIcon, Info, Phone, MapPin } from "lucide-react";
+import { Heart, Star, Clock, Bike, ShoppingBag, Users, Search as SearchIcon, Info, Phone, MapPin, ArrowLeft, Share2, Plus } from "lucide-react";
 import { CustomerShell, TopBar } from "@/components/AppShell";
 import { DietaryBadges, EmptyState, ErrorState, StoreImage } from "@/components/common";
 import { StoreThemeArt, themeFor } from "@/components/StoreThemeArt";
+import { CategoryArt } from "@/components/CategoryArt";
 import { ItemDialog, type ItemSelection, type MenuItemFull } from "@/components/ItemDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,6 +66,14 @@ export default function StorePage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [pending, setPending] = useState<ItemSelection | null>(null);
   const [activeSection, setActiveSection] = useState<string>("");
+  // Deliveroo: a barra com o nome só aparece depois de passar a imagem do topo
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const on = () => setScrolled(window.scrollY > 170);
+    on();
+    window.addEventListener("scroll", on, { passive: true });
+    return () => window.removeEventListener("scroll", on);
+  }, []);
   const navRef = useRef<HTMLDivElement>(null);
 
   const loginNext = () => navigate(`/entrar?next=${encodeURIComponent(`/loja/${id}`)}`);
@@ -158,6 +167,16 @@ export default function StorePage() {
 
   const startGroup = () => (user ? group.mutate() : loginNext());
   const toggleFav = () => (user ? fav.mutate(!data?.isFavorite) : loginNext());
+  const goBack = () => (window.history.length > 1 ? window.history.back() : navigate("/"));
+  const share = async () => {
+    const url = window.location.href;
+    const title = data?.store.name ?? "PedeJá";
+    try {
+      if (navigator.share) { await navigator.share({ title, url }); return; }
+      await navigator.clipboard.writeText(url);
+      toast({ title: t({ pt: "Link copiado", en: "Link copied", fr: "Lien copié" }) });
+    } catch { /* partilha cancelada */ }
+  };
 
   const cartHere = store && cart.storeId === store.id && cart.itemCount > 0;
 
@@ -187,24 +206,40 @@ export default function StorePage() {
 
   return (
     <CustomerShell hideHeader>
-      <TopBar title={store.name} back right={
-        <button onClick={toggleFav} aria-label={favLabel} aria-pressed={data.isFavorite} disabled={fav.isPending}
-          className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-neutral-100">
+      {/* Barra compacta (aparece ao descer) */}
+      <div className={cn("fixed inset-x-0 top-0 z-40 mx-auto flex max-w-md items-center gap-2 border-b bg-white/95 px-2 py-2 backdrop-blur transition-all duration-200",
+        scrolled ? "translate-y-0 opacity-100" : "pointer-events-none -translate-y-full opacity-0")} aria-hidden={!scrolled}>
+        <button type="button" onClick={goBack} tabIndex={scrolled ? 0 : -1} aria-label={t({ pt: "Voltar", en: "Back", fr: "Retour" })} className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-neutral-100"><ArrowLeft className="h-5 w-5" /></button>
+        <p className="min-w-0 flex-1 truncate text-base font-bold">{store.name}</p>
+        <button type="button" onClick={toggleFav} tabIndex={scrolled ? 0 : -1} aria-label={favLabel} className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-neutral-100">
           <Heart className={cn("h-5 w-5", data.isFavorite ? "fill-red-500 text-red-500" : "text-neutral-700")} />
         </button>
-      } />
+      </div>
 
       {/* Capa e cabeçalho, na cor escolhida pela loja */}
       <div style={{ background: `linear-gradient(180deg, ${theme.c3} 0%, ${theme.c3} 55%, #fff 100%)` }}>
       <div className="relative">
         {store.coverUrl
-          ? <StoreImage name={store.name} url={store.coverUrl} rounded="rounded-none" className="h-44 w-full text-4xl" />
+          ? <StoreImage name={store.name} url={store.coverUrl} rounded="rounded-none" className="h-52 w-full text-4xl" />
           : (
-            <StoreThemeArt theme={theme} seed={store.id} className="h-44 w-full">
-              <span aria-hidden className="absolute bottom-3 right-5 text-7xl drop-shadow-md">{STORE_TYPE[store.storeType]?.icon ?? "🛍️"}</span>
+            <StoreThemeArt theme={theme} seed={store.id} className="h-52 w-full">
+              <CategoryArt kind={store.storeType} className="absolute bottom-1 right-4 h-32 w-32 drop-shadow-md" />
             </StoreThemeArt>
           )}
         {store.coverUrl && <div aria-hidden className="absolute inset-x-0 bottom-0 h-10" style={{ background: `linear-gradient(0deg, ${theme.c3}, transparent)` }} />}
+        {/* Botões redondos sobre a imagem (Deliveroo) */}
+        <div className="absolute inset-x-3 top-3 flex items-center justify-between">
+          <button type="button" onClick={goBack} aria-label={t({ pt: "Voltar", en: "Back", fr: "Retour" })}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-neutral-900 shadow-md active:scale-95"><ArrowLeft className="h-5 w-5" /></button>
+          <div className="flex gap-2">
+            <button type="button" onClick={share} aria-label={t({ pt: "Partilhar", en: "Share", fr: "Partager" })}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-neutral-900 shadow-md active:scale-95"><Share2 className="h-[18px] w-[18px]" /></button>
+            <button type="button" onClick={toggleFav} aria-label={favLabel} aria-pressed={data.isFavorite} disabled={fav.isPending}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-md active:scale-95">
+              <Heart className={cn("h-5 w-5", data.isFavorite ? "fill-red-500 text-red-500" : "text-neutral-900")} />
+            </button>
+          </div>
+        </div>
         <div className="absolute -bottom-8 left-4">
           <StoreImage name={store.name} url={store.logoUrl} className="h-16 w-16 border-4 border-white text-lg shadow-md" rounded="rounded-2xl" />
         </div>
@@ -335,6 +370,22 @@ export default function StorePage() {
               {groups.map((g) => (
                 <section key={g.key} id={`sec-${g.key}`} className="pt-5">
                   <h2 className="mb-2 text-lg font-bold text-neutral-900">{g.name}</h2>
+                  {g.key === "popular" ? (
+                    /* Populares em cartões que deslizam (Deliveroo) */
+                    <div className="-mx-4"><HScroll snap className="flex gap-3 scroll-px-4 px-4 pb-2" arrowSize="sm" label={g.name}>
+                      {g.items.map((it) => (
+                        <button key={`pop-${it.id}`} type="button" onClick={() => openItem(it)} disabled={!it.isAvailable}
+                          className={cn("relative w-40 shrink-0 snap-start rounded-2xl border bg-white p-2 text-left shadow-sm transition-shadow hover:shadow-md", !it.isAvailable && "opacity-55")}>
+                          {it.imageUrl
+                            ? <img src={it.imageUrl} alt="" loading="lazy" className="h-28 w-full rounded-xl object-cover" />
+                            : <StoreThemeArt theme={theme} seed={it.id} className="h-28 w-full rounded-xl"><CategoryArt kind={store.storeType} className="absolute bottom-0 right-1 h-20 w-20" /></StoreThemeArt>}
+                          <span aria-hidden className="absolute right-3.5 top-[6.4rem] flex h-8 w-8 items-center justify-center rounded-full border bg-white text-primary shadow-md"><Plus className="h-5 w-5" strokeWidth={2.6} /></span>
+                          <p className="mt-2 line-clamp-2 text-sm font-semibold leading-tight text-neutral-900">{it.name}</p>
+                          <p className="mt-0.5 text-sm font-semibold text-neutral-900">{kz(it.price)}</p>
+                        </button>
+                      ))}
+                    </HScroll></div>
+                  ) : (
                   <ul className="divide-y">
                     {g.items.map((it) => (
                       <li key={`${g.key}-${it.id}`}>
@@ -350,11 +401,21 @@ export default function StorePage() {
                             <p className="mt-1 font-semibold text-neutral-900">{kz(it.price)}</p>
                             <div className="mt-1"><DietaryBadges tags={it.dietaryTags} small /></div>
                           </div>
-                          {it.imageUrl && <img src={it.imageUrl} alt="" loading="lazy" className="h-24 w-24 shrink-0 rounded-xl object-cover" />}
+                          <div className="relative shrink-0 self-center">
+                            {it.imageUrl
+                              ? <img src={it.imageUrl} alt="" loading="lazy" className="h-24 w-24 rounded-xl object-cover" />
+                              : <div aria-hidden className="h-10 w-10" />}
+                            {it.isAvailable && (
+                              <span aria-hidden className="absolute -bottom-1.5 -right-1.5 flex h-8 w-8 items-center justify-center rounded-full border bg-white text-primary shadow-md">
+                                <Plus className="h-5 w-5" strokeWidth={2.6} />
+                              </span>
+                            )}
+                          </div>
                         </button>
                       </li>
                     ))}
                   </ul>
+                  )}
                 </section>
               ))}
             </div>

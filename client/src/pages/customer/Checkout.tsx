@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Clock, CreditCard, Loader2, MapPin, MessageSquare, Receipt, ShoppingBag } from "lucide-react";
+import { Bike, Clock, CreditCard, HandCoins, Loader2, MapPin, MessageSquare, Receipt, ShoppingBag, Utensils, Zap } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { CustomerShell, TopBar } from "@/components/AppShell";
 import { EmptyState, Guard, StoreImage } from "@/components/common";
 import { Button } from "@/components/ui/button";
@@ -37,13 +38,18 @@ function CheckoutInner() {
   const [scheduledFor, setScheduledFor] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [notes, setNotes] = useState("");
+  // Deliveroo: entrega normal ou prioritária, gorjeta e talheres
+  const [priorityPick, setPriority] = useState(false);
+  const [riderTip, setRiderTip] = useState(0);
+  const [cutlery, setCutlery] = useState(false);
   const [orderError, setOrderError] = useState<unknown>(null);
   const errorRef = useRef<HTMLDivElement>(null);
 
   const balance = user?.loyaltyPoints ?? 0;
   const usePoints = prefs.usePoints && balance > 0 ? balance : 0;
+  const priority = priorityPick && mode === "now";
   const body = cart.storeId && cart.lines.length
-    ? { storeId: cart.storeId, items: toApiItems(cart.lines), promoCode: prefs.promoCode, usePoints }
+    ? { storeId: cart.storeId, items: toApiItems(cart.lines), promoCode: prefs.promoCode, usePoints, priority, riderTip }
     : null;
   const quote = useQuote(body, 0);
 
@@ -66,6 +72,9 @@ function CheckoutInner() {
       scheduledFor: mode === "schedule" ? scheduledFor : null,
       promoCode: prefs.promoCode,
       usePoints,
+      priority,
+      riderTip,
+      cutlery,
     }),
     onSuccess: ({ order }) => {
       cart.clear();
@@ -134,6 +143,43 @@ function CheckoutInner() {
         )}
       </Section>
 
+      {mode === "now" && store && (
+        <Section title={t({ pt: "Opções de entrega", en: "Delivery options", fr: "Options de livraison" })} icon={<Bike className="h-4 w-4 text-primary" />}>
+          <div role="radiogroup" aria-label={t({ pt: "Opções de entrega", en: "Delivery options", fr: "Options de livraison" })} className="space-y-2">
+            {[
+              { on: false, icon: <Bike className="h-5 w-5" />, title: t({ pt: "Normal", en: "Standard", fr: "Standard" }), sub: `~${store.deliveryTimeMin} ${t(T.minutes)}`, price: t({ pt: "Incluída", en: "Included", fr: "Incluse" }) },
+              { on: true, icon: <Zap className="h-5 w-5" />, title: t({ pt: "Prioritária", en: "Priority", fr: "Prioritaire" }),
+                sub: t({ pt: `~${Math.max(10, store.deliveryTimeMin - (q?.priorityOption?.minutesSaved ?? 10))} min · a sua encomenda vai primeiro`, en: `~${Math.max(10, store.deliveryTimeMin - (q?.priorityOption?.minutesSaved ?? 10))} min · your order goes first`, fr: `~${Math.max(10, store.deliveryTimeMin - (q?.priorityOption?.minutesSaved ?? 10))} min · votre commande passe en premier` }),
+                price: `+${kz(q?.priorityOption?.fee ?? 500)}` },
+            ].map((o) => (
+              <button key={String(o.on)} type="button" role="radio" aria-checked={priorityPick === o.on} onClick={() => setPriority(o.on)}
+                className={cn("flex w-full items-center gap-3 rounded-xl border-2 px-3 py-3 text-left transition",
+                  priorityPick === o.on ? "border-primary bg-brand-50" : "border-neutral-200 hover:border-neutral-300")}>
+                <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full", priorityPick === o.on ? "bg-primary text-white" : "bg-neutral-100 text-neutral-700")}>{o.icon}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-semibold">{o.title}</span>
+                  <span className="block text-xs text-neutral-500">{o.sub}</span>
+                </span>
+                <span className="shrink-0 text-sm font-semibold">{o.price}</span>
+              </button>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      <Section title={t({ pt: "Gorjeta para o estafeta", en: "Tip your rider", fr: "Pourboire pour le livreur" })} icon={<HandCoins className="h-4 w-4 text-primary" />}>
+        <p className="mb-2 text-xs text-neutral-500">{t({ pt: "100% da gorjeta vai para o estafeta.", en: "100% of the tip goes to your rider.", fr: "100 % du pourboire va au livreur." })}</p>
+        <div role="radiogroup" aria-label={t({ pt: "Gorjeta", en: "Tip", fr: "Pourboire" })} className="grid grid-cols-4 gap-2">
+          {[0, 200, 500, 1000].map((v) => (
+            <button key={v} type="button" role="radio" aria-checked={riderTip === v} onClick={() => setRiderTip(v)}
+              className={cn("rounded-xl border-2 py-2.5 text-sm font-semibold transition",
+                riderTip === v ? "border-primary bg-brand-50 text-primary" : "border-neutral-200 text-neutral-800 hover:border-neutral-300")}>
+              {v === 0 ? t({ pt: "Agora não", en: "Not now", fr: "Pas maintenant" }) : kz(v)}
+            </button>
+          ))}
+        </div>
+      </Section>
+
       <Section title={t({ pt: "Pagamento", en: "Payment", fr: "Paiement" })} icon={<CreditCard className="h-4 w-4 text-primary" />}>
         <PaymentPicker value={paymentMethod} onChange={setPaymentMethod} />
         {paymentMethod === "cash" && (
@@ -144,8 +190,16 @@ function CheckoutInner() {
       <Section title={t({ pt: "Notas para o estafeta / loja", en: "Notes for the rider / store", fr: "Notes pour le livreur / magasin" })} icon={<MessageSquare className="h-4 w-4 text-primary" />}>
         <Label htmlFor="order-notes" className="sr-only">{t({ pt: "Notas", en: "Notes", fr: "Notes" })}</Label>
         <Textarea id="order-notes" rows={3} maxLength={500} value={notes} onChange={(e) => setNotes(e.target.value)}
-          placeholder={t({ pt: "Ex.: ligar ao chegar, portão verde, sem talheres…", en: "E.g. call on arrival, green gate, no cutlery…", fr: "Ex. : appeler en arrivant, portail vert, sans couverts…" })} />
+          placeholder={t({ pt: "Ex.: ligar ao chegar, portão verde…", en: "E.g. call on arrival, green gate…", fr: "Ex. : appeler en arrivant, portail vert…" })} />
         <p className="mt-1 text-right text-[11px] text-neutral-400">{notes.length}/500</p>
+        <div className="mt-3 flex items-center gap-3 rounded-xl bg-neutral-50 p-3">
+          <Utensils className="h-5 w-5 shrink-0 text-neutral-600" aria-hidden />
+          <Label htmlFor="cutlery" className="min-w-0 flex-1 cursor-pointer">
+            <span className="block text-sm font-semibold">{t({ pt: "Talheres e guardanapos", en: "Cutlery and napkins", fr: "Couverts et serviettes" })}</span>
+            <span className="block text-xs font-normal text-neutral-500">{t({ pt: "Só enviamos se pedir — menos plástico.", en: "We only send them if you ask — less plastic.", fr: "Envoyés uniquement sur demande — moins de plastique." })}</span>
+          </Label>
+          <Switch id="cutlery" checked={cutlery} onCheckedChange={setCutlery} />
+        </div>
       </Section>
 
       <Section title={t({ pt: "Resumo da encomenda", en: "Order summary", fr: "Récapitulatif" })} icon={<Receipt className="h-4 w-4 text-primary" />}

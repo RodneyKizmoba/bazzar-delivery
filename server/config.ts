@@ -22,6 +22,8 @@ export const config = {
   // PedeJá Plus
   plusMonthlyPrice: num("PLUS_MONTHLY_PRICE", 2500),
   plusFreeDeliveryMinOrder: num("PLUS_FREE_DELIVERY_MIN_ORDER", 3000),
+  priorityFee: num("PRIORITY_FEE", 500), // Kz a mais pela entrega prioritária
+  priorityMinutesSaved: num("PRIORITY_MINUTES_SAVED", 10),
 
   // Pontos de fidelização
   pointValueKz: num("POINT_VALUE_KZ", 10), // 1 ponto = 10 Kz de desconto

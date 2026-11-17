@@ -53,6 +53,9 @@ export interface CreateOrderInput {
   promoCode?: string | null;
   usePoints?: number;
   groupOrderId?: number | null;
+  priority?: boolean;
+  riderTip?: number;
+  cutlery?: boolean;
 }
 
 export async function createOrder(input: CreateOrderInput): Promise<Order> {
@@ -66,8 +69,12 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
     const [addr] = await tx.select().from(addresses).where(eq(addresses.id, input.addressId));
     if (!addr || addr.userId !== user.id) throw badRequest("Morada inválida.", "INVALID_ADDRESS");
 
+    if (input.priority && input.scheduledFor) {
+      throw badRequest("A entrega prioritária não se aplica a encomendas agendadas.", "PRIORITY_NOT_FOR_SCHEDULED");
+    }
     const quote = await buildQuote(tx, {
       storeId: input.storeId, lines: input.lines, user, promoCode: input.promoCode, usePoints: input.usePoints,
+      priority: !!input.priority, riderTip: input.riderTip ?? 0,
     });
     const store = quote.store;
     validateSchedule(input.scheduledFor ?? null, store);
@@ -79,7 +86,8 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
     }
 
     const now = new Date();
-    const etaBase = input.scheduledFor ?? new Date(now.getTime() + store.deliveryTimeMin * 60_000);
+    const etaMin = input.priority ? Math.max(10, store.deliveryTimeMin - config.priorityMinutesSaved) : store.deliveryTimeMin;
+    const etaBase = input.scheduledFor ?? new Date(now.getTime() + etaMin * 60_000);
     const [order] = await tx.insert(orders).values({
       orderNumber: newOrderNumber(),
       customerId: user.id,
@@ -94,6 +102,9 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
       notes: input.notes || null,
       subtotal: quote.subtotal,
       deliveryFee: quote.deliveryFee,
+      priorityFee: quote.priorityFee,
+      riderTip: quote.riderTip,
+      cutlery: !!input.cutlery,
       discount: quote.discount + quote.pointsDiscount,
       pointsRedeemed: quote.pointsRedeemed,
       total: quote.total,
@@ -297,7 +308,7 @@ export async function modifyOrder(
       update.subtotal = quote.subtotal;
       update.deliveryFee = quote.deliveryFee;
       update.discount = discount + pointsDiscount;
-      update.total = Math.max(0, quote.subtotal + quote.deliveryFee - discount - pointsDiscount);
+      update.total = Math.max(0, quote.subtotal + quote.deliveryFee - discount - pointsDiscount) + order.priorityFee + order.riderTip;
       await tx.execute(sql`update payments set amount = ${update.total}, updated_at = now() where order_id = ${order.id}`);
     }
 

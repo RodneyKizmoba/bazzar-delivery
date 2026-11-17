@@ -46,6 +46,7 @@ export interface Quote {
   subtotal: number; deliveryFee: number; baseDeliveryFee: number; discount: number;
   pointsRedeemed: number; pointsDiscount: number; total: number; promoCode: string | null;
   isPlus: boolean; plusSavings: number; plusFreeDeliveryMinOrder: number;
+  priorityFee?: number; riderTip?: number; priorityOption?: { fee: number; minutesSaved: number };
 }
 
 export interface QuoteBody {
@@ -53,6 +54,8 @@ export interface QuoteBody {
   items: { menuItemId: number; quantity: number; optionIds: number[]; specialInstructions?: string | null }[];
   promoCode?: string | null;
   usePoints?: number;
+  priority?: boolean;
+  riderTip?: number;
 }
 
 export interface StoreSummary {
@@ -450,7 +453,7 @@ export function AddressPicker({ value, onChange, zonesServed }: { value: number 
   return (
     <div className="space-y-2">
       {list.length > 0 && (
-        <RadioGroup value={value != null ? String(value) : undefined} onValueChange={(v) => onChange(Number(v))} className="gap-2">
+        <RadioGroup value={value != null ? String(value) : undefined} onValueChange={(v) => onChange(Number(v))} className="grid-cols-[minmax(0,1fr)] gap-2">
           {list.map((a) => {
             const id = `addr-${a.id}`;
             const ok = served(a.zone);
@@ -503,7 +506,7 @@ export function PriceRow({ label, value, strong, muted, children }: { label: Rea
   );
 }
 
-export function QuoteBreakdown({ quote }: { quote: Pick<Quote, "subtotal" | "deliveryFee" | "baseDeliveryFee" | "discount" | "pointsRedeemed" | "pointsDiscount" | "total" | "promoCode" | "plusSavings"> }) {
+export function QuoteBreakdown({ quote }: { quote: Pick<Quote, "subtotal" | "deliveryFee" | "baseDeliveryFee" | "discount" | "pointsRedeemed" | "pointsDiscount" | "total" | "promoCode" | "plusSavings" | "priorityFee" | "riderTip"> }) {
   const t = useT();
   return (
     <div className="space-y-2">
@@ -524,6 +527,8 @@ export function QuoteBreakdown({ quote }: { quote: Pick<Quote, "subtotal" | "del
         <PriceRow label={t({ pt: `Pontos (${quote.pointsRedeemed})`, en: `Points (${quote.pointsRedeemed})`, fr: `Points (${quote.pointsRedeemed})` })}
           value={<span className="text-green-700">−{kz(quote.pointsDiscount)}</span>} />
       )}
+      {!!quote.priorityFee && <PriceRow label={t({ pt: "Entrega prioritária", en: "Priority delivery", fr: "Livraison prioritaire" })} value={kz(quote.priorityFee)} />}
+      {!!quote.riderTip && <PriceRow label={t({ pt: "Gorjeta para o estafeta", en: "Rider tip", fr: "Pourboire livreur" })} value={kz(quote.riderTip)} />}
       <div className="border-t pt-2">
         <PriceRow strong label={t(T.total)} value={kz(quote.total)} />
       </div>

@@ -29,6 +29,8 @@ export interface Quote {
   promo: PromoCode | null;
   isPlus: boolean;
   plusSavings: number;
+  priorityFee: number;
+  riderTip: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -186,7 +188,7 @@ async function validatePromo(db: DbOrTx, code: string, user: User | null, store:
 
 export async function buildQuote(
   db: DbOrTx,
-  opts: { storeId: number; lines: CartLine[]; user: User | null; promoCode?: string | null; usePoints?: number },
+  opts: { storeId: number; lines: CartLine[]; user: User | null; promoCode?: string | null; usePoints?: number; priority?: boolean; riderTip?: number },
 ): Promise<Quote> {
   const [store] = await db.select().from(stores).where(eq(stores.id, opts.storeId));
   if (!store || !store.isApproved) throw notFound("Loja não encontrada");
@@ -232,8 +234,11 @@ export async function buildQuote(
     pointsDiscount = pointsRedeemed * config.pointValueKz;
   }
 
-  const total = Math.max(0, subtotal + deliveryFee - discount - pointsDiscount);
-  return { store, lines, subtotal, deliveryFee, baseDeliveryFee, discount, pointsRedeemed, pointsDiscount, total, promo, isPlus, plusSavings };
+  // extras fora dos descontos: entrega prioritária e gorjeta (100% para o estafeta)
+  const priorityFee = opts.priority ? config.priorityFee : 0;
+  const riderTip = Math.max(0, Math.floor(opts.riderTip || 0));
+  const total = Math.max(0, subtotal + deliveryFee - discount - pointsDiscount) + priorityFee + riderTip;
+  return { store, lines, subtotal, deliveryFee, baseDeliveryFee, discount, pointsRedeemed, pointsDiscount, total, promo, isPlus, plusSavings, priorityFee, riderTip };
 }
 
 export function quoteToJson(q: Quote) {
@@ -255,10 +260,13 @@ export function quoteToJson(q: Quote) {
     discount: q.discount,
     pointsRedeemed: q.pointsRedeemed,
     pointsDiscount: q.pointsDiscount,
+    priorityFee: q.priorityFee,
+    riderTip: q.riderTip,
     total: q.total,
     promoCode: q.promo?.code ?? null,
     isPlus: q.isPlus,
     plusSavings: q.plusSavings,
     plusFreeDeliveryMinOrder: config.plusFreeDeliveryMinOrder,
+    priorityOption: { fee: config.priorityFee, minutesSaved: config.priorityMinutesSaved },
   };
 }

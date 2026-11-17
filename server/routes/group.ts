@@ -163,6 +163,9 @@ const checkoutSchema = z.object({
   scheduledFor: z.string().datetime().optional().nullable(),
   promoCode: z.string().trim().max(30).optional().nullable(),
   usePoints: z.number().int().min(0).optional().default(0),
+  priority: z.boolean().optional().default(false),
+  riderTip: z.number().int().min(0).max(20000).optional().default(0),
+  cutlery: z.boolean().optional().default(false),
 });
 
 groupRouter.post("/:token/checkout", requireAuth, ah(async (req, res) => {
@@ -198,6 +201,9 @@ groupRouter.post("/:token/checkout", requireAuth, ah(async (req, res) => {
       promoCode: input.promoCode,
       usePoints: input.usePoints,
       groupOrderId: g.id,
+      priority: input.priority,
+      riderTip: input.riderTip,
+      cutlery: input.cutlery,
     });
     await db.update(groupOrders).set({ status: "ordered", orderId: order.id }).where(eq(groupOrders.id, g.id));
     res.status(201).json({ order });

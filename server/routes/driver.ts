@@ -23,6 +23,9 @@ function summary(o: typeof orders.$inferSelect, s: typeof stores.$inferSelect) {
     collectCash: o.paymentMethod === "cash" && o.paymentStatus !== "paid" ? o.total : 0,
     deliveryAddress: o.deliveryAddress,
     notes: o.notes,
+    priority: o.priorityFee > 0,
+    riderTip: o.riderTip,
+    cutlery: o.cutlery,
     estimatedDeliveryAt: o.estimatedDeliveryAt,
     createdAt: o.createdAt,
     store: { id: s.id, name: s.name, street: s.street, zone: s.zone, phone: s.phone, latitude: s.latitude, longitude: s.longitude },
@@ -33,7 +36,7 @@ function summary(o: typeof orders.$inferSelect, s: typeof stores.$inferSelect) {
 driverRouter.get("/available", ah(async (_req, res) => {
   const rows = await db.select({ o: orders, s: stores }).from(orders).innerJoin(stores, eq(stores.id, orders.storeId))
     .where(and(isNull(orders.driverId), inArray(orders.status, ["accepted", "preparing", "ready"])))
-    .orderBy(asc(orders.createdAt)).limit(50);
+    .orderBy(desc(orders.priorityFee), asc(orders.createdAt)).limit(50);
   res.json({ orders: rows.map((r) => summary(r.o, r.s)) });
 }));
 

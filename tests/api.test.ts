@@ -239,6 +239,32 @@ async function main() {
   });
 
   // =========================================================================
+  await section("Priority delivery, rider tip, cutlery", async () => {
+    let r = await cli.post("/api/cart/quote", { storeId: 1, items: [FRANGO], priority: true, riderTip: 300 });
+    const q = r.body.quote;
+    check("quote adds priority fee (500) and tip (300): 4500+1000+500+300 = 6300", r.status === 200 && q.priorityFee === 500 && q.riderTip === 300 && q.total === 6300, q);
+    check("quote exposes the priority option (fee + minutes saved)", q?.priorityOption?.fee === 500 && q?.priorityOption?.minutesSaved > 0, q?.priorityOption);
+    r = await cli.post("/api/cart/quote", { storeId: 1, items: [FRANGO], riderTip: -50 });
+    check("negative tip rejected (400)", r.status === 400, r.status);
+    r = await cli.post("/api/cart/quote", { storeId: 1, items: [FRANGO], riderTip: 50000 });
+    check("tip above 20 000 Kz rejected (400)", r.status === 400, r.status);
+    r = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash", priority: true, riderTip: 200, cutlery: true });
+    const o = r.body.order;
+    check("order stores priority fee, tip and cutlery", r.status === 201 && o.priorityFee === 500 && o.riderTip === 200 && o.cutlery === true && o.total === 4500 + 1000 + 500 + 200, r.body);
+    if (o) {
+      const pay = await cli.get(`/api/orders/${o.id}`);
+      check("order detail returns tip and cutlery", pay.body.order?.riderTip === 200 && pay.body.order?.cutlery === true, pay.body.order);
+      await cli.post(`/api/orders/${o.id}/cancel`, {});
+    }
+    r = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash" });
+    check("defaults: no priority, no tip, no cutlery", r.status === 201 && r.body.order.priorityFee === 0 && r.body.order.riderTip === 0 && r.body.order.cutlery === false, r.body.order);
+    if (r.body.order) await cli.post(`/api/orders/${r.body.order.id}/cancel`, {});
+    const later = new Date(Date.now() + 26 * 3600_000).toISOString();
+    r = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash", priority: true, scheduledFor: later });
+    check("priority + scheduled rejected (PRIORITY_NOT_FOR_SCHEDULED)", r.status === 400 && r.body.code === "PRIORITY_NOT_FOR_SCHEDULED", r.body);
+  });
+
+  // =========================================================================
   await section("Input validation", async () => {
     const base = { storeId: 1, addressId: addrTalatona, paymentMethod: "cash" };
     const bad: [string, any][] = [

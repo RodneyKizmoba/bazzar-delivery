@@ -34,7 +34,7 @@ interface Addr { label: string; street: string; zone: string; city: string; refe
 interface DStore { id: number; name: string; street: string; zone: string; phone: string; latitude: number | null; longitude: number | null }
 export interface DriverOrder {
   id: number; orderNumber: string; status: string; total: number; deliveryFee: number; paymentMethod: string;
-  collectCash: number; deliveryAddress: Addr; notes: string | null; estimatedDeliveryAt: string | null; createdAt: string;
+  collectCash: number; deliveryAddress: Addr; notes: string | null; priority?: boolean; riderTip?: number; cutlery?: boolean; estimatedDeliveryAt: string | null; createdAt: string;
   store: DStore;
 }
 interface CurrentOrder extends DriverOrder {
@@ -200,6 +200,12 @@ function CurrentDelivery({ order, myPos }: { order: CurrentOrder; myPos: { latit
           ))}
         </ul>
         {order.notes && <p className="mt-2 flex gap-1 rounded bg-yellow-50 px-2 py-1 text-sm text-yellow-900"><StickyNote className="mt-0.5 h-4 w-4 shrink-0" />{order.notes}</p>}
+        {(order.priority || !!order.riderTip) && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {order.priority && <span className="rounded-full bg-primary px-2.5 py-1 text-xs font-bold text-white">⚡ {t({ pt: "Prioritária — entregar primeiro", en: "Priority — deliver first", fr: "Prioritaire — livrer d'abord" })}</span>}
+            {!!order.riderTip && <span className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-bold text-green-800">💚 {t({ pt: `Gorjeta para si: ${kz(order.riderTip)}`, en: `Your tip: ${kz(order.riderTip)}`, fr: `Votre pourboire : ${kz(order.riderTip)}` })}</span>}
+          </div>
+        )}
         <p className="mt-2 text-sm text-neutral-600">
           {t(T.total)}: <strong>{kz(order.total)}</strong> · {PAYMENT[order.paymentMethod] ? t(PAYMENT[order.paymentMethod]) : order.paymentMethod}
           {order.estimatedDeliveryAt && <> · {t({ pt: "Previsto", en: "ETA", fr: "Prévu" })} {time(order.estimatedDeliveryAt, lang)}</>}

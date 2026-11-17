@@ -31,6 +31,7 @@ interface OrderFull {
   status: string; scheduledFor: string | null; notes: string | null;
   deliveryAddress: { label: string; street: string; zone: string; city: string; reference?: string | null; latitude?: number | null; longitude?: number | null };
   subtotal: number; deliveryFee: number; discount: number; pointsRedeemed: number; total: number; promoCode: string | null;
+  priorityFee?: number; riderTip?: number; cutlery?: boolean;
   paymentMethod: string; paymentStatus: string; cancelReason: string | null; estimatedDeliveryAt: string | null;
   createdAt: string; deliveredAt: string | null;
   canCancel: boolean; canModify: boolean; canReview: boolean;
@@ -322,7 +323,7 @@ function OrderDetailInner({ id }: { id: string }) {
   const eta = tr?.estimatedDeliveryAt ?? order.estimatedDeliveryAt;
   const isOwner = user?.id === order.customerId;
   const currentIdx = STEPS.indexOf(order.status as (typeof STEPS)[number]);
-  const showMap = !isFinal && (order.status === "picked_up" || !!order.driverId);
+  const showMap = !isFinal;
   const storePt = tr?.storeLocation ?? (store.latitude != null && store.longitude != null ? { latitude: store.latitude, longitude: store.longitude } : null);
   const destPt = tr?.destination ?? (order.deliveryAddress.latitude != null && order.deliveryAddress.longitude != null ? { latitude: order.deliveryAddress.latitude, longitude: order.deliveryAddress.longitude } : null);
   const pay = paymentStatusLabel(order);
@@ -330,7 +331,39 @@ function OrderDetailInner({ id }: { id: string }) {
 
   return (
     <div className="space-y-4 px-4 pb-10 pt-4">
-      {/* Cabeçalho de estado */}
+      {/* Deliveroo: mapa no topo e hora de chegada em grande, com barra de progresso */}
+      {showMap && (storePt || destPt || tr?.driverLocation) && (
+        <div className="-mx-4 -mt-4">
+          <OrderMap store={storePt} destination={destPt} driver={tr?.driverLocation ?? null} className="h-60 w-full overflow-hidden"
+            labels={{ store: store.name, destination: t({ pt: "A sua morada", en: "Your address", fr: "Votre adresse" }), driver: driver?.fullName.split(" ")[0] ?? t({ pt: "Estafeta", en: "Rider", fr: "Livreur" }) }} />
+        </div>
+      )}
+      {!isFinal && order.status !== "scheduled" ? (
+        <div className={cn("relative rounded-2xl border bg-white p-5 shadow-md", showMap && (storePt || destPt) && "-mt-10")}>
+          <div className="flex items-center justify-between gap-2 text-xs text-neutral-500">
+            <span>#{order.orderNumber}</span>
+            <span className="flex items-center gap-1 font-medium text-primary"><span className="h-2 w-2 animate-pulse rounded-full bg-primary" />{t({ pt: "Ao vivo", en: "Live", fr: "En direct" })}</span>
+          </div>
+          {eta && (
+            <>
+              <p className="mt-2 text-sm text-neutral-600">{t({ pt: "Chegada prevista", en: "Arriving at", fr: "Arrivée prévue" })}</p>
+              <p className="text-4xl font-extrabold tracking-tight text-neutral-900">{time(eta, lang)}</p>
+            </>
+          )}
+          <div className="mt-3 grid grid-cols-4 gap-1.5" aria-hidden>
+            {[0, 1, 2, 3].map((seg) => {
+              const step = Math.min(3, Math.max(0, currentIdx - 1));
+              return (
+                <span key={seg} className={cn("h-1.5 overflow-hidden rounded-full", seg < step ? "bg-primary" : "bg-neutral-200")}>
+                  {seg === step && <span className="block h-full w-1/2 animate-pulse rounded-full bg-primary" />}
+                </span>
+              );
+            })}
+          </div>
+          <h2 className="mt-3 text-lg font-bold leading-tight">{t(HEADLINE[order.status] ?? ORDER_STATUS[order.status] ?? { pt: order.status, en: order.status, fr: order.status })}</h2>
+          {!!order.priorityFee && <p className="mt-1 text-xs font-semibold text-primary">⚡ {t({ pt: "Entrega prioritária", en: "Priority delivery", fr: "Livraison prioritaire" })}</p>}
+        </div>
+      ) : (
       <div className={cn("rounded-2xl p-5 text-white shadow-sm",
         order.status === "cancelled" || order.status === "rejected" ? "bg-neutral-700" : order.status === "delivered" ? "bg-green-700" : "bg-gradient-to-br from-brand-600 to-brand-800")}>
         <div className="flex items-start justify-between gap-2">
@@ -348,6 +381,7 @@ function OrderDetailInner({ id }: { id: string }) {
           <p className="mt-2 text-sm text-white/90">{order.cancelReason}</p>
         ) : null}
       </div>
+      )}
 
       {/* Stepper */}
       {order.status !== "cancelled" && order.status !== "rejected" && (
@@ -372,11 +406,6 @@ function OrderDetailInner({ id }: { id: string }) {
         </ol>
       )}
 
-      {/* Mapa */}
-      {showMap && (storePt || destPt || tr?.driverLocation) && (
-        <OrderMap store={storePt} destination={destPt} driver={tr?.driverLocation ?? null} className="h-64 w-full overflow-hidden rounded-2xl border"
-          labels={{ store: store.name, destination: t({ pt: "A sua morada", en: "Your address", fr: "Votre adresse" }), driver: driver?.fullName.split(" ")[0] ?? t({ pt: "Estafeta", en: "Rider", fr: "Livreur" }) }} />
-      )}
 
       {/* Estafeta */}
       {driver && !isFinal && (
@@ -461,6 +490,8 @@ function OrderDetailInner({ id }: { id: string }) {
         <div className="mt-4 space-y-2 border-t pt-3">
           <PriceRow label={t(T.subtotal)} value={kz(order.subtotal)} />
           <PriceRow label={t(T.deliveryFee)} value={order.deliveryFee === 0 ? <span className="font-semibold text-green-700">{t(T.free)}</span> : kz(order.deliveryFee)} />
+          {!!order.priorityFee && <PriceRow label={t({ pt: "Entrega prioritária", en: "Priority delivery", fr: "Livraison prioritaire" })} value={kz(order.priorityFee)} />}
+          {!!order.riderTip && <PriceRow label={t({ pt: "Gorjeta para o estafeta", en: "Rider tip", fr: "Pourboire livreur" })} value={kz(order.riderTip)} />}
           {order.discount > 0 && (
             <PriceRow label={<>{t(T.discount)}{order.promoCode && <span className="ml-1 rounded bg-green-50 px-1.5 py-0.5 text-[11px] font-semibold text-green-800">{order.promoCode}</span>}{order.pointsRedeemed > 0 && <span className="ml-1 text-xs text-neutral-500">(+{order.pointsRedeemed} {t({ pt: "pontos", en: "points", fr: "points" })})</span>}</>}
               value={<span className="text-green-700">−{kz(order.discount)}</span>} />

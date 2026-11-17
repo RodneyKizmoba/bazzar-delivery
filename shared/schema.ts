@@ -171,6 +171,9 @@ export const orders = pgTable("orders", {
   notes: text("notes"),
   subtotal: integer("subtotal").notNull(),
   deliveryFee: integer("delivery_fee").notNull(),
+  priorityFee: integer("priority_fee").notNull().default(0), // entrega prioritária (vai primeiro)
+  riderTip: integer("rider_tip").notNull().default(0), // gorjeta: 100% para o estafeta
+  cutlery: boolean("cutlery").notNull().default(false), // talheres só se o cliente pedir
   discount: integer("discount").notNull().default(0),
   pointsRedeemed: integer("points_redeemed").notNull().default(0),
   total: integer("total").notNull(),
@@ -400,6 +403,8 @@ export const quoteSchema = z.object({
   items: z.array(cartLineSchema).min(1).max(100),
   promoCode: z.string().trim().max(30).optional().nullable(),
   usePoints: z.number().int().min(0).optional().default(0),
+  priority: z.boolean().optional().default(false),
+  riderTip: z.number().int().min(0).max(20000).optional().default(0),
 });
 
 export const createOrderSchema = z.object({
@@ -412,6 +417,9 @@ export const createOrderSchema = z.object({
   promoCode: z.string().trim().max(30).optional().nullable(),
   usePoints: z.number().int().min(0).optional().default(0),
   groupToken: z.string().max(64).optional().nullable(),
+  priority: z.boolean().optional().default(false),
+  riderTip: z.number().int().min(0).max(20000).optional().default(0),
+  cutlery: z.boolean().optional().default(false),
 });
 
 export const modifyOrderSchema = z.object({

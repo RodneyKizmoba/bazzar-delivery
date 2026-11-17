@@ -179,12 +179,40 @@ const ART: Record<string, () => JSX.Element> = {
       <path d="M7 31 h-3 M57 31 h3" stroke="#8B3A1E" strokeWidth="3" strokeLinecap="round" />
     </>
   ),
+  // encomenda: caixa de cartão com seta de envio
+  parcel: () => (
+    <>
+      <Shadow />
+      <path d="M10 24 L32 14 L54 24 L32 34 Z" fill="#F2C38A" />
+      <path d="M10 24 L32 34 L32 56 L10 46 Z" fill="#D99A55" />
+      <path d="M54 24 L32 34 L32 56 L54 46 Z" fill="#E8AE6B" />
+      <path d="M21 19 L43 29 L43 37 L39 35 L39 31 L17 21 Z" fill="#FFF3D6" opacity=".9" />
+      <path d="M36 44 h12 m-4 -4 l4 4 -4 4" stroke="#7B1FFF" strokeWidth="2.6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M14 34 l6 3 M14 38 l6 3" stroke="#B9732E" strokeWidth="1.6" strokeLinecap="round" />
+    </>
+  ),
+  // táxi: carro amarelo com placa no tejadilho
+  taxi: () => (
+    <>
+      <Shadow />
+      <rect x="25" y="14" width="14" height="6" rx="2" fill="#2E3333" />
+      <text x="32" y="19" textAnchor="middle" fontSize="4.6" fontWeight="800" fill="#FFD23F" fontFamily="system-ui, sans-serif">TAXI</text>
+      <path d="M14 32 L19 22 Q20 20 23 20 H41 Q44 20 45 22 L50 32 Z" fill="#FFC107" />
+      <path d="M20 31 L23.5 23.5 H31 V31 Z M33 31 V23.5 H40.5 L44 31 Z" fill="#BFE6FF" />
+      <rect x="8" y="30" width="48" height="15" rx="6" fill="#FFC107" />
+      <rect x="8" y="36" width="48" height="4" fill="#2E3333" opacity=".85" />
+      <g fill="#FFF8E1"><rect x="8" y="36" width="4" height="4" /><rect x="16" y="36" width="4" height="4" /><rect x="24" y="36" width="4" height="4" /><rect x="32" y="36" width="4" height="4" /><rect x="40" y="36" width="4" height="4" /><rect x="48" y="36" width="4" height="4" /></g>
+      <circle cx="11.5" cy="33" r="2" fill="#FFF3B0" /><circle cx="52.5" cy="33" r="2" fill="#FF5252" />
+      <circle cx="19" cy="46" r="6" fill="#2E3333" /><circle cx="19" cy="46" r="2.6" fill="#CBD5E1" />
+      <circle cx="45" cy="46" r="6" fill="#2E3333" /><circle cx="45" cy="46" r="2.6" fill="#CBD5E1" />
+    </>
+  ),
 };
 
 export const CATEGORY_TILE_BG: Record<string, string> = {
   restaurant: "#FFE7D6", bakery: "#FFF1C9", grocery: "#DDF6E6", pharmacy: "#DCF2F5", beauty: "#F6E3FF",
   flowers: "#FFE3EC", retail: "#ECE5FF", burger: "#FFF0D1", pizza: "#FFE4DC", grill: "#FFE7D6",
-  sushi: "#E2EEFF", angolan: "#FFE9D2",
+  sushi: "#E2EEFF", angolan: "#FFE9D2", parcel: "#EFE6FF", taxi: "#FFF6CC",
 };
 
 export function CategoryArt({ kind, className }: { kind: string; className?: string }) {
