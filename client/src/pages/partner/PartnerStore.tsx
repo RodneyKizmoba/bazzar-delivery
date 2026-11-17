@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ExternalLink, X } from "lucide-react";
+import { Check, ExternalLink, X } from "lucide-react";
+import { StoreThemeArt, themeFor } from "@/components/StoreThemeArt";
+import { STORE_THEMES, STORE_THEME_IDS } from "@shared/themes";
+import { STORE_TYPE } from "@/lib/format";
 import { Guard, Loading, ErrorState, StoreImage } from "@/components/common";
 import { PanelShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
@@ -32,7 +35,7 @@ interface Form {
   name: string; description: string; cuisines: string[]; phone: string; street: string; zone: string;
   zonesServed: string[]; logoUrl: string; coverUrl: string; openingTime: string; closingTime: string;
   isOpen: boolean; deliveryFee: string; minOrder: string; prepTimeMin: string; deliveryTimeMin: string;
-  minNoticeHours: string; maxOrdersPerDay: string; payoutMethod: string; payoutReference: string;
+  minNoticeHours: string; maxOrdersPerDay: string; payoutMethod: string; payoutReference: string; theme: string;
 }
 
 function StoreForm() {
@@ -53,7 +56,7 @@ function StoreForm() {
         isOpen: !!s.isOpen, deliveryFee: String(s.deliveryFee ?? 0), minOrder: String(s.minOrder ?? 0),
         prepTimeMin: String(s.prepTimeMin ?? 20), deliveryTimeMin: String(s.deliveryTimeMin ?? 35),
         minNoticeHours: String(Math.round((s.minNoticeMin ?? 0) / 60)), maxOrdersPerDay: s.maxOrdersPerDay ? String(s.maxOrdersPerDay) : "",
-        payoutMethod: s.payoutMethod ?? "", payoutReference: s.payoutReference ?? "",
+        payoutMethod: s.payoutMethod ?? "", payoutReference: s.payoutReference ?? "", theme: s.theme ?? "",
       });
     }
   }, [storeQ.data]);
@@ -113,6 +116,7 @@ function StoreForm() {
       prepTimeMin: Number(form.prepTimeMin), deliveryTimeMin: Number(form.deliveryTimeMin),
       minNoticeMin: Number(form.minNoticeHours) * 60, maxOrdersPerDay: form.maxOrdersPerDay === "" ? null : Number(form.maxOrdersPerDay),
       payoutMethod: form.payoutMethod || null, payoutReference: form.payoutReference.trim() || null,
+      theme: form.theme || null,
     });
   };
 
@@ -196,6 +200,10 @@ function StoreForm() {
         )}
       </Card>
 
+      <Card title={{ pt: "Cor da loja", en: "Store colour", fr: "Couleur du magasin" }}>
+        <ThemePicker value={form.theme} onChange={(v) => set("theme", v)} store={{ id: store.id, name: form.name || store.name, storeType: store.storeType }} />
+      </Card>
+
       <Card title={{ pt: "Imagens", en: "Images", fr: "Images" }}>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field id="st-logo" label={{ pt: "URL do logótipo", en: "Logo URL", fr: "URL du logo" }}>
@@ -275,6 +283,52 @@ function StoreForm() {
         <Button type="submit" disabled={!!err || save.isPending}>{t(T.save)}</Button>
       </div>
     </form>
+  );
+}
+
+/** Escolha da cor da página da loja, com pré-visualização. */
+function ThemePicker({ value, onChange, store }: { value: string; onChange: (v: string) => void; store: { id: number; name: string; storeType: string } }) {
+  const t = useT();
+  const current = themeFor({ ...store, theme: value || null });
+  const icon = STORE_TYPE[store.storeType]?.icon ?? "🛍️";
+  return (
+    <div className="grid gap-4 md:grid-cols-[1fr_15rem]">
+      <div>
+        <p className="mb-2 text-sm text-neutral-600">
+          {t({ pt: "Os clientes vêem esta cor ao abrir a sua loja e no cartão da página inicial. Os botões e o pagamento ficam sempre na cor PedeJá.",
+            en: "Customers see this colour when they open your store and on its home-page card. Buttons and checkout always stay in PedeJá colours.",
+            fr: "Les clients voient cette couleur en ouvrant votre magasin et sur sa carte d'accueil. Les boutons et le paiement restent aux couleurs PedeJá." })}
+        </p>
+        <div role="radiogroup" aria-label={t({ pt: "Cor da loja", en: "Store colour", fr: "Couleur du magasin" })} className="grid grid-cols-4 gap-2 sm:grid-cols-7">
+          <button type="button" role="radio" aria-checked={!value} onClick={() => onChange("")}
+            className={cn("flex h-14 flex-col items-center justify-center rounded-xl border-2 border-dashed text-[11px] font-medium text-neutral-600", !value ? "border-primary bg-brand-50" : "border-neutral-300")}>
+            ✨{t({ pt: "Automática", en: "Automatic", fr: "Auto" })}
+          </button>
+          {STORE_THEME_IDS.map((id) => {
+            const th = STORE_THEMES[id];
+            const on = value === id;
+            return (
+              <button key={id} type="button" role="radio" aria-checked={on} aria-label={t(th.label)} title={t(th.label)} onClick={() => onChange(id)}
+                className={cn("relative rounded-xl ring-offset-2 transition", on ? "ring-2 ring-primary" : "hover:scale-105")}>
+                <StoreThemeArt theme={th} seed={store.id} className="h-14 w-full rounded-xl" />
+                {on && <span className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-white text-primary shadow"><Check className="h-3.5 w-3.5" /></span>}
+                <span className="mt-1 block truncate text-center text-[11px] text-neutral-600">{t(th.label)}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div aria-label={t({ pt: "Pré-visualização", en: "Preview", fr: "Aperçu" })} className="overflow-hidden rounded-2xl border bg-white shadow-sm">
+        <StoreThemeArt theme={current} seed={store.id} className="h-24 w-full">
+          <span aria-hidden className="absolute bottom-1 right-3 text-5xl drop-shadow-md">{icon}</span>
+        </StoreThemeArt>
+        <div className="p-3" style={{ background: `linear-gradient(180deg, ${current.c3}, #fff)` }}>
+          <p className="truncate font-bold text-neutral-900">{store.name}</p>
+          <p className="text-xs text-neutral-500">{t({ pt: "Pré-visualização", en: "Preview", fr: "Aperçu" })} · {t(current.label)}</p>
+          <span className="mt-2 inline-block rounded-full bg-primary px-3 py-1 text-xs font-semibold text-white">{t({ pt: "Adicionar", en: "Add", fr: "Ajouter" })}</span>
+        </div>
+      </div>
+    </div>
   );
 }
 

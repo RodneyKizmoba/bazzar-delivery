@@ -281,8 +281,16 @@ const BANNERS: (typeof banners.$inferInsert)[] = [
 ];
 
 /** Cria uma loja com o seu menu (secções, produtos e opções). */
+/** Cores das lojas de demonstração (as restantes ficam na cor automática do tipo). */
+const DEMO_THEMES: Record<string, string> = {
+  "Burger Station": "lemon", "Pizzaria Ilha": "coral", "Sushi Baía": "blue", "Mercado Fresco Talatona": "mint",
+  "Farmácia Saúde+": "aqua", "Flores de Luanda": "rose", "Casa & Oficina": "violet", "Beleza Natural": "berry",
+  "Bolos da Tia Rosa": "candy", "Mariato Restaurante Grill": "peach",
+};
+
 async function insertStore(tx: any, s: StoreSeed, ownerId: number | null, opts: { isOpen?: boolean } = {}) {
     const [store] = await tx.insert(stores).values({
+      theme: DEMO_THEMES[s.name] ?? null,
       ownerId, name: s.name, storeType: s.storeType, description: s.description,
       cuisines: s.cuisines, isChain: !!s.isChain, phone: s.phone ?? "+244923100100", street: s.street, zone: s.zone,
       latitude: s.lat, longitude: s.lng, zonesServed: s.zonesServed, openingTime: s.open ?? "00:00", closingTime: s.close ?? "00:00",

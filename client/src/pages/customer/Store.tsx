@@ -5,6 +5,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Heart, Star, Clock, Bike, ShoppingBag, Users, Search as SearchIcon, Info, Phone, MapPin } from "lucide-react";
 import { CustomerShell, TopBar } from "@/components/AppShell";
 import { DietaryBadges, EmptyState, ErrorState, StoreImage } from "@/components/common";
+import { StoreThemeArt, themeFor } from "@/components/StoreThemeArt";
 import { ItemDialog, type ItemSelection, type MenuItemFull } from "@/components/ItemDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -181,6 +182,7 @@ export default function StorePage() {
     );
   }
 
+  const theme = themeFor(store);
   const favLabel = data.isFavorite ? t({ pt: "Remover dos favoritos", en: "Remove from favourites", fr: "Retirer des favoris" }) : t({ pt: "Adicionar aos favoritos", en: "Add to favourites", fr: "Ajouter aux favoris" });
 
   return (
@@ -192,9 +194,17 @@ export default function StorePage() {
         </button>
       } />
 
-      {/* Capa e cabeçalho */}
+      {/* Capa e cabeçalho, na cor escolhida pela loja */}
+      <div style={{ background: `linear-gradient(180deg, ${theme.c3} 0%, ${theme.c3} 55%, #fff 100%)` }}>
       <div className="relative">
-        <StoreImage name={store.name} url={store.coverUrl} rounded="rounded-none" className="h-44 w-full text-4xl" />
+        {store.coverUrl
+          ? <StoreImage name={store.name} url={store.coverUrl} rounded="rounded-none" className="h-44 w-full text-4xl" />
+          : (
+            <StoreThemeArt theme={theme} seed={store.id} className="h-44 w-full">
+              <span aria-hidden className="absolute bottom-3 right-5 text-7xl drop-shadow-md">{STORE_TYPE[store.storeType]?.icon ?? "🛍️"}</span>
+            </StoreThemeArt>
+          )}
+        {store.coverUrl && <div aria-hidden className="absolute inset-x-0 bottom-0 h-10" style={{ background: `linear-gradient(0deg, ${theme.c3}, transparent)` }} />}
         <div className="absolute -bottom-8 left-4">
           <StoreImage name={store.name} url={store.logoUrl} className="h-16 w-16 border-4 border-white text-lg shadow-md" rounded="rounded-2xl" />
         </div>
@@ -218,7 +228,7 @@ export default function StorePage() {
 
         {store.description && <p className="mt-2 text-sm text-neutral-600">{store.description}</p>}
 
-        <div className="mt-3 grid grid-cols-3 divide-x rounded-2xl border bg-neutral-50/60 py-2.5 text-center text-sm">
+        <div className="mt-3 grid grid-cols-3 divide-x rounded-2xl border bg-white/80 py-2.5 shadow-sm text-center text-sm">
           <button type="button" onClick={() => setTab("reviews")} className="flex flex-col items-center">
             <span className="flex items-center gap-1 font-semibold"><Star className="h-4 w-4 fill-amber-400 text-amber-400" aria-hidden />{store.ratingCount ? store.ratingAvg.toFixed(1) : "—"}</span>
             <span className="text-xs text-neutral-500">{store.ratingCount} {t({ pt: "avaliações", en: "reviews", fr: "avis" })}</span>
@@ -263,10 +273,11 @@ export default function StorePage() {
           </div>
         )}
 
-        <Button variant="outline" className="mt-3 h-11 w-full rounded-full" onClick={startGroup} disabled={group.isPending}>
+        <Button variant="outline" className="mt-3 h-11 w-full rounded-full bg-white" onClick={startGroup} disabled={group.isPending}>
           <Users className="mr-2 h-4 w-4" />
           {group.isPending ? t(T.loading) : t({ pt: "Encomenda em grupo", en: "Group order", fr: "Commande groupée" })}
         </Button>
+      </div>
       </div>
 
       <Tabs value={tab} onValueChange={setTab} className="mt-4">

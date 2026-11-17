@@ -504,6 +504,19 @@ async function main() {
     r = await loja.patch("/api/partner/store", { openingTime: "25:99" });
     check("partner cannot set invalid time '25:99' (400)", r.status === 400, `${r.status} ${JSON.stringify(r.body?.store?.openingTime)}`);
     await loja.patch("/api/partner/store", { openingTime: "00:00", closingTime: "00:00" });
+    // store colour theme
+    r = await anon.get("/api/stores/1");
+    check("store theme defaults to null (automatic)", r.body.store.theme === null, r.body.store.theme);
+    r = await loja.patch("/api/partner/store", { theme: "lilac" });
+    check("partner sets store theme 'lilac'", r.status === 200 && r.body.store.theme === "lilac", r.body);
+    r = await anon.get("/api/stores/1");
+    check("public store page returns theme", r.body.store.theme === "lilac", r.body.store.theme);
+    r = await anon.get("/api/stores?limit=100");
+    check("store list cards carry theme", r.body.stores.find((x: any) => x.id === 1)?.theme === "lilac");
+    r = await loja.patch("/api/partner/store", { theme: "neon-green" });
+    check("invalid theme rejected (400)", r.status === 400, r.status);
+    r = await loja.patch("/api/partner/store", { theme: null });
+    check("partner resets theme to automatic", r.status === 200 && r.body.store.theme === null, r.body);
     // min order
     r = await cli.post("/api/orders", { storeId: 4, items: [{ menuItemId: 26, quantity: 1, optionIds: [] }], addressId: addrIngombota, paymentMethod: "cash" });
     check("below store minimum order -> 400 BELOW_MIN_ORDER", r.status === 400 && r.body.code === "BELOW_MIN_ORDER", r.body);
@@ -605,6 +618,10 @@ async function main() {
     check("admin lists pending stores incl. Kitanda (loja2)", r.body.stores.some((s: any) => s.id === 11), r.body.stores?.map((s: any) => s.name));
     r = await loja2.get("/api/partner/store");
     check("unapproved store owner can open panel (store isApproved=false shown)", r.status === 200 && r.body.store.isApproved === false, r.body);
+    r = await admin.patch("/api/admin/stores/11", { theme: "mint" });
+    check("admin can set a store's colour", r.status === 200 && r.body.store.theme === "mint", r.body);
+    r = await admin.patch("/api/admin/stores/11", { theme: "bogus" });
+    check("admin invalid colour rejected (400)", r.status === 400, r.status);
     r = await admin.patch("/api/admin/stores/11", { isApproved: true });
     check("admin approves loja2 store", r.status === 200 && r.body.store.isApproved === true, r.body);
     r = await anon.get("/api/stores/11");

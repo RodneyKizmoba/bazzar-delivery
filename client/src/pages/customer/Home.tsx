@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Search as SearchIcon, MapPin, Star, Clock, Bike, Crown, ChevronRight } from "lucide-react";
 import { CustomerShell } from "@/components/AppShell";
 import { ErrorState, StoreImage } from "@/components/common";
+import { StoreThemeArt, themeFor } from "@/components/StoreThemeArt";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -39,6 +40,7 @@ export interface StoreCardData {
   openingTime?: string;
   closingTime?: string;
   isOpenNow: boolean;
+  theme?: string | null;
   matchingItems?: { id: number; name: string; price: number }[];
 }
 
@@ -68,8 +70,15 @@ export function StoreCard({ store, compact, footer }: { store: StoreCardData; co
     <div className={cn("group", compact ? "w-64 shrink-0 snap-start" : "w-full")}>
       <Link href={`/loja/${store.id}`} className="block rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
         <div className="relative overflow-hidden rounded-2xl">
-          <StoreImage name={store.name} url={store.coverUrl} rounded="rounded-2xl"
-            className={cn("w-full text-3xl transition-transform duration-300 group-hover:scale-[1.02]", compact ? "h-32" : "h-40", !store.isOpenNow && "opacity-70")} />
+          {store.coverUrl ? (
+            <StoreImage name={store.name} url={store.coverUrl} rounded="rounded-2xl"
+              className={cn("w-full text-3xl transition-transform duration-300 group-hover:scale-[1.02]", compact ? "h-32" : "h-40", !store.isOpenNow && "opacity-60 grayscale")} />
+          ) : (
+            <StoreThemeArt theme={themeFor(store)} seed={store.id} muted={!store.isOpenNow}
+              className={cn("w-full rounded-2xl transition-transform duration-300 group-hover:scale-[1.02]", compact ? "h-32" : "h-40", !store.isOpenNow && "opacity-60")}>
+              <span aria-hidden className={cn("absolute bottom-2 left-3 drop-shadow-md", compact ? "text-5xl" : "text-6xl")}>{STORE_TYPE[store.storeType]?.icon ?? "🛍️"}</span>
+            </StoreThemeArt>
+          )}
           <div className="absolute left-2 top-2 flex flex-wrap gap-1">
             {!store.isOpenNow && (
               <span className="rounded-full bg-neutral-900/85 px-2.5 py-1 text-[11px] font-semibold text-white">

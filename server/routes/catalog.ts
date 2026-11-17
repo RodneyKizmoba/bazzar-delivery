@@ -34,6 +34,7 @@ export function storeCard(s: Store, now = new Date()) {
     zonesServed: s.zonesServed,
     logoUrl: s.logoUrl,
     coverUrl: s.coverUrl,
+    theme: s.theme,
     deliveryFee: s.deliveryFee,
     minOrder: s.minOrder,
     deliveryTimeMin: s.deliveryTimeMin,

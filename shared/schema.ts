@@ -2,6 +2,7 @@ import {
   pgTable, serial, integer, text, timestamp, boolean, jsonb, real, pgEnum, uniqueIndex, index,
 } from "drizzle-orm/pg-core";
 import { z } from "zod";
+import { STORE_THEME_IDS } from "./themes";
 
 // ---------------------------------------------------------------------------
 // Enums
@@ -90,6 +91,7 @@ export const stores = pgTable("stores", {
   zonesServed: text("zones_served").array().notNull().default([]),
   logoUrl: text("logo_url"),
   coverUrl: text("cover_url"),
+  theme: text("theme"), // cor da página da loja (ver shared/themes.ts); null = cor por defeito do tipo
   openingTime: text("opening_time").notNull().default("10:00"),
   closingTime: text("closing_time").notNull().default("22:00"),
   isOpen: boolean("is_open").notNull().default(true),
@@ -435,6 +437,7 @@ export const storeUpdateSchema = z.object({
   zonesServed: z.array(z.string().trim().min(2).max(60)).max(50),
   logoUrl: z.string().url().max(500).nullable(),
   coverUrl: z.string().url().max(500).nullable(),
+  theme: z.enum(STORE_THEME_IDS).nullable(),
   openingTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Hora inválida (HH:MM)"),
   closingTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Hora inválida (HH:MM)"),
   isOpen: z.boolean(),
