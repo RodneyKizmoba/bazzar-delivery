@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import { MARIATO } from "./seedMariato";
+import { photoForMenuItem, photoForStore } from "./seedPhotos";
 import { randomBytes } from "crypto";
 import { eq, sql } from "drizzle-orm";
 import { db } from "./db";
@@ -30,7 +31,7 @@ export async function ensureAdmin() {
 export type OptGroup = { name: string; min: number; max: number; options: [string, number][] };
 export type Item = {
   name: string; price: number; description?: string; dietary?: string[]; allergens?: string[];
-  popular?: boolean; groups?: OptGroup[];
+  popular?: boolean; groups?: OptGroup[]; imageUrl?: string;
 };
 export type StoreSeed = {
   name: string; storeType: any; cuisines: string[]; zone: string; street: string; lat: number; lng: number;
@@ -296,6 +297,7 @@ async function insertStore(tx: any, s: StoreSeed, ownerId: number | null, opts: 
       latitude: s.lat, longitude: s.lng, zonesServed: s.zonesServed, openingTime: s.open ?? "00:00", closingTime: s.close ?? "00:00",
       isOpen: opts.isOpen ?? true, isApproved: s.approved ?? true, isHomeBusiness: !!s.home, minNoticeMin: s.noticeMin ?? 0, maxOrdersPerDay: s.maxPerDay ?? null, deliveryFee: s.deliveryFee, minOrder: s.minOrder ?? 0,
       deliveryTimeMin: s.time, prepTimeMin: Math.round(s.time / 2),
+      logoUrl: photoForStore(s.name), coverUrl: photoForStore(s.name),
       // sem avaliações inventadas: a média nasce das avaliações reais dos clientes
     }).returning();
     let order = 0;
@@ -304,6 +306,7 @@ async function insertStore(tx: any, s: StoreSeed, ownerId: number | null, opts: 
       for (const it of items) {
         const [mi] = await tx.insert(menuItems).values({
           storeId: store.id, sectionId: section.id, name: it.name, description: it.description ?? null, price: it.price,
+          imageUrl: it.imageUrl ?? photoForMenuItem(it.name, s.name),
           dietaryTags: it.dietary ?? [], allergens: it.allergens ?? [], isPopular: !!it.popular,
         }).returning();
         for (const [gi, g] of (it.groups ?? []).entries()) {

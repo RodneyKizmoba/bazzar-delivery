@@ -77,7 +77,11 @@ export function CustomerShell({ children, hideHeader, hideNav, bare }: { childre
   ];
 
   return (
-    <div className={cn("relative mx-auto min-h-screen max-w-md", !bare && "bg-white shadow-sm")}>
+    <div className={cn(
+      "relative mx-auto min-h-screen max-w-md",
+      !bare && "shadow-sm",
+      !bare && (location === "/pesquisa" ? "bg-transparent" : "bg-white"),
+    )}>
       {bare && <PageBackdrop />}
       {!hideHeader && (
         <header className="brand-bar sticky top-0 z-30 flex items-center justify-between px-4 py-2.5 shadow-sm">

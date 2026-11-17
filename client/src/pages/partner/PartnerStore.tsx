@@ -79,7 +79,7 @@ function StoreForm() {
   const zones = metaQ.data?.zones ?? [];
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((p) => (p ? { ...p, [k]: v } : p));
 
-  const isUrl = (s: string) => !s.trim() || /^https?:\/\/\S+$/i.test(s.trim());
+  const isUrl = (s: string) => !s.trim() || /^https?:\/\/\S+$/i.test(s.trim()) || /^\/(?!\/)\S*$/.test(s.trim());
   const isInt = (s: string, min: number, max: number) => s !== "" && Number.isInteger(Number(s)) && Number(s) >= min && Number(s) <= max;
   const err: Tr | null =
     form.name.trim().length < 2 ? { pt: "Nome demasiado curto.", en: "Name too short.", fr: "Nom trop court." }
@@ -208,10 +208,10 @@ function StoreForm() {
       <Card title={{ pt: "Imagens", en: "Images", fr: "Images" }}>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field id="st-logo" label={{ pt: "URL do logótipo", en: "Logo URL", fr: "URL du logo" }}>
-            <Input id="st-logo" type="url" placeholder="https://…" value={form.logoUrl} onChange={(e) => set("logoUrl", e.target.value)} />
+            <Input id="st-logo" type="text" inputMode="url" placeholder="https://… ou /caminho/local" value={form.logoUrl} onChange={(e) => set("logoUrl", e.target.value)} />
           </Field>
           <Field id="st-cover" label={{ pt: "URL da capa", en: "Cover URL", fr: "URL de couverture" }}>
-            <Input id="st-cover" type="url" placeholder="https://…" value={form.coverUrl} onChange={(e) => set("coverUrl", e.target.value)} />
+            <Input id="st-cover" type="text" inputMode="url" placeholder="https://… ou /caminho/local" value={form.coverUrl} onChange={(e) => set("coverUrl", e.target.value)} />
           </Field>
         </div>
         <div className="mt-3 flex items-center gap-3">
@@ -300,17 +300,28 @@ function ThemePicker({ value, onChange, store }: { value: string; onChange: (v: 
             en: "Customers see this colour when they open your store and on its home-page card. Buttons and checkout always stay in PedeJá colours.",
             fr: "Les clients voient cette couleur en ouvrant votre magasin et sur sa carte d'accueil. Les boutons et le paiement restent aux couleurs PedeJá." })}
         </p>
-        <div role="radiogroup" aria-label={t({ pt: "Cor da loja", en: "Store colour", fr: "Couleur du magasin" })} className="grid grid-cols-4 gap-2 sm:grid-cols-7">
-          <button type="button" role="radio" aria-checked={!value} onClick={() => onChange("")}
-            className={cn("flex h-14 flex-col items-center justify-center rounded-xl border-2 border-dashed text-[11px] font-medium text-neutral-600", !value ? "border-primary bg-brand-50" : "border-neutral-300")}>
+        <div role="radiogroup" aria-label={t({ pt: "Cor da loja", en: "Store colour", fr: "Couleur du magasin" })} className="grid grid-cols-4 gap-2 sm:grid-cols-7"
+          onKeyDown={(event) => {
+            if (!["ArrowRight", "ArrowDown", "ArrowLeft", "ArrowUp"].includes(event.key)) return;
+            const options = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]'));
+            const index = options.indexOf(event.target as HTMLButtonElement);
+            if (index < 0) return;
+            event.preventDefault();
+            const direction = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : -1;
+            const next = options[(index + direction + options.length) % options.length];
+            next.focus();
+            next.click();
+          }}>
+          <button type="button" role="radio" aria-checked={!value} tabIndex={!value ? 0 : -1} onClick={() => onChange("")}
+            className={cn("flex h-14 flex-col items-center justify-center rounded-xl border-2 border-dashed text-[11px] font-medium text-neutral-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-neutral-900", !value ? "border-primary bg-brand-50" : "border-neutral-300")}>
             ✨{t({ pt: "Automática", en: "Automatic", fr: "Auto" })}
           </button>
           {STORE_THEME_IDS.map((id) => {
             const th = STORE_THEMES[id];
             const on = value === id;
             return (
-              <button key={id} type="button" role="radio" aria-checked={on} aria-label={t(th.label)} title={t(th.label)} onClick={() => onChange(id)}
-                className={cn("relative rounded-xl ring-offset-2 transition", on ? "ring-2 ring-primary" : "hover:scale-105")}>
+              <button key={id} type="button" role="radio" aria-checked={on} tabIndex={on ? 0 : -1} aria-label={t(th.label)} title={t(th.label)} onClick={() => onChange(id)}
+                className={cn("relative rounded-xl ring-offset-2 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-neutral-900", on ? "ring-2 ring-primary" : "hover:scale-105")}>
                 <StoreThemeArt theme={th} seed={store.id} className="h-14 w-full rounded-xl" />
                 {on && <span className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-white text-primary shadow"><Check className="h-3.5 w-3.5" /></span>}
                 <span className="mt-1 block truncate text-center text-[11px] text-neutral-600">{t(th.label)}</span>

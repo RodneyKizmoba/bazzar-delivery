@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Eye, EyeOff, AlertCircle, User as UserIcon, Store as StoreIcon, Bike, Gift, Info } from "lucide-react";
@@ -27,6 +27,19 @@ const WELCOME_POINTS_FALLBACK = 100;
 
 const PHONE_RE = /^\+?[0-9 ]{9,15}$/;
 const USERNAME_RE = /^[a-zA-Z0-9_.]+$/;
+
+function handleRadioArrowKey(event: KeyboardEvent<HTMLDivElement>) {
+  const directions: Record<string, number | undefined> = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
+  const direction = directions[event.key];
+  if (!direction) return;
+  const radios = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button[role="radio"]'));
+  const index = radios.findIndex((radio) => radio === event.target);
+  if (index < 0) return;
+  event.preventDefault();
+  const next = radios[(index + direction + radios.length) % radios.length];
+  next.focus();
+  next.click();
+}
 
 function Field({ id, label, error, hint, children }: { id: string; label: string; error?: string; hint?: string; children: ReactNode }) {
   return (
@@ -153,11 +166,12 @@ export default function Register() {
 
         <form onSubmit={submit} noValidate className="mt-6 space-y-5">
           <fieldset>
-            <legend className="mb-2 text-sm font-medium">{t({ pt: "Tipo de conta", en: "Account type", fr: "Type de compte" })}</legend>
-            <div className="grid grid-cols-3 gap-2" role="radiogroup">
+            <legend id="account-type-label" className="mb-2 text-sm font-medium">{t({ pt: "Tipo de conta", en: "Account type", fr: "Type de compte" })}</legend>
+            <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-labelledby="account-type-label" onKeyDown={handleRadioArrowKey}>
               {types.map(({ id, icon: Icon, label, sub }) => (
                 <button key={id} type="button" role="radio" aria-checked={type === id} onClick={() => setType(id)}
-                  className={cn("flex flex-col items-center gap-1 rounded-2xl border-2 px-2 py-3 text-center transition-colors",
+                  tabIndex={type === id ? 0 : -1}
+                  className={cn("flex flex-col items-center gap-1 rounded-2xl border-2 px-2 py-3 text-center transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
                     type === id ? "border-primary bg-brand-50 text-primary" : "border-neutral-200 text-neutral-700 hover:bg-neutral-50")}>
                   <Icon className="h-6 w-6" aria-hidden />
                   <span className="text-xs font-semibold leading-tight">{t(label)}</span>
@@ -223,14 +237,15 @@ export default function Register() {
           {type === "supplier" && (
             <fieldset className="space-y-4 rounded-2xl border p-4">
               <legend className="px-1 text-sm font-semibold">{t({ pt: "Dados do negócio", en: "Business details", fr: "Informations de l'entreprise" })}</legend>
-              <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label={t({ pt: "Tipo de negócio", en: "Business kind", fr: "Type d'activité" })}>
+              <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label={t({ pt: "Tipo de negócio", en: "Business kind", fr: "Type d'activité" })} onKeyDown={handleRadioArrowKey}>
                 {[
                   { home: false, icon: "🏪", label: { pt: "Loja ou restaurante", en: "Shop or restaurant", fr: "Magasin ou restaurant" }, hint: { pt: "Com espaço físico", en: "With premises", fr: "Avec local" } },
                   { home: true, icon: "🏠", label: { pt: "Negócio caseiro", en: "Home business", fr: "Activité à domicile" }, hint: { pt: "Bolos, salgados, comida feita em casa", en: "Cakes, snacks, home cooking", fr: "Gâteaux, snacks, cuisine maison" } },
                 ].map((o) => (
                   <button key={String(o.home)} type="button" role="radio" aria-checked={biz.isHomeBusiness === o.home}
+                    tabIndex={biz.isHomeBusiness === o.home ? 0 : -1}
                     onClick={() => setBiz((b) => ({ ...b, isHomeBusiness: o.home, storeType: o.home && b.storeType === "restaurant" ? "bakery" : b.storeType, minNoticeHours: o.home ? (b.minNoticeHours || 24) : 0 }))}
-                    className={cn("rounded-xl border-2 p-3 text-left text-sm", biz.isHomeBusiness === o.home ? "border-primary bg-brand-50" : "border-neutral-200")}>
+                    className={cn("rounded-xl border-2 p-3 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary", biz.isHomeBusiness === o.home ? "border-primary bg-brand-50" : "border-neutral-200")}>
                     <span className="text-xl" aria-hidden>{o.icon}</span>
                     <span className="block font-semibold">{t(o.label)}</span>
                     <span className="block text-xs text-neutral-500">{t(o.hint)}</span>

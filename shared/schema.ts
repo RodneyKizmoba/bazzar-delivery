@@ -440,6 +440,16 @@ export const reviewSchema = z.object({
   comment: z.string().trim().max(1000).optional().nullable(),
 });
 
+const storeImageUrlSchema = z.string().max(500).refine((value) => {
+  if (/^\/(?!\/)\S*$/.test(value)) return true;
+  try {
+    const url = new URL(value);
+    return (url.protocol === "http:" || url.protocol === "https:") && !!url.hostname;
+  } catch {
+    return false;
+  }
+});
+
 export const storeUpdateSchema = z.object({
   name: z.string().trim().min(2).max(100),
   description: z.string().trim().max(500).nullable(),
@@ -448,8 +458,8 @@ export const storeUpdateSchema = z.object({
   street: z.string().trim().min(3).max(200),
   zone: z.string().trim().min(2).max(60),
   zonesServed: z.array(z.string().trim().min(2).max(60)).max(50),
-  logoUrl: z.string().url().max(500).nullable(),
-  coverUrl: z.string().url().max(500).nullable(),
+  logoUrl: storeImageUrlSchema.nullable(),
+  coverUrl: storeImageUrlSchema.nullable(),
   theme: z.enum(STORE_THEME_IDS).nullable(),
   openingTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Hora inválida (HH:MM)"),
   closingTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Hora inválida (HH:MM)"),
