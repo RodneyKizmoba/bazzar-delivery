@@ -97,6 +97,62 @@ try {
   const saved = await api("GET", "/api/partner/store");
   assert.equal(saved.body.store.theme, targetTheme, "a cor escolhida deve continuar guardada após reabrir");
   console.log(`PASS  guardar e reabrir mantém ${targetLabel}`);
+
+  const radios = '[role="radiogroup"] [role="radio"]';
+  const count = colors.length + 1; // Inclui a opção Automática.
+  let index = colors.indexOf(targetLabel) + 1;
+  async function assertKeyboardChoice(expected) {
+    const state = await page.$$eval(radios, (buttons) => buttons.map((button) => ({
+      focused: document.activeElement === button,
+      selected: button.getAttribute("aria-checked") === "true",
+      tabIndex: button.tabIndex,
+      focusVisible: button.matches(":focus-visible"),
+      outline: getComputedStyle(button).outlineStyle,
+      outlineWidth: getComputedStyle(button).outlineWidth,
+    })));
+    assert.equal(state.filter((button) => button.selected).length, 1, "deve existir uma única opção seleccionada");
+    assert.deepEqual(state.map((button) => button.tabIndex), state.map((_, i) => i === expected ? 0 : -1),
+      "apenas a opção actual deve entrar na ordem de Tab");
+    assert.equal(state[expected].focused, true, "o foco deve acompanhar a opção actual");
+    assert.equal(state[expected].selected, true, "as setas devem seleccionar a opção focada");
+    assert.equal(state[expected].focusVisible, true, "o foco de teclado deve ser visível");
+    assert.equal(state[expected].outline, "solid", "a opção focada deve ter um contorno visível");
+    assert.notEqual(state[expected].outlineWidth, "0px");
+  }
+
+  await page.focus(`${radios}[aria-checked="true"]`);
+  await page.keyboard.down("Shift");
+  await page.keyboard.press("Tab");
+  await page.keyboard.up("Shift");
+  assert.equal(await page.$eval('[role="radiogroup"]', (group) => group.contains(document.activeElement)), false);
+  await page.keyboard.press("Tab");
+  await assertKeyboardChoice(index);
+  // Percorre todas as cores e Automática, incluindo a passagem da última à primeira.
+  for (let step = 0; step < count; step++) {
+    await page.keyboard.press("ArrowRight");
+    index = (index + 1) % count;
+    await assertKeyboardChoice(index);
+  }
+  for (const [key, direction] of [["ArrowDown", 1], ["ArrowLeft", -1], ["ArrowUp", -1]]) {
+    await page.keyboard.press(key);
+    index = (index + direction + count) % count;
+    await assertKeyboardChoice(index);
+  }
+  // Confirma também a passagem da primeira opção à última.
+  await page.focus(`${radios}:first-child`);
+  await page.keyboard.press("ArrowLeft");
+  await assertKeyboardChoice(count - 1);
+  // Espaço e Enter activam os botões nativos sem submeter o formulário.
+  for (const [key, expected] of [["Space", 0], ["Enter", 1]]) {
+    await page.focus(`${radios}:nth-child(${expected + 1})`);
+    await page.keyboard.press(key);
+    await assertKeyboardChoice(expected);
+    assert.equal(new URL(page.url()).pathname, "/parceiro/loja");
+  }
+  await page.keyboard.press("Tab");
+  assert.equal(await page.$eval('[role="radiogroup"]', (group) => group.contains(document.activeElement)), false,
+    "Tab deve sair do grupo sem percorrer as restantes cores");
+  console.log("PASS  teclado: Tab, quatro setas, navegação circular, Automática, Espaço, Enter e foco visível");
 } finally {
   if (originalTheme !== undefined) {
     const restored = await api("PATCH", "/api/partner/store", { theme: originalTheme });
