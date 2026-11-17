@@ -19,6 +19,7 @@ import { driverRouter } from "./routes/driver";
 import { adminRouter } from "./routes/admin";
 import { webhookRouter } from "./routes/webhooks";
 import { ensureAdmin, seedDemoData, seedLaunchData } from "./seed";
+import { applyStockPhotos } from "./lib/stockPhotos";
 import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
@@ -110,6 +111,7 @@ app.use(errorHandler);
   if (process.env.SEED_DEMO === "true" || (!config.isProd && process.env.SEED_DEMO !== "false")) {
     await seedDemoData();
   }
+  await applyStockPhotos().catch((e) => console.error("[fotos]", e));
 
   const server = createServer(app);
   if (config.isProd) serveStatic(app);

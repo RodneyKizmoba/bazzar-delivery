@@ -92,7 +92,7 @@ export function ItemDialog({ item, open, onOpenChange, onConfirm, confirmLabel, 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto p-0">
-        {item.imageUrl && <img src={item.imageUrl} alt="" className="w-full h-44 object-cover" />}
+        {item.imageUrl && <img src={item.imageUrl} alt="" className="bg-neutral-100 w-full h-56 object-cover" onError={(e) => { e.currentTarget.style.display = "none"; }} />}
         <div className="p-5 space-y-4">
           <DialogHeader className="text-left space-y-1">
             <DialogTitle className="text-lg">{item.name}</DialogTitle>

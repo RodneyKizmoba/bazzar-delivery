@@ -23,6 +23,11 @@ Segredos de produção (Publish → Secrets):
 
 Opcionais: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` (SMS).
 
+Entrega prioritária (opcional): `PRIORITY_FEE` (Kz a mais, por defeito 500) e `PRIORITY_MINUTES_SAVED` (minutos poupados, por defeito 10).
+
+## Fotografias
+As lojas de demonstração e o Mariato usam fotografias reais e gratuitas do [Unsplash](https://unsplash.com/license) (uso comercial livre, sem atribuição obrigatória), aplicadas no arranque só onde falta foto (`server/lib/stockPhotos.ts`). Pratos sem fotografia correspondente ficam sem foto, para não enganar o cliente. Assim que cada loja carregar as suas próprias fotos, estas substituem as de exemplo. Os anúncios usam fotos de animais do Wikimedia Commons, com o crédito no próprio anúncio.
+
 Domínio próprio: Tools → Domains → introduzir o domínio e copiar os registos **A** e **TXT** para o fornecedor do domínio (manter o TXT para sempre).
 
 ## Contas de demonstração (só com SEED_DEMO)

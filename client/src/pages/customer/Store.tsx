@@ -377,7 +377,7 @@ export default function StorePage() {
                         <button key={`pop-${it.id}`} type="button" onClick={() => openItem(it)} disabled={!it.isAvailable}
                           className={cn("relative w-40 shrink-0 snap-start rounded-2xl border bg-white p-2 text-left shadow-sm transition-shadow hover:shadow-md", !it.isAvailable && "opacity-55")}>
                           {it.imageUrl
-                            ? <img src={it.imageUrl} alt="" loading="lazy" className="h-28 w-full rounded-xl object-cover" />
+                            ? <img src={it.imageUrl} alt="" loading="lazy" className="bg-neutral-100 h-28 w-full rounded-xl object-cover" onError={(e) => { e.currentTarget.style.display = "none"; }} />
                             : <StoreThemeArt theme={theme} seed={it.id} className="h-28 w-full rounded-xl"><CategoryArt kind={store.storeType} className="absolute bottom-0 right-1 h-20 w-20" /></StoreThemeArt>}
                           <span aria-hidden className="absolute right-3.5 top-[6.4rem] flex h-8 w-8 items-center justify-center rounded-full border bg-white text-primary shadow-md"><Plus className="h-5 w-5" strokeWidth={2.6} /></span>
                           <p className="mt-2 line-clamp-2 text-sm font-semibold leading-tight text-neutral-900">{it.name}</p>
@@ -403,7 +403,7 @@ export default function StorePage() {
                           </div>
                           <div className="relative shrink-0 self-center">
                             {it.imageUrl
-                              ? <img src={it.imageUrl} alt="" loading="lazy" className="h-24 w-24 rounded-xl object-cover" />
+                              ? <img src={it.imageUrl} alt="" loading="lazy" className="bg-neutral-100 h-24 w-24 rounded-xl object-cover" onError={(e) => { e.currentTarget.style.display = "none"; }} />
                               : <div aria-hidden className="h-10 w-10" />}
                             {it.isAvailable && (
                               <span aria-hidden className="absolute -bottom-1.5 -right-1.5 flex h-8 w-8 items-center justify-center rounded-full border bg-white text-primary shadow-md">

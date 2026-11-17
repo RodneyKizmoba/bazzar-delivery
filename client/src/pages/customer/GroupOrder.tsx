@@ -376,7 +376,7 @@ export default function GroupOrder() {
                           </div>
                           <div className="mt-1"><DietaryBadges tags={it.dietaryTags} small /></div>
                         </div>
-                        {it.imageUrl ? <img src={it.imageUrl} alt="" className="h-16 w-16 rounded-lg object-cover" loading="lazy" /> : null}
+                        {it.imageUrl ? <img src={it.imageUrl} alt="" className="bg-neutral-100 h-16 w-16 rounded-lg object-cover" loading="lazy" onError={(e) => { e.currentTarget.style.display = "none"; }} /> : null}
                         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-50 text-primary"><Plus className="h-4 w-4" /></span>
                       </button>
                     </li>

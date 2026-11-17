@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { ReactNode } from "react";
 import { Link, Redirect } from "wouter";
 import { Loader2, AlertCircle } from "lucide-react";
@@ -64,7 +65,9 @@ export function DietaryBadges({ tags, small }: { tags: string[]; small?: boolean
 
 /** Logótipo/capa: imagem se existir, senão bloco colorido com iniciais. */
 export function StoreImage({ name, url, className, rounded = "rounded-lg" }: { name: string; url?: string | null; className?: string; rounded?: string }) {
-  if (url) return <img src={url} alt="" className={cn("object-cover", rounded, className)} loading="lazy" />;
+  const [failed, setFailed] = useState<string | null>(null);
+  // se a foto não carregar (rede fraca), mostrar as iniciais em vez de uma imagem partida
+  if (url && failed !== url) return <img src={url} alt="" className={cn("bg-neutral-100 object-cover", rounded, className)} loading="lazy" onError={() => setFailed(url)} />;
   return (
     <div className={cn("flex items-center justify-center text-white font-bold", rounded, className)} style={{ background: colorFor(name) }} aria-hidden>
       {initials(name)}

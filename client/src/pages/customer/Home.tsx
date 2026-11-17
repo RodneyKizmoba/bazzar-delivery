@@ -333,7 +333,7 @@ export default function Home() {
               : popular.data!.items.map((it) => (
                 <Link key={it.id} href={`/loja/${it.storeId}`} className="w-36 shrink-0 snap-start rounded-2xl border bg-white p-2 shadow-sm hover:shadow-md transition-shadow">
                   {it.imageUrl
-                    ? <img src={it.imageUrl} alt="" loading="lazy" className="h-24 w-full rounded-xl object-cover" />
+                    ? <img src={it.imageUrl} alt="" loading="lazy" className="bg-neutral-100 h-24 w-full rounded-xl object-cover" onError={(e) => { e.currentTarget.style.display = "none"; }} />
                     : <StoreImage name={it.name} className="h-24 w-full text-xl" rounded="rounded-xl" />}
                   <p className="mt-1.5 line-clamp-2 text-sm font-semibold leading-tight text-neutral-900">{it.name}</p>
                   <p className="truncate text-[11px] text-neutral-500">{it.storeName}</p>
