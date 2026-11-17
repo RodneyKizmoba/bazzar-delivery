@@ -59,8 +59,8 @@ export function TopBar({ title, back, right }: { title: string; back?: string | 
 
 /** Layout das páginas de cliente: largura de telemóvel, cabeçalho e navegação inferior. */
 /**
- * `bare`: a página desenha os seus próprios cartões sobre o fundo colorido (Início, Loja).
- * Sem `bare`, o conteúdo fica numa folha branca arredondada a flutuar sobre o fundo.
+ * `bare`: página de ecrã inteiro a cores, com cartões brancos por cima (só o Início, como Deliveroo/Talabat).
+ * As restantes páginas ficam simples, em fundo branco, para ser rápido ler e encomendar.
  */
 export function CustomerShell({ children, hideHeader, hideNav, bare }: { children: ReactNode; hideHeader?: boolean; hideNav?: boolean; bare?: boolean }) {
   const [location] = useLocation();
@@ -77,8 +77,8 @@ export function CustomerShell({ children, hideHeader, hideNav, bare }: { childre
   ];
 
   return (
-    <div className="relative mx-auto min-h-screen max-w-md">
-      <PageBackdrop />
+    <div className={cn("relative mx-auto min-h-screen max-w-md", !bare && "bg-white shadow-sm")}>
+      {bare && <PageBackdrop />}
       {!hideHeader && (
         <header className="brand-bar sticky top-0 z-30 flex items-center justify-between px-4 py-2.5 shadow-sm">
           <Link href="/" className="flex items-center gap-2" aria-label="PedeJá">
@@ -97,11 +97,7 @@ export function CustomerShell({ children, hideHeader, hideNav, bare }: { childre
         </header>
       )}
       <main className={cn(!hideNav && "pb-20")}>
-        {bare ? children : (
-          <div className={cn("mx-2.5 mt-2.5 rounded-3xl bg-white shadow-xl [overflow:clip]", hideNav ? "mb-2.5 min-h-[calc(100vh-1.25rem)]" : "mb-3 min-h-[calc(100vh-10rem)]")}>
-            {children}
-          </div>
-        )}
+        {children}
       </main>
       {!hideNav && (
         <nav className="fixed bottom-0 left-1/2 z-30 w-full max-w-md -translate-x-1/2 border-t bg-white" aria-label="Navegação principal">
@@ -134,7 +130,7 @@ export function PanelShell({ title, tabs, children }: { title: string; tabs: { h
   const [, navigate] = useLocation();
   const t = useT();
   return (
-    <div className="min-h-screen bg-white/75">
+    <div className="min-h-screen bg-neutral-50">
       <header className="sticky top-0 z-30 border-b bg-white">
         <div className="brand-bar">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2.5">
