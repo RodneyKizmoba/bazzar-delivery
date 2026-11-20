@@ -155,7 +155,7 @@ function CheckoutInner() {
               <button key={String(o.on)} type="button" role="radio" aria-checked={priorityPick === o.on} onClick={() => setPriority(o.on)}
                 className={cn("flex w-full items-center gap-3 rounded-xl border-2 px-3 py-3 text-left transition",
                   priorityPick === o.on ? "border-primary bg-brand-50" : "border-neutral-200 hover:border-neutral-300")}>
-                <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full", priorityPick === o.on ? "bg-primary text-white" : "bg-neutral-100 text-neutral-700")}>{o.icon}</span>
+                <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full", priorityPick === o.on ? "bg-primary text-on-brand" : "bg-neutral-100 text-neutral-700")}>{o.icon}</span>
                 <span className="min-w-0 flex-1">
                   <span className="block font-semibold">{o.title}</span>
                   <span className="block text-xs text-neutral-500">{o.sub}</span>

@@ -295,7 +295,7 @@ function OrderCard({ order }: { order: PartnerOrder }) {
         <p className="mt-2 flex gap-1 rounded bg-yellow-50 px-2 py-1 text-xs text-yellow-900"><StickyNote className="mt-0.5 h-3 w-3 shrink-0" />{order.notes}</p>
       )}
       <div className="mt-2 flex flex-wrap gap-1.5 text-xs font-semibold">
-        {!!order.priorityFee && <span className="rounded-full bg-primary px-2.5 py-1 text-white">⚡ {t({ pt: "Prioritária — preparar primeiro", en: "Priority — prepare first", fr: "Prioritaire — préparer d'abord" })}</span>}
+        {!!order.priorityFee && <span className="rounded-full bg-primary px-2.5 py-1 text-on-brand">⚡ {t({ pt: "Prioritária — preparar primeiro", en: "Priority — prepare first", fr: "Prioritaire — préparer d'abord" })}</span>}
         <span className={cn("rounded-full px-2.5 py-1", order.cutlery ? "bg-amber-100 text-amber-900" : "bg-neutral-100 text-neutral-600")}>
           🍴 {order.cutlery ? t({ pt: "Enviar talheres", en: "Include cutlery", fr: "Mettre des couverts" }) : t({ pt: "Sem talheres", en: "No cutlery", fr: "Sans couverts" })}
         </span>

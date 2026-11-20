@@ -23,7 +23,7 @@ const STICKERS: { id: Banner["sticker"]; label: Tr }[] = [
   { id: "none", label: { pt: "Nenhum", en: "None", fr: "Aucun" } },
 ];
 
-const EMPTY = { title: "", subtitle: "", imageUrl: "", imageCredit: "", sticker: "burger" as Banner["sticker"], ctaLabel: "", linkUrl: "", bgColor: "#FF0F5B", sortOrder: 0, isActive: true };
+const EMPTY = { title: "", subtitle: "", imageUrl: "", imageCredit: "", sticker: "burger" as Banner["sticker"], ctaLabel: "", linkUrl: "", bgColor: "#00CCBC", sortOrder: 0, isActive: true };
 
 export default function AdminBanners() {
   return <AdminPage><BannersContent /></AdminPage>;
@@ -57,7 +57,7 @@ function BannersContent() {
   });
   const remove = useMutation({ mutationFn: (id: number) => del(`${KEY}/${id}`), onSuccess: refresh, onError });
 
-  const swatches = ["#FF0F5B", "#7B1FFF", "#2A0A3D", ...Object.values(FOOD_COLORS)];
+  const swatches = ["#00CCBC", "#007A72", "#2E3333", ...Object.values(FOOD_COLORS)];
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_400px]">

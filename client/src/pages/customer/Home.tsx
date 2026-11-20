@@ -3,11 +3,10 @@ import { HScroll } from "@/components/HScroll";
 import { PromoCarousel } from "@/components/PromoCarousel";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Search as SearchIcon, MapPin, Star, Clock, Bike, Crown, ChevronRight } from "lucide-react";
+import { Search as SearchIcon, MapPin, Star, Crown, ChevronRight } from "lucide-react";
 import { CustomerShell } from "@/components/AppShell";
 import { ErrorState, StoreImage } from "@/components/common";
-import { StoreThemeArt, themeFor } from "@/components/StoreThemeArt";
-import { CategoryArt, CATEGORY_TILE_BG } from "@/components/CategoryArt";
+import { CategoryArt } from "@/components/CategoryArt";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -65,74 +64,71 @@ function storeZone(z: string) {
 }
 
 /** Cartão de loja (estilo Deliveroo). `compact` = largura fixa para carrosséis horizontais. */
+/** Nota ao estilo Deliveroo: estrela teal, nota e palavra ("Excelente"). */
+export function RatingText({ avg, count, className }: { avg: number; count: number; className?: string }) {
+  const t = useT();
+  if (!count) return <span className={cn("rounded-full bg-brand-100 px-2 py-0.5 text-[11px] font-semibold text-primary", className)}>{t({ pt: "Novo", en: "New", fr: "Nouveau" })}</span>;
+  const word = avg >= 4.5 ? t({ pt: "Excelente", en: "Excellent", fr: "Excellent" }) : avg >= 4 ? t({ pt: "Muito bom", en: "Very good", fr: "Très bien" }) : avg >= 3.5 ? t({ pt: "Bom", en: "Good", fr: "Bien" }) : "";
+  return (
+    <span className={cn("inline-flex items-center gap-1 text-[13px] font-medium text-primary", className)}>
+      <Star className="h-3.5 w-3.5 fill-current" aria-hidden />{avg.toFixed(1)} {word} <span className="font-normal text-neutral-500">({count > 500 ? "500+" : count})</span>
+    </span>
+  );
+}
+
+/** Imagem da loja: foto real; sem foto, um mosaico cinzento com o desenho do tipo de loja. */
+function StorePhoto({ store, className, rounded = "rounded-xl" }: { store: StoreCardData; className?: string; rounded?: string }) {
+  return store.coverUrl
+    ? <StoreImage name={store.name} url={store.coverUrl} rounded={rounded} className={cn("object-cover", !store.isOpenNow && "opacity-60 grayscale", className)} />
+    : (
+      <div className={cn("relative flex items-center justify-center bg-neutral-100", rounded, !store.isOpenNow && "opacity-60", className)}>
+        <CategoryArt kind={store.storeType} className="h-3/4 w-3/4" />
+      </div>
+    );
+}
+
+const timeRange = (min: number) => `${min}–${min + 15} min`;
+
 export function StoreCard({ store, compact, footer }: { store: StoreCardData; compact?: boolean; footer?: ReactNode }) {
   const t = useT();
   return (
-    <div className={cn("group", compact ? "w-64 shrink-0 snap-start" : "w-full")}>
-      <Link href={`/loja/${store.id}`} className="block rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-        <div className="relative overflow-hidden rounded-2xl">
-          {store.coverUrl ? (
-            <StoreImage name={store.name} url={store.coverUrl} rounded="rounded-2xl"
-              className={cn("w-full text-3xl transition-transform duration-300 group-hover:scale-[1.02]", compact ? "h-32" : "h-40", !store.isOpenNow && "opacity-60 grayscale")} />
-          ) : (
-            <StoreThemeArt theme={themeFor(store)} seed={store.id} muted={!store.isOpenNow}
-              className={cn("w-full rounded-2xl transition-transform duration-300 group-hover:scale-[1.02]", compact ? "h-32" : "h-40", !store.isOpenNow && "opacity-60")}>
-              <CategoryArt kind={store.storeType} className={cn("absolute bottom-1 left-2 drop-shadow-md", compact ? "h-20 w-20" : "h-24 w-24")} />
-            </StoreThemeArt>
-          )}
+    <div className={cn("group", compact ? "w-72 shrink-0 snap-start" : "w-full")}>
+      <Link href={`/loja/${store.id}`} className="block rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+        <div className="relative overflow-hidden rounded-xl">
+          <StorePhoto store={store} className={cn("w-full transition-transform duration-300 group-hover:scale-[1.02]", compact ? "h-36" : "h-44")} />
           <div className="absolute left-2 top-2 flex flex-wrap gap-1">
             {!store.isOpenNow && (
-              <span className="rounded-full bg-neutral-900/85 px-2.5 py-1 text-[11px] font-semibold text-white">
+              <span className="rounded-md bg-neutral-900/85 px-2 py-1 text-[11px] font-semibold text-white">
                 {t({ pt: "Fechado — agende", en: "Closed — schedule", fr: "Fermé — programmez" })}
               </span>
             )}
+            {store.deliveryFee === 0 && store.isOpenNow && (
+              <span className="rounded-md bg-primary px-2 py-1 text-[11px] font-bold text-on-brand">{t({ pt: "Entrega grátis", en: "Free delivery", fr: "Livraison gratuite" })}</span>
+            )}
             {store.isHomeBusiness && (
-              <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-900 shadow-sm">
-                🏠 {t({ pt: "Feito em casa", en: "Home-made", fr: "Fait maison" })}
-              </span>
+              <span className="rounded-md bg-white px-2 py-1 text-[11px] font-semibold text-neutral-900 shadow-sm">🏠 {t({ pt: "Feito em casa", en: "Home-made", fr: "Fait maison" })}</span>
             )}
             {!!store.minNoticeMin && (
-              <span className="rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-neutral-800 shadow-sm">
-                {t({ pt: "Por encomenda", en: "Pre-order", fr: "Sur commande" })}
-              </span>
-            )}
-            {store.isChain && (
-              <span className="rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-neutral-800 shadow-sm">
-                {t({ pt: "Rede", en: "Chain", fr: "Chaîne" })}
-              </span>
+              <span className="rounded-md bg-white px-2 py-1 text-[11px] font-semibold text-neutral-900 shadow-sm">{t({ pt: "Por encomenda", en: "Pre-order", fr: "Sur commande" })}</span>
             )}
           </div>
-          <span className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-neutral-900 shadow">
-            <Clock className="h-3.5 w-3.5" aria-hidden /> {store.deliveryTimeMin} {t(T.minutes)}
+          <span className="absolute bottom-2 right-2 rounded-full bg-white px-2.5 py-1 text-xs font-bold text-neutral-900 shadow">
+            {timeRange(store.deliveryTimeMin)}
           </span>
         </div>
-        <div className="mt-2 flex items-start gap-2.5 px-0.5">
-          <StoreImage name={store.name} url={store.logoUrl} className="h-10 w-10 shrink-0 text-xs" rounded="rounded-xl" />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="truncate font-semibold text-neutral-900">{store.name}</h3>
-              {store.ratingCount > 0 ? (
-                <span className="flex shrink-0 items-center gap-0.5 text-sm font-medium text-neutral-800">
-                  <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" aria-hidden />
-                  {store.ratingAvg.toFixed(1)} <span className="text-neutral-500 font-normal">({store.ratingCount})</span>
-                </span>
-              ) : (
-                <span className="shrink-0 rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-medium text-green-700">
-                  {t({ pt: "Novo", en: "New", fr: "Nouveau" })}
-                </span>
-              )}
-            </div>
-            <p className="truncate text-xs text-neutral-500">
-              {[STORE_TYPE[store.storeType] ? STORE_TYPE[store.storeType].icon : "", store.cuisines.slice(0, 3).join(" · ") || (STORE_TYPE[store.storeType] ? t(STORE_TYPE[store.storeType]) : "")].join(" ")}
-            </p>
-            <p className="mt-0.5 flex items-center gap-1 text-xs text-neutral-600">
-              <Bike className="h-3.5 w-3.5" aria-hidden />
-              {store.deliveryFee === 0
-                ? <span className="font-semibold text-green-700">{t({ pt: "Entrega grátis", en: "Free delivery", fr: "Livraison gratuite" })}</span>
-                : <span>{kz(store.deliveryFee)}</span>}
-              {store.minOrder > 0 && <span className="text-neutral-400">· {t({ pt: "mín.", en: "min.", fr: "min." })} {kz(store.minOrder)}</span>}
-            </p>
-          </div>
+        <div className="mt-2 px-0.5">
+          <h3 className="truncate text-base font-bold text-neutral-900">{store.name}</h3>
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[13px] text-neutral-500">
+            <RatingText avg={store.ratingAvg} count={store.ratingCount} />
+            <span aria-hidden>·</span>
+            <span className="truncate">{store.cuisines.slice(0, 2).join(" · ") || (STORE_TYPE[store.storeType] ? t(STORE_TYPE[store.storeType]) : "")}</span>
+          </p>
+          <p className="text-[13px] text-neutral-500">
+            {store.deliveryFee === 0
+              ? <span className="font-semibold text-primary">{t({ pt: "Entrega grátis", en: "Free delivery", fr: "Livraison gratuite" })}</span>
+              : <>{kz(store.deliveryFee)} {t({ pt: "entrega", en: "delivery", fr: "livraison" })}</>}
+            {store.minOrder > 0 && <> · {t({ pt: "mín.", en: "min.", fr: "min." })} {kz(store.minOrder)}</>}
+          </p>
         </div>
       </Link>
       {footer}
@@ -140,16 +136,34 @@ export function StoreCard({ store, compact, footer }: { store: StoreCardData; co
   );
 }
 
+/** Linha de loja (Deliveroo "Popular near you"): foto à esquerda, dados ao centro, nota à direita. */
+export function StoreListRow({ store }: { store: StoreCardData }) {
+  const t = useT();
+  return (
+    <Link href={`/loja/${store.id}`} className="flex items-center gap-3 rounded-xl py-2.5 hover:bg-neutral-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+      <StorePhoto store={store} className="h-[72px] w-[72px] shrink-0" />
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-bold text-neutral-900">{store.name}</p>
+        <p className="truncate text-[13px] text-neutral-500">{store.cuisines.slice(0, 2).join(" · ") || (STORE_TYPE[store.storeType] ? t(STORE_TYPE[store.storeType]) : "")}</p>
+        <p className="text-[13px] text-neutral-500">
+          {timeRange(store.deliveryTimeMin)} · {store.deliveryFee === 0 ? <span className="font-semibold text-primary">{t({ pt: "grátis", en: "free", fr: "gratuit" })}</span> : kz(store.deliveryFee)}
+          {!store.isOpenNow && <span className="ml-1 font-semibold text-neutral-700">· {t({ pt: "Fechado", en: "Closed", fr: "Fermé" })}</span>}
+        </p>
+      </div>
+      {store.ratingCount > 0
+        ? <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-primary px-2 py-1 text-xs font-bold text-on-brand"><Star className="h-3 w-3 fill-current" aria-hidden />{store.ratingAvg.toFixed(1)}</span>
+        : <span className="shrink-0 rounded-full bg-brand-100 px-2 py-1 text-[11px] font-semibold text-primary">{t({ pt: "Novo", en: "New", fr: "Nouveau" })}</span>}
+    </Link>
+  );
+}
+
 export function StoreCardSkeleton({ compact }: { compact?: boolean }) {
   return (
-    <div className={cn(compact ? "w-64 shrink-0" : "w-full")} aria-hidden>
-      <Skeleton className={cn("w-full rounded-2xl", compact ? "h-32" : "h-40")} />
-      <div className="mt-2 flex gap-2.5">
-        <Skeleton className="h-10 w-10 rounded-xl" />
-        <div className="flex-1 space-y-1.5">
-          <Skeleton className="h-4 w-3/4" />
-          <Skeleton className="h-3 w-1/2" />
-        </div>
+    <div className={cn(compact ? "w-72 shrink-0" : "w-full")} aria-hidden>
+      <Skeleton className={cn("w-full rounded-xl", compact ? "h-36" : "h-44")} />
+      <div className="mt-2 space-y-1.5">
+        <Skeleton className="h-4 w-3/4" />
+        <Skeleton className="h-3 w-1/2" />
       </div>
     </div>
   );
@@ -168,9 +182,9 @@ function storesUrl(params: Record<string, string | undefined>) {
 function Section({ title, href, children }: { title: string; href?: string; children: ReactNode }) {
   const t = useT();
   return (
-    <section className="mx-3 mt-3 overflow-hidden rounded-3xl bg-white pb-3 pt-4 shadow-lg">
+    <section className="mt-7">
       <div className="mb-3 flex items-center justify-between px-4">
-        <h2 className="text-lg font-bold text-neutral-900">{title}</h2>
+        <h2 className="text-xl font-bold text-neutral-900">{title}</h2>
         {href && (
           <Link href={href} className="flex items-center text-sm font-medium text-primary">
             {t({ pt: "Ver tudo", en: "See all", fr: "Tout voir" })} <ChevronRight className="h-4 w-4" />
@@ -251,14 +265,14 @@ export default function Home() {
 
   return (
     <CustomerShell bare>
-      {/* Morada e pesquisa (Talabat: "Entregar em" no topo) */}
-      <div className="px-4 pb-1 pt-3 text-white">
-        <div className="flex items-center justify-between gap-2">
+      {/* Deliveroo: "Agora · Localização ▾" e a pesquisa cinzenta */}
+      <div className="px-4 pb-1 pt-3">
+        <div className="flex items-end justify-between gap-2">
           <div className="min-w-0">
-            <span id="zone-label" className="block text-[11px] font-semibold uppercase tracking-wide text-white/85">{t({ pt: "Entregar em", en: "Deliver to", fr: "Livrer à" })}</span>
+            <span id="zone-label" className="block text-xs text-neutral-500">{t({ pt: "Agora · entregar em", en: "Now · deliver to", fr: "Maintenant · livrer à" })}</span>
             <Select value={zone || "__all"} onValueChange={chooseZone}>
-              <SelectTrigger aria-labelledby="zone-label" className="h-auto w-auto gap-1 border-0 bg-transparent p-0 text-lg font-extrabold text-white shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:opacity-100">
-                <MapPin className="mr-0.5 h-4 w-4 shrink-0" aria-hidden />
+              <SelectTrigger aria-labelledby="zone-label" className="h-auto w-auto gap-1 border-0 bg-transparent p-0 text-lg font-bold text-neutral-900 shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:text-primary [&>svg]:opacity-100">
+                <MapPin className="mr-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="max-h-72">
@@ -267,50 +281,57 @@ export default function Home() {
               </SelectContent>
             </Select>
           </div>
-          <span className="shrink-0 text-sm text-white/90">{greet}{firstName ? `, ${firstName}` : ""} 👋</span>
+          <span className="shrink-0 pb-0.5 text-sm text-neutral-500">{greet}{firstName ? `, ${firstName}` : ""}</span>
         </div>
 
         <form onSubmit={submit} role="search" className="relative mt-3">
           <label htmlFor="home-search" className="sr-only">{t(T.search)}</label>
-          <SearchIcon className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-neutral-400" aria-hidden />
+          <SearchIcon className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-neutral-500" aria-hidden />
           <Input id="home-search" value={q} onChange={(e) => setQ(e.target.value)} enterKeyHint="search"
-            placeholder={t({ pt: "Pratos, restaurantes, lojas…", en: "Dishes, restaurants, shops…", fr: "Plats, restaurants, magasins…" })}
-            className="h-12 rounded-full border-0 bg-white pl-12 text-base shadow-md" />
+            placeholder={t({ pt: "Restaurantes, pratos, lojas…", en: "Restaurants, dishes, shops…", fr: "Restaurants, plats, magasins…" })}
+            className="h-12 rounded-xl border-0 bg-neutral-100 pl-11 text-base shadow-none focus-visible:ring-2 focus-visible:ring-primary" />
         </form>
       </div>
 
-      {/* Serviços (Talabat): tudo numa só app */}
-      <ServiceGrid zq={zq} />
+      {/* Serviços: Restaurantes, Mercado, Farmácia… (Envios e Táxi em breve) */}
+      <ServiceRow zq={zq} />
 
       {/* Publicidade */}
-      <PromoCarousel onSky />
+      <PromoCarousel />
 
-      {/* Voltar a pedir (Talabat) */}
+      {/* Cozinhas (Deliveroo: mosaicos redondos) */}
+      <HScroll className="mt-5 flex gap-3 px-4 pb-1" arrowSize="sm" label="Categorias">
+        {CUISINE_TILES.map((c) => (
+          <Link key={c.key} href={`/pesquisa?q=${encodeURIComponent(c.q)}${zq}`}
+            className="group flex w-[4.5rem] shrink-0 flex-col items-center gap-1.5">
+            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-neutral-100 transition-transform duration-200 group-hover:-translate-y-0.5 group-active:scale-95">
+              <CategoryArt kind={c.key} className="h-12 w-12" />
+            </span>
+            <span className="line-clamp-2 text-center text-[13px] font-medium leading-tight text-neutral-900">{t(c)}</span>
+          </Link>
+        ))}
+      </HScroll>
+
+      {/* Voltar a pedir */}
       {user?.userType === "customer" && <OrderAgain />}
 
-      {/* O que lhe apetece? (Deliveroo: mosaicos de cozinha) */}
-      <Section title={t({ pt: "O que lhe apetece?", en: "What do you fancy?", fr: "Qu'est-ce qui vous tente ?" })}>
-        <HScroll className="flex gap-2 px-3 pb-1" arrowSize="sm" label="Categorias">
-          {CUISINE_TILES.map((c) => (
-            <Link key={c.key} href={`/pesquisa?q=${encodeURIComponent(c.q)}${zq}`}
-              className="group flex w-[5.25rem] shrink-0 flex-col items-center gap-1.5 rounded-2xl pb-1">
-              <span className="flex h-[4.75rem] w-[4.75rem] items-center justify-center rounded-2xl transition-transform duration-200 group-hover:-translate-y-0.5 group-active:scale-95"
-                style={{ backgroundColor: CATEGORY_TILE_BG[c.key] ?? "#F1F5F9" }}>
-                <CategoryArt kind={c.key} className="h-[3.9rem] w-[3.9rem] drop-shadow-sm" />
-              </span>
-              <span className="line-clamp-2 text-center text-[13px] font-semibold leading-tight text-neutral-900">{t(c)}</span>
-            </Link>
-          ))}
-        </HScroll>
+      {/* Destaques: cartões grandes */}
+      <Section title={t({ pt: "Em destaque", en: "Featured", fr: "À la une" })} href={`/pesquisa?sort=rating${zq}`}>
+        <StoreRow url={storesUrl({ zone: z, sort: "rating" })} emptyText={empty} />
+      </Section>
+
+      {/* Populares perto de si: lista com foto à esquerda */}
+      <Section title={t({ pt: "Populares perto de si", en: "Popular near you", fr: "Populaires près de chez vous" })} href={`/pesquisa?sort=recommended${zq}`}>
+        <StoreList url={storesUrl({ zone: z, sort: "recommended" })} emptyText={empty} />
       </Section>
 
       {/* PedeJá Plus */}
-      <div className="px-3 pt-3">
-        <Link href="/plus" className="flex items-center gap-3 rounded-2xl brand-grad p-4 shadow-md">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/20"><Crown className="h-6 w-6" aria-hidden /></span>
+      <div className="px-4 pt-7">
+        <Link href="/plus" className="flex items-center gap-3 rounded-xl bg-brand-100 p-4">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-on-brand"><Crown className="h-6 w-6" aria-hidden /></span>
           <div className="min-w-0 flex-1">
-            <p className="font-bold">PedeJá Plus</p>
-            <p className="text-sm opacity-90">
+            <p className="font-bold text-neutral-900">PedeJá Plus</p>
+            <p className="text-sm text-neutral-700">
               {meta.data
                 ? t({
                   pt: `Entregas grátis acima de ${kz(meta.data.plus.freeDeliveryMinOrder)} por ${kz(meta.data.plus.monthlyPrice)}/mês`,
@@ -320,24 +341,24 @@ export default function Home() {
                 : t({ pt: "Entregas grátis e vantagens exclusivas", en: "Free delivery and exclusive perks", fr: "Livraison gratuite et avantages exclusifs" })}
             </p>
           </div>
-          <ChevronRight className="h-5 w-5 shrink-0" aria-hidden />
+          <ChevronRight className="h-5 w-5 shrink-0 text-primary" aria-hidden />
         </Link>
       </div>
 
-      {/* Populares */}
+      {/* Pratos populares */}
       {(popular.isLoading || (popular.data?.items.length ?? 0) > 0) && (
         <Section title={t({ pt: "Pratos populares", en: "Popular dishes", fr: "Plats populaires" })}>
           <HScroll snap className="flex gap-3 scroll-px-4 px-4 pb-2" label="Populares">
             {popular.isLoading
-              ? [0, 1, 2].map((i) => <Skeleton key={i} className="h-40 w-36 shrink-0 rounded-2xl" />)
+              ? [0, 1, 2].map((i) => <Skeleton key={i} className="h-44 w-36 shrink-0 rounded-xl" />)
               : popular.data!.items.map((it) => (
-                <Link key={it.id} href={`/loja/${it.storeId}`} className="w-36 shrink-0 snap-start rounded-2xl border bg-white p-2 shadow-sm hover:shadow-md transition-shadow">
+                <Link key={it.id} href={`/loja/${it.storeId}`} className="w-36 shrink-0 snap-start">
                   {it.imageUrl
-                    ? <img src={it.imageUrl} alt="" loading="lazy" className="bg-neutral-100 h-24 w-full rounded-xl object-cover" onError={(e) => { e.currentTarget.style.display = "none"; }} />
-                    : <StoreImage name={it.name} className="h-24 w-full text-xl" rounded="rounded-xl" />}
+                    ? <img src={it.imageUrl} alt="" loading="lazy" className="h-28 w-full rounded-xl bg-neutral-100 object-cover" onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                    : <StoreImage name={it.name} className="h-28 w-full text-xl" rounded="rounded-xl" />}
                   <p className="mt-1.5 line-clamp-2 text-sm font-semibold leading-tight text-neutral-900">{it.name}</p>
-                  <p className="truncate text-[11px] text-neutral-500">{it.storeName}</p>
-                  <p className="text-sm font-semibold text-primary">{kz(it.price)}</p>
+                  <p className="truncate text-xs text-neutral-500">{it.storeName}</p>
+                  <p className="text-sm font-semibold text-neutral-900">{kz(it.price)}</p>
                 </Link>
               ))}
           </HScroll>
@@ -345,9 +366,6 @@ export default function Home() {
       )}
       {popular.error && <ErrorState error={popular.error} onRetry={() => popular.refetch()} />}
 
-      <Section title={t({ pt: "Perto de si", en: "Near you", fr: "Près de chez vous" })} href={`/pesquisa?sort=recommended${zq}`}>
-        <StoreRow url={storesUrl({ zone: z, sort: "recommended" })} emptyText={empty} />
-      </Section>
       <Section title={t({ pt: "Feito em casa 🏠", en: "Home-made 🏠", fr: "Fait maison 🏠" })} href={`/pesquisa?homeBusiness=1${zq}`}>
         <StoreRow url={storesUrl({ zone: z, homeBusiness: "1", sort: "rating" })}
           emptyText={t({ pt: "Ainda não há negócios caseiros na sua zona.", en: "No home businesses in your area yet.", fr: "Pas encore de commerces faits maison ici." })} />
@@ -356,65 +374,56 @@ export default function Home() {
         <NonRestaurantRow zone={z} types={nonRestaurantTypes} emptyText={empty} />
       </Section>
 
-      {/* Todas as lojas (Deliveroo): lista vertical com filtros rápidos */}
+      {/* Todas as lojas, com filtros rápidos */}
       <AllStores zone={z} />
       <div className="h-6" />
     </CustomerShell>
   );
 }
 
-/** Mosaicos de serviços, ao estilo Talabat: comida em destaque, depois mercado, farmácia, envios, táxi… */
-function ServiceGrid({ zq }: { zq: string }) {
+/** Lista vertical (até 5) com "Ver tudo". */
+function StoreList({ url, emptyText }: { url: string; emptyText: string }) {
+  const q = useQuery<{ stores: StoreCardData[] }>({ queryKey: [url] });
+  if (q.isLoading) return <div className="space-y-3 px-4">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-[72px] w-full rounded-xl" />)}</div>;
+  if (q.error) return <ErrorState error={q.error} onRetry={() => q.refetch()} />;
+  const stores = q.data?.stores ?? [];
+  if (!stores.length) return <p className="px-4 text-sm text-neutral-500">{emptyText}</p>;
+  return <div className="divide-y px-4">{stores.slice(0, 5).map((s) => <StoreListRow key={s.id} store={s} />)}</div>;
+}
+
+/** Serviços numa fila de mosaicos cinzentos (Deliveroo: Restaurantes · Mercearia · Lojas). */
+function ServiceRow({ zq }: { zq: string }) {
   const t = useT();
   const soon = t({ pt: "Em breve", en: "Soon", fr: "Bientôt" });
-  const tiles: { key: string; art: string; label: string; sub?: string; href?: string }[] = [
-    { key: "food", art: "restaurant", label: t({ pt: "Comida", en: "Food", fr: "Repas" }), sub: t({ pt: "Restaurantes e take-away", en: "Restaurants & takeaway", fr: "Restaurants et à emporter" }), href: `/pesquisa?type=restaurant${zq}` },
-    { key: "grocery", art: "grocery", label: t({ pt: "Mercado", en: "Grocery", fr: "Épicerie" }), sub: t({ pt: "Compras do dia-a-dia", en: "Everyday shopping", fr: "Courses du quotidien" }), href: `/pesquisa?type=grocery${zq}` },
-    { key: "bakery", art: "bakery", label: t({ pt: "Bolos", en: "Cakes", fr: "Gâteaux" }), href: `/pesquisa?type=bakery${zq}` },
+  const tiles: { key: string; art: string; label: string; href?: string }[] = [
+    { key: "food", art: "restaurant", label: t({ pt: "Restaurantes", en: "Restaurants", fr: "Restaurants" }), href: `/pesquisa?type=restaurant${zq}` },
+    { key: "grocery", art: "grocery", label: t({ pt: "Mercado", en: "Grocery", fr: "Épicerie" }), href: `/pesquisa?type=grocery${zq}` },
     { key: "pharmacy", art: "pharmacy", label: t({ pt: "Farmácia", en: "Pharmacy", fr: "Pharmacie" }), href: `/pesquisa?type=pharmacy${zq}` },
+    { key: "bakery", art: "bakery", label: t({ pt: "Bolos", en: "Cakes", fr: "Gâteaux" }), href: `/pesquisa?type=bakery${zq}` },
     { key: "flowers", art: "flowers", label: t({ pt: "Flores", en: "Flowers", fr: "Fleurs" }), href: `/pesquisa?type=flowers${zq}` },
     { key: "beauty", art: "beauty", label: t({ pt: "Beleza", en: "Beauty", fr: "Beauté" }), href: `/pesquisa?type=beauty${zq}` },
     { key: "retail", art: "retail", label: t({ pt: "Presentes", en: "Gifts", fr: "Cadeaux" }), href: `/pesquisa?type=retail${zq}` },
     { key: "parcel", art: "parcel", label: t({ pt: "Envios", en: "Send", fr: "Envois" }) },
     { key: "taxi", art: "taxi", label: t({ pt: "Táxi", en: "Taxi", fr: "Taxi" }) },
   ];
-  const Tile = ({ tile, big }: { tile: (typeof tiles)[number]; big?: boolean }) => {
-    const body = (
-      <>
-        {!tile.href && <span className="absolute right-1.5 top-1.5 rounded-full bg-neutral-900/80 px-1.5 py-0.5 text-[9px] font-bold uppercase text-white">{soon}</span>}
-        {big ? (
-          <>
-            <div className="min-w-0 self-start pt-1">
-              <p className="text-base font-extrabold text-neutral-900">{tile.label}</p>
-              {tile.sub && <p className="mt-0.5 text-[11px] leading-tight text-neutral-600">{tile.sub}</p>}
-            </div>
-            <CategoryArt kind={tile.art} className="absolute -bottom-1 -right-1 h-20 w-20 drop-shadow-sm" />
-          </>
-        ) : (
-          <>
-            <CategoryArt kind={tile.art} className="h-12 w-12 drop-shadow-sm" />
-            <span className="text-center text-[12px] font-semibold leading-tight text-neutral-900">{tile.label}</span>
-          </>
-        )}
-      </>
-    );
-    const cls = cn("relative flex overflow-hidden rounded-2xl transition-transform active:scale-95",
-      big ? "h-28 items-start p-3" : "h-[5.5rem] flex-col items-center justify-center gap-1 px-1",
-      !tile.href && "opacity-80");
-    const style = { backgroundColor: CATEGORY_TILE_BG[tile.art] ?? "#F1F5F9" };
-    return tile.href
-      ? <Link href={tile.href} className={cn(cls, "hover:-translate-y-0.5")} style={style}>{body}</Link>
-      : <div className={cls} style={style} aria-disabled title={soon}>{body}</div>;
-  };
   return (
-    <section aria-label={t({ pt: "Serviços", en: "Services", fr: "Services" })} className="mx-3 mt-3 rounded-3xl bg-white p-3 shadow-lg">
-      <div className="grid grid-cols-2 gap-2">
-        <Tile tile={tiles[0]} big /><Tile tile={tiles[1]} big />
-      </div>
-      <div className="mt-2 grid grid-cols-4 gap-2">
-        {tiles.slice(2).map((tile) => <Tile key={tile.key} tile={tile} />)}
-      </div>
-    </section>
+    <HScroll className="mt-4 flex gap-2 px-4 pb-1" arrowSize="sm" label={t({ pt: "Serviços", en: "Services", fr: "Services" })}>
+      {tiles.map((tile) => {
+        const body = (
+          <>
+            <span className="relative flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-xl bg-neutral-100">
+              <CategoryArt kind={tile.art} className="h-14 w-14" />
+              {!tile.href && <span className="absolute -top-1.5 right-0 rounded-full bg-neutral-900 px-1.5 py-0.5 text-[9px] font-bold uppercase text-white">{soon}</span>}
+            </span>
+            <span className="text-center text-[13px] font-medium leading-tight text-neutral-900">{tile.label}</span>
+          </>
+        );
+        const cls = "flex w-[4.75rem] shrink-0 flex-col items-center gap-1.5";
+        return tile.href
+          ? <Link key={tile.key} href={tile.href} className={cn(cls, "active:scale-95")}>{body}</Link>
+          : <div key={tile.key} className={cn(cls, "opacity-70")} aria-disabled title={soon}>{body}</div>;
+      })}
+    </HScroll>
   );
 }
 
@@ -455,13 +464,13 @@ function AllStores({ zone }: { zone?: string }) {
   const q = useQuery<{ stores: StoreCardData[] }>({ queryKey: [storesUrl(params)] });
   const toggle = (k: string) => setOn((cur) => (cur.includes(k) ? cur.filter((x) => x !== k) : [...cur, k]));
   return (
-    <section className="mx-3 mt-3 rounded-3xl bg-white pb-4 pt-4 shadow-lg">
-      <h2 className="px-4 text-lg font-bold text-neutral-900">{t({ pt: "Todas as lojas", en: "All stores", fr: "Tous les magasins" })}</h2>
+    <section className="mt-7 pb-4">
+      <h2 className="px-4 text-xl font-bold text-neutral-900">{t({ pt: "Todas as lojas", en: "All stores", fr: "Tous les magasins" })}</h2>
       <HScroll className="mt-3 flex gap-2 px-4 pb-1" arrowSize="sm" label="Filtros">
         {FILTERS.map((f) => (
           <button key={f.key} type="button" aria-pressed={on.includes(f.key)} onClick={() => toggle(f.key)}
             className={cn("shrink-0 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors",
-              on.includes(f.key) ? "border-primary bg-primary text-white" : "border-neutral-200 bg-white text-neutral-800 hover:bg-neutral-50")}>
+              on.includes(f.key) ? "border-primary bg-brand-100 text-primary" : "border-neutral-200 bg-white text-neutral-800 hover:bg-neutral-50")}>
             {f.label}
           </button>
         ))}

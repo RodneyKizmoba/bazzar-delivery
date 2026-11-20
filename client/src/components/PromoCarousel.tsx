@@ -44,7 +44,7 @@ export function FoodSticker({ kind, className }: { kind: Banner["sticker"]; clas
       )}
       {kind === "cake" && (
         <g transform="translate(22 20)">
-          <rect x="34" y="0" width="5" height="16" rx="2" fill="#7B1FFF" />
+          <rect x="34" y="0" width="5" height="16" rx="2" fill="#00CCBC" />
           <path d="M36.5 -6 C40 -1 40 2 36.5 4 C33 2 33 -1 36.5 -6 Z" fill="#FF7B00" />
           <rect x="6" y="18" width="64" height="26" rx="6" fill="#FFF3D6" stroke="#5D4037" strokeWidth="2" />
           <path d="M6 26 Q14 34 22 26 Q30 34 38 26 Q46 34 54 26 Q62 34 70 26 L70 22 L6 22 Z" fill="#920054" />

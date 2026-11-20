@@ -1,6 +1,7 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "../db";
 import { menuItems, stores } from "@shared/schema";
+import { REPLACED_PHOTOS } from "../seedPhotos";
 
 /**
  * Fotografias reais e gratuitas do Unsplash (licença Unsplash: uso comercial livre, sem atribuição obrigatória;
@@ -103,6 +104,13 @@ export function stockCover(storeName: string): string | null {
  * Nunca substitui uma foto que a loja tenha carregado.
  */
 export async function applyStockPhotos() {
+  // fotos locais retiradas por não mostrarem o produto: trocar pelos substitutos (também em bases de dados já criadas)
+  for (const [key, url] of Object.entries(REPLACED_PHOTOS)) {
+    const old = `/photos/catalog/${key}.jpg`;
+    await db.update(stores).set({ coverUrl: url }).where(eq(stores.coverUrl, old));
+    await db.update(stores).set({ logoUrl: url }).where(eq(stores.logoUrl, old));
+    await db.update(menuItems).set({ imageUrl: url }).where(eq(menuItems.imageUrl, old));
+  }
   const rows = await db.select({ id: stores.id, name: stores.name, coverUrl: stores.coverUrl }).from(stores)
     .where(inArray(stores.name, Object.keys(STORE_COVERS)));
   let covers = 0;

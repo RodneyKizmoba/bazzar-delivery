@@ -223,7 +223,7 @@ function CurrentDelivery({ order, myPos }: { order: CurrentOrder; myPos: { latit
         {order.notes && <p className="mt-2 flex gap-1 rounded bg-yellow-50 px-2 py-1 text-sm text-yellow-900"><StickyNote className="mt-0.5 h-4 w-4 shrink-0" />{order.notes}</p>}
         {(order.priority || !!order.riderTip) && (
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {order.priority && <span className="rounded-full bg-primary px-2.5 py-1 text-xs font-bold text-white">⚡ {t({ pt: "Prioritária — entregar primeiro", en: "Priority — deliver first", fr: "Prioritaire — livrer d'abord" })}</span>}
+            {order.priority && <span className="rounded-full bg-primary px-2.5 py-1 text-xs font-bold text-on-brand">⚡ {t({ pt: "Prioritária — entregar primeiro", en: "Priority — deliver first", fr: "Prioritaire — livrer d'abord" })}</span>}
             {!!order.riderTip && <span className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-bold text-green-800">💚 {t({ pt: `Gorjeta para si: ${kz(order.riderTip)}`, en: `Your tip: ${kz(order.riderTip)}`, fr: `Votre pourboire : ${kz(order.riderTip)}` })}</span>}
           </div>
         )}
@@ -372,7 +372,7 @@ function AvailableList({ onClaimError, myPos }: { onClaimError: (e: Error) => vo
                 <StatusBadge status={o.status} />
                 <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />{time(o.createdAt, lang)}</span>
                 {dist !== null && <span className="inline-flex items-center gap-1"><Navigation className="h-3 w-3" />{t({ pt: `loja a ${fmtKm(dist)}`, en: `store ${fmtKm(dist)} away`, fr: `magasin à ${fmtKm(dist)}` })}</span>}
-                {o.priority && <span className="rounded-full bg-primary px-2 py-0.5 font-bold text-white">⚡ {t({ pt: "Prioritária", en: "Priority", fr: "Prioritaire" })}</span>}
+                {o.priority && <span className="rounded-full bg-primary px-2 py-0.5 font-bold text-on-brand">⚡ {t({ pt: "Prioritária", en: "Priority", fr: "Prioritaire" })}</span>}
                 {!!o.riderTip && <span className="rounded-full bg-green-100 px-2 py-0.5 font-bold text-green-800">+{kz(o.riderTip)} {t({ pt: "gorjeta", en: "tip", fr: "pourboire" })}</span>}
                 {o.collectCash > 0 && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-brand-100 px-2 py-0.5 font-semibold text-brand-800">

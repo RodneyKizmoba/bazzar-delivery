@@ -200,7 +200,7 @@ export default function Cart() {
 
         {/* Upsell Plus */}
         {showPlusUpsell && (
-          <Link href="/plus" className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-ink to-brand2 p-4 text-white shadow-sm">
+          <Link href="/plus" className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-ink to-brand-800 p-4 text-white shadow-sm">
             <Crown className="h-6 w-6 shrink-0" />
             <div className="flex-1">
               <p className="text-sm font-bold">{t({ pt: "Entrega grátis com PedeJá Plus", en: "Free delivery with PedeJá Plus", fr: "Livraison gratuite avec PedeJá Plus" })}</p>

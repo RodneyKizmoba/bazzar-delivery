@@ -5,7 +5,6 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Heart, Star, Clock, Bike, ShoppingBag, Users, Search as SearchIcon, Info, Phone, MapPin, ArrowLeft, Share2, Plus } from "lucide-react";
 import { CustomerShell, TopBar } from "@/components/AppShell";
 import { DietaryBadges, EmptyState, ErrorState, StoreImage } from "@/components/common";
-import { StoreThemeArt, themeFor } from "@/components/StoreThemeArt";
 import { CategoryArt } from "@/components/CategoryArt";
 import { ItemDialog, type ItemSelection, type MenuItemFull } from "@/components/ItemDialog";
 import { Button } from "@/components/ui/button";
@@ -201,7 +200,6 @@ export default function StorePage() {
     );
   }
 
-  const theme = themeFor(store);
   const favLabel = data.isFavorite ? t({ pt: "Remover dos favoritos", en: "Remove from favourites", fr: "Retirer des favoris" }) : t({ pt: "Adicionar aos favoritos", en: "Add to favourites", fr: "Ajouter aux favoris" });
 
   return (
@@ -216,17 +214,16 @@ export default function StorePage() {
         </button>
       </div>
 
-      {/* Capa e cabeçalho, na cor escolhida pela loja */}
-      <div style={{ background: `linear-gradient(180deg, ${theme.c3} 0%, ${theme.c3} 55%, #fff 100%)` }}>
+      {/* Capa (foto real) e cabeçalho, em fundo branco como no Deliveroo */}
+      <div>
       <div className="relative">
         {store.coverUrl
           ? <StoreImage name={store.name} url={store.coverUrl} rounded="rounded-none" className="h-52 w-full text-4xl" />
           : (
-            <StoreThemeArt theme={theme} seed={store.id} className="h-52 w-full">
-              <CategoryArt kind={store.storeType} className="absolute bottom-1 right-4 h-32 w-32 drop-shadow-md" />
-            </StoreThemeArt>
+            <div className="flex h-52 w-full items-center justify-center bg-neutral-100">
+              <CategoryArt kind={store.storeType} className="h-32 w-32" />
+            </div>
           )}
-        {store.coverUrl && <div aria-hidden className="absolute inset-x-0 bottom-0 h-10" style={{ background: `linear-gradient(0deg, ${theme.c3}, transparent)` }} />}
         {/* Botões redondos sobre a imagem (Deliveroo) */}
         <div className="absolute inset-x-3 top-3 flex items-center justify-between">
           <button type="button" onClick={goBack} aria-label={t({ pt: "Voltar", en: "Back", fr: "Retour" })}
@@ -378,7 +375,7 @@ export default function StorePage() {
                           className={cn("relative w-40 shrink-0 snap-start rounded-2xl border bg-white p-2 text-left shadow-sm transition-shadow hover:shadow-md", !it.isAvailable && "opacity-55")}>
                           {it.imageUrl
                             ? <img src={it.imageUrl} alt="" loading="lazy" className="bg-neutral-100 h-28 w-full rounded-xl object-cover" onError={(e) => { e.currentTarget.style.display = "none"; }} />
-                            : <StoreThemeArt theme={theme} seed={it.id} className="h-28 w-full rounded-xl"><CategoryArt kind={store.storeType} className="absolute bottom-0 right-1 h-20 w-20" /></StoreThemeArt>}
+                            : <div className="flex h-28 w-full items-center justify-center rounded-xl bg-neutral-100"><CategoryArt kind={store.storeType} className="h-20 w-20" /></div>}
                           <span aria-hidden className="absolute right-3.5 top-[6.4rem] flex h-8 w-8 items-center justify-center rounded-full border bg-white text-primary shadow-md"><Plus className="h-5 w-5" strokeWidth={2.6} /></span>
                           <p className="mt-2 line-clamp-2 text-sm font-semibold leading-tight text-neutral-900">{it.name}</p>
                           <p className="mt-0.5 text-sm font-semibold text-neutral-900">{kz(it.price)}</p>

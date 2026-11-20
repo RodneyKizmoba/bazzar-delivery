@@ -16,9 +16,6 @@ import { useLang, useT, T } from "@/lib/i18n";
 import { kz, dateTime, STORE_TYPE } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { AdminPage } from "./AdminDashboard";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { StoreThemeArt, themeFor } from "@/components/StoreThemeArt";
-import { STORE_THEMES, STORE_THEME_IDS } from "@shared/themes";
 
 interface AdminStore {
   id: number; name: string; storeType: string; zone: string; street: string; phone: string; isApproved: boolean; isChain: boolean; isHomeBusiness?: boolean; theme?: string | null;
@@ -104,17 +101,6 @@ function StoreRow({ store }: { store: AdminStore }) {
         <div className="flex items-center gap-2">
           <Switch id={`open-${store.id}`} checked={store.isOpen} disabled={m.isPending} onCheckedChange={(v) => m.mutate({ isOpen: v })} />
           <Label htmlFor={`open-${store.id}`}>{store.isOpen ? t(T.open) : t(T.closed)}</Label>
-        </div>
-        <div className="flex items-center gap-2 sm:col-span-2">
-          <StoreThemeArt theme={themeFor(store)} seed={store.id} className="h-8 w-14 shrink-0 rounded-lg" />
-          <Label htmlFor={`theme-${store.id}`} className="shrink-0">{t({ pt: "Cor da loja", en: "Store colour", fr: "Couleur" })}</Label>
-          <Select value={store.theme ?? "auto"} disabled={m.isPending} onValueChange={(v) => m.mutate({ theme: v === "auto" ? null : v })}>
-            <SelectTrigger id={`theme-${store.id}`} className="h-9 w-44"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="auto">✨ {t({ pt: "Automática", en: "Automatic", fr: "Auto" })}</SelectItem>
-              {STORE_THEME_IDS.map((id) => <SelectItem key={id} value={id}>{t(STORE_THEMES[id].label)}</SelectItem>)}
-            </SelectContent>
-          </Select>
         </div>
         <form className="flex items-end gap-2 sm:col-span-2" onSubmit={(e) => { e.preventDefault(); if (feeValid) m.mutate({ deliveryFee: feeNum }); }}>
           <div className="space-y-1">

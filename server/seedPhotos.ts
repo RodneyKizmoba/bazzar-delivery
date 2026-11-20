@@ -1,4 +1,5 @@
 type PhotoKey =
+  | "drink"
   | "banana" | "beans" | "beefStew" | "bitoque" | "bread" | "bulb" | "burger"
   | "cachupa" | "cake" | "calulu" | "cappuccino" | "carbonara" | "cassavaCake"
   | "chicken" | "cleaning" | "cocktail" | "coffee" | "coconut" | "edamame" | "eggs"
@@ -61,7 +62,7 @@ const ITEM_PHOTOS: Array<[RegExp, PhotoKey]> = [
   [/pudim|pudding/, "pudding"],
   [/gelado|sorvete|ice cream/, "icecream"],
   [/sumo de maracuj[aá]|passion fruit/, "passionJuice"],
-  [/agua|[aá]gua|refrigerante|soda|bebida|mineral/, "juice"],
+  [/agua|[aá]gua|refrigerante|soda|bebida|mineral/, "drink"],
   [/sumo|juice|anan[aá]s/, "juice"],
   [/cocktail|coquetel|mocktail/, "cocktail"],
   [/cappuccino|gal[aã]o/, "cappuccino"],
@@ -96,8 +97,23 @@ const ITEM_PHOTOS: Array<[RegExp, PhotoKey]> = [
   [/bitoque|prego|bifana|sandwich/, "sandwich"],
 ];
 
+/**
+ * Fotos locais substituídas por fotos do Unsplash (licença Unsplash) porque não mostravam o produto:
+ * "firstaid" era um concerto (banda "First Aid Kit"), "octopus" a capa de um livro, "skewers" uma barraca de feira,
+ * "juice" um pacote espetado com uma faca e "fish" embrulhos de alumínio. "drink" é novo (água/refrigerantes).
+ */
+const unsplash = (id: string) => `https://images.unsplash.com/${id}?auto=format&fit=crop&w=600&q=70`;
+export const REPLACED_PHOTOS: Partial<Record<PhotoKey, string>> = {
+  firstaid: unsplash("photo-1611072965169-e1534f6f300c"),
+  octopus: unsplash("photo-1768322264423-4b0adf0cf31b"),
+  skewers: unsplash("photo-1626323109252-0adb3b46692b"),
+  juice: unsplash("photo-1546173159-315724a31696"),
+  fish: unsplash("photo-1519708227418-c8fd9a32b7a2"),
+  drink: unsplash("photo-1533007716222-4b465613a984"),
+};
+
 function photoUrl(key: PhotoKey): string {
-  return `/photos/catalog/${key}.jpg`;
+  return REPLACED_PHOTOS[key] ?? `/photos/catalog/${key}.jpg`;
 }
 
 /** Free, credited catalogue imagery for demo-store photography. */
