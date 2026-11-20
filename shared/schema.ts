@@ -191,6 +191,10 @@ export const orders = pgTable("orders", {
   driverLatitude: real("driver_latitude"),
   driverLongitude: real("driver_longitude"),
   driverLocationAt: timestamp("driver_location_at"),
+  // momentos da entrega (mostrados ao cliente e à loja, como no Deliveroo)
+  driverAssignedAt: timestamp("driver_assigned_at"),
+  driverAtStoreAt: timestamp("driver_at_store_at"),
+  driverAtCustomerAt: timestamp("driver_at_customer_at"),
   externalDispatchId: text("external_dispatch_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

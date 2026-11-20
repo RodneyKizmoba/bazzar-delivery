@@ -3,6 +3,7 @@
  * Run against a FRESH seeded DB:  npx tsx tests/api.test.ts
  * BASE env var overrides the server URL (default http://localhost:5055).
  */
+import WebSocket from "ws";
 const BASE = process.env.BASE || "http://localhost:5055";
 const ORIGIN = BASE;
 
@@ -61,6 +62,27 @@ const AGUA = { menuItemId: 10, quantity: 1, optionIds: [] }; // 500
 const BOLO = { menuItemId: 51, quantity: 1, optionIds: [] as number[] };
 
 let uniq = Date.now().toString(36).slice(-5);
+
+// ---- WebSocket helpers -----------------------------------------------------
+type LiveEv = { type: string; id?: number; status?: string; step?: string };
+function openLive(c: { cookie: string } | null, origin = ORIGIN): Promise<{ ws: WebSocket; events: LiveEv[]; error?: number }> {
+  return new Promise((resolve) => {
+    const headers: Record<string, string> = { origin };
+    if (c?.cookie) headers.cookie = c.cookie;
+    const ws = new WebSocket(BASE.replace(/^http/, "ws") + "/ws", { headers });
+    const events: LiveEv[] = [];
+    ws.on("message", (d) => { try { events.push(JSON.parse(String(d))); } catch { /* */ } });
+    ws.on("unexpected-response", (_req, res) => resolve({ ws, events, error: res.statusCode }));
+    ws.on("error", () => { /* tratado em unexpected-response */ });
+    ws.on("open", () => setTimeout(() => resolve({ ws, events }), 150));
+  });
+}
+async function waitFor(events: LiveEv[], pred: (e: LiveEv) => boolean, ms = 3000) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) { if (events.some(pred)) return true; await sleep(50); }
+  return false;
+}
+
 async function newCustomer(prefix: string, extra: Record<string, unknown> = {}, zone = "Talatona") {
   const c = new Client(prefix);
   const r = await c.post("/api/auth/register", {
@@ -262,6 +284,52 @@ async function main() {
     const later = new Date(Date.now() + 26 * 3600_000).toISOString();
     r = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash", priority: true, scheduledFor: later });
     check("priority + scheduled rejected (PRIORITY_NOT_FOR_SCHEDULED)", r.status === 400 && r.body.code === "PRIORITY_NOT_FOR_SCHEDULED", r.body);
+  });
+
+  // =========================================================================
+  await section("Live updates (WebSocket) and rider arrival steps", async () => {
+    let r0 = await openLive(null);
+    check("WebSocket without a session is refused (401)", r0.error === 401, r0.error);
+    r0 = await openLive(cli, "https://evil.example");
+    check("WebSocket from another website is refused (403)", r0.error === 403, r0.error);
+    const cLive = await openLive(cli), c2Live = await openLive(cli2), sLive = await openLive(loja), dLive = await openLive(est), aLive = await openLive(admin);
+    check("customer, store, rider and admin connect", [cLive, c2Live, sLive, dLive, aLive].every((x) => !x.error && x.events.some((e) => e.type === "hello")));
+
+    const o = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash" });
+    const id = o.body.order.id;
+    check("customer gets the new order live", await waitFor(cLive.events, (e) => e.type === "order" && e.id === id && e.step === "created"));
+    check("store gets the new order live", await waitFor(sLive.events, (e) => e.type === "order" && e.id === id));
+    check("admin gets the new order live", await waitFor(aLive.events, (e) => e.type === "order" && e.id === id));
+    await sleep(300);
+    check("another customer gets nothing about it", !c2Live.events.some((e) => e.id === id), c2Live.events);
+    check("events carry no personal data (id/status/step only)", cLive.events.filter((e) => e.id === id).every((e) => Object.keys(e).every((k) => ["type", "id", "status", "at", "step"].includes(k))));
+
+    await loja.post(`/api/partner/orders/${id}/status`, { status: "accepted" });
+    check("riders see the order become available live", await waitFor(dLive.events, (e) => e.type === "order" && e.id === id && e.status === "accepted"));
+    let r = await est.post(`/api/driver/orders/${id}/claim`);
+    check("rider claims it", r.status === 200 && !!r.body.order.driverAssignedAt, r.body);
+    check("customer is told a rider was assigned", await waitFor(cLive.events, (e) => e.id === id && e.step === "assigned"));
+    r = await est.post(`/api/driver/orders/${id}/arrived`, { at: "customer" });
+    check("'at customer' before pick-up is refused (409)", r.status === 409 && r.body.code === "BAD_STEP", r.body);
+    r = await est.post(`/api/driver/orders/${id}/arrived`, { at: "store" });
+    check("rider marks 'at the store'", r.status === 200 && !!r.body.order.driverAtStoreAt, r.body);
+    check("store is told the rider is there", await waitFor(sLive.events, (e) => e.id === id && e.step === "at_store"));
+    r = await est2.post(`/api/driver/orders/${id}/arrived`, { at: "store" });
+    check("another rider cannot mark arrival (403/404)", r.status === 403 || r.status === 404, r.status);
+    await loja.post(`/api/partner/orders/${id}/status`, { status: "preparing" });
+    await loja.post(`/api/partner/orders/${id}/status`, { status: "ready" });
+    await est.post(`/api/driver/orders/${id}/status`, { status: "picked_up" });
+    check("customer sees 'picked up' live", await waitFor(cLive.events, (e) => e.id === id && e.status === "picked_up"));
+    await est.post("/api/driver/location", { latitude: -8.91, longitude: 13.18 });
+    check("customer gets the rider's position live", await waitFor(cLive.events, (e) => e.type === "location" && e.id === id));
+    check("other customer doesn't get the position", !c2Live.events.some((e) => e.type === "location" && e.id === id));
+    r = await est.post(`/api/driver/orders/${id}/arrived`, { at: "customer" });
+    check("rider marks 'at the customer'", r.status === 200 && !!r.body.order.driverAtCustomerAt, r.body);
+    const tr = await cli.get(`/api/orders/${id}/tracking`);
+    check("tracking shows the three rider moments", !!tr.body.driverAssignedAt && !!tr.body.driverAtStoreAt && !!tr.body.driverAtCustomerAt, tr.body);
+    await est.post(`/api/driver/orders/${id}/status`, { status: "delivered" });
+    check("customer sees 'delivered' live", await waitFor(cLive.events, (e) => e.id === id && e.status === "delivered"));
+    for (const x of [cLive, c2Live, sLive, dLive, aLive]) x.ws.close();
   });
 
   // =========================================================================

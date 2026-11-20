@@ -102,7 +102,7 @@
 @layer utilities {
   .text-primary { color: rgb(var(--brand-ink)); }
   /* Barra de marca: degradê vivo usado nos cabeçalhos da app e dos painéis */
-  .brand-bar { background-color: #fff; color: #1a1a1a; border-bottom: 1px solid #ececec; }
+  .brand-bar { background-color: rgb(var(--brand-500)); color: #1a1a1a; }
   /* Céu PedeJá: verde-água → azul (fundo da app) */
   .sky-bg { background-image: linear-gradient(135deg, rgb(var(--sky-1)) 0%, rgb(var(--sky-2)) 45%, rgb(var(--sky-3)) 100%); }
   .brand-grad { background-color: rgb(var(--brand-500)); color: #1a1a1a; }

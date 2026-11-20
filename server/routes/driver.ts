@@ -5,7 +5,8 @@ import { db } from "../db";
 import { orderItems, orders, stores, users } from "@shared/schema";
 import { ah, idParam, notFound, parse } from "../lib/http";
 import { requireRole } from "../lib/auth";
-import { changeStatus, claimDelivery } from "../lib/orderFlow";
+import { changeStatus, claimDelivery, markArrived } from "../lib/orderFlow";
+import { publishLocation } from "../lib/realtime";
 
 export const driverRouter = Router();
 driverRouter.use(requireRole("driver"));
@@ -23,6 +24,8 @@ function summary(o: typeof orders.$inferSelect, s: typeof stores.$inferSelect) {
     collectCash: o.paymentMethod === "cash" && o.paymentStatus !== "paid" ? o.total : 0,
     deliveryAddress: o.deliveryAddress,
     notes: o.notes,
+    driverAtStoreAt: o.driverAtStoreAt,
+    driverAtCustomerAt: o.driverAtCustomerAt,
     priority: o.priorityFee > 0,
     riderTip: o.riderTip,
     cutlery: o.cutlery,
@@ -60,13 +63,21 @@ driverRouter.post("/orders/:id/status", ah(async (req, res) => {
   res.json({ order });
 }));
 
+/** "Cheguei": à loja (antes de recolher) ou ao cliente (depois de recolher). */
+driverRouter.post("/orders/:id/arrived", ah(async (req, res) => {
+  const { at } = parse(z.object({ at: z.enum(["store", "customer"]) }), req.body);
+  const order = await markArrived(idParam(req), req.user!.id, at);
+  res.json({ order });
+}));
+
 driverRouter.post("/location", ah(async (req, res) => {
   const { latitude, longitude } = parse(z.object({
     latitude: z.number().min(-90).max(90), longitude: z.number().min(-180).max(180),
   }), req.body);
   const updated = await db.update(orders)
     .set({ driverLatitude: latitude, driverLongitude: longitude, driverLocationAt: new Date() })
-    .where(and(eq(orders.driverId, req.user!.id), inArray(orders.status, [...ACTIVE]))).returning({ id: orders.id });
+    .where(and(eq(orders.driverId, req.user!.id), inArray(orders.status, [...ACTIVE]))).returning({ id: orders.id, customerId: orders.customerId });
+  for (const o of updated) publishLocation(o);
   res.json({ updatedOrders: updated.map((u) => u.id) });
 }));
 

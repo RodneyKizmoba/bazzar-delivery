@@ -15,6 +15,7 @@ import { patch, post, queryClient } from "@/lib/api";
 import { useLang, useT, T } from "@/lib/i18n";
 import { kz, dateTime, time, PAYMENT } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { poll } from "@/lib/live";
 
 /** Separadores da área do parceiro (reutilizados nas outras páginas do parceiro). */
 export function usePartnerTabs() {
@@ -40,7 +41,8 @@ interface PartnerOrderItem {
 }
 export interface PartnerOrder {
   id: number; orderNumber: string; status: string; createdAt: string; scheduledFor: string | null; storeConfirmedAt?: string | null;
-  customerName: string; notes: string | null; priorityFee?: number; cutlery?: boolean; subtotal: number; total: number; deliveryFee: number;
+  customerName: string; notes: string | null; priorityFee?: number; cutlery?: boolean;
+  driverAtStoreAt?: string | null; subtotal: number; total: number; deliveryFee: number;
   paymentMethod: string; paymentStatus: string; driverId: number | null; groupOrderId: number | null;
   cancelReason: string | null; items: PartnerOrderItem[];
 }
@@ -130,7 +132,7 @@ function ActiveBoard() {
   const { toast } = useToast();
   const beep = useBeep();
   const { data, isLoading, error, refetch } = useQuery<{ orders: PartnerOrder[] }>({
-    queryKey: [ORDERS_ACTIVE], refetchInterval: 5000,
+    queryKey: [ORDERS_ACTIVE], refetchInterval: poll(5000),
   });
   const seen = useRef<Set<number> | null>(null);
   const [, forceTick] = useState(0);
@@ -295,6 +297,11 @@ function OrderCard({ order }: { order: PartnerOrder }) {
         <p className="mt-2 flex gap-1 rounded bg-yellow-50 px-2 py-1 text-xs text-yellow-900"><StickyNote className="mt-0.5 h-3 w-3 shrink-0" />{order.notes}</p>
       )}
       <div className="mt-2 flex flex-wrap gap-1.5 text-xs font-semibold">
+        {order.driverId && ["accepted", "preparing", "ready"].includes(order.status) && (
+          <span className={cn("rounded-full px-2.5 py-1", order.driverAtStoreAt ? "bg-green-600 text-white" : "bg-brand-100 text-primary")}>
+            🛵 {order.driverAtStoreAt ? t({ pt: "Estafeta na loja", en: "Rider at the store", fr: "Livreur au magasin" }) : t({ pt: "Estafeta a caminho", en: "Rider on the way", fr: "Livreur en route" })}
+          </span>
+        )}
         {!!order.priorityFee && <span className="rounded-full bg-primary px-2.5 py-1 text-on-brand">⚡ {t({ pt: "Prioritária — preparar primeiro", en: "Priority — prepare first", fr: "Prioritaire — préparer d'abord" })}</span>}
         <span className={cn("rounded-full px-2.5 py-1", order.cutlery ? "bg-amber-100 text-amber-900" : "bg-neutral-100 text-neutral-600")}>
           🍴 {order.cutlery ? t({ pt: "Enviar talheres", en: "Include cutlery", fr: "Mettre des couverts" }) : t({ pt: "Sem talheres", en: "No cutlery", fr: "Sans couverts" })}

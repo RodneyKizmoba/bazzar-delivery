@@ -16,6 +16,7 @@ import { get } from "@/lib/api";
 import { useLang, useT } from "@/lib/i18n";
 import { kz, dateTime } from "@/lib/format";
 import { FINAL_STATUSES, type SelectedOption, type StoreDetail } from "./_orderingKit";
+import { poll } from "@/lib/live";
 
 export interface OrderListItem {
   id: number; orderNumber: string; storeId: number; storeName: string; storeLogo: string | null;
@@ -110,7 +111,7 @@ function OrdersInner() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const cart = useCart();
-  const q = useQuery<{ orders: OrderListItem[] }>({ queryKey: ["/api/orders"], refetchInterval: 15_000 });
+  const q = useQuery<{ orders: OrderListItem[] }>({ queryKey: ["/api/orders"], refetchInterval: poll(15_000) });
   const [repeatingId, setRepeatingId] = useState<number | null>(null);
   const [confirmReplace, setConfirmReplace] = useState<OrderListItem | null>(null);
 

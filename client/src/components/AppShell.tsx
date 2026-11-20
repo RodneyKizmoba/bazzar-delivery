@@ -10,11 +10,11 @@ import { useLang, useT, type Lang } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 /** Logótipo PedeJá: símbolo + nome (compacto, para cabeçalhos). */
-export function BrandLogo({ size = "md", light }: { size?: "sm" | "md"; light?: boolean }) {
+export function BrandLogo({ size = "md", light, onTeal }: { size?: "sm" | "md"; light?: boolean; onTeal?: boolean }) {
   return (
     <span className="flex items-center gap-2">
-      <img src={light ? markWhite : mark} alt="" className={size === "sm" ? "h-7 w-7" : "h-9 w-9"} />
-      <span className={cn("font-extrabold leading-none tracking-tight", light ? "text-white" : "text-neutral-800", size === "sm" ? "text-lg" : "text-[22px]")}>PedeJá</span>
+      <img src={light || onTeal ? markWhite : mark} alt="" className={size === "sm" ? "h-7 w-7" : "h-9 w-9"} />
+      <span className={cn("font-extrabold leading-none tracking-tight", light ? "text-white" : onTeal ? "text-neutral-900" : "text-neutral-800", size === "sm" ? "text-lg" : "text-[22px]")}>PedeJá</span>
     </span>
   );
 }
@@ -26,7 +26,7 @@ export function LanguageSwitch({ className, onColor }: { className?: string; onC
       aria-label="Idioma / Language"
       value={lang}
       onChange={(e) => setLang(e.target.value as Lang)}
-      className={cn("rounded-md border px-1.5 py-1 text-xs", onColor ? "border-white/40 bg-white/15 text-white [&>option]:text-neutral-900" : "bg-white", className)}
+      className={cn("rounded-md border px-1.5 py-1 text-xs", onColor ? "border-white bg-white text-neutral-900" : "bg-white", className)}
     >
       <option value="pt">PT</option>
       <option value="en">EN</option>
@@ -80,17 +80,17 @@ export function CustomerShell({ children, hideHeader, hideNav, bare }: { childre
       {!hideHeader && (
         <header className="brand-bar sticky top-0 z-30 flex items-center justify-between px-4 py-2.5">
           <Link href="/" className="flex items-center gap-2" aria-label="PedeJá">
-            <BrandLogo />
+            <BrandLogo onTeal />
           </Link>
           <div className="flex items-center gap-2">
             {user && user.userType !== "customer" && (
               <Link href={user.userType === "supplier" ? "/parceiro" : user.userType === "driver" ? "/estafeta" : "/admin"}
-                className="rounded-full bg-brand-100 px-3 py-1 text-xs font-semibold text-primary">
+                className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-neutral-900">
                 {user.userType === "supplier" ? t({ pt: "Portal da loja", en: "Store portal", fr: "Portail" })
                   : user.userType === "driver" ? t({ pt: "App estafeta", en: "Rider app", fr: "Livreur" }) : "Admin"}
               </Link>
             )}
-            <LanguageSwitch />
+            <LanguageSwitch onColor />
           </div>
         </header>
       )}
@@ -103,8 +103,10 @@ export function CustomerShell({ children, hideHeader, hideNav, bare }: { childre
             {nav.map(({ href, icon: Icon, label, badge }) => {
               const active = href === "/" ? location === "/" : location.startsWith(href);
               return (
-                <Link key={href} href={href} className={cn("flex flex-col items-center gap-0.5 px-2 text-[11px]", active ? "text-primary font-semibold" : "text-neutral-500")}>
-                  <span className="relative">
+                <Link key={href} href={href} aria-current={active ? "page" : undefined}
+                  className={cn("relative flex h-full flex-col items-center justify-center gap-0.5 px-2 text-[11px]", active ? "text-primary font-semibold" : "text-neutral-500")}>
+                  {active && <span aria-hidden className="absolute inset-x-2 top-0 h-[3px] rounded-b-full bg-brand-500" />}
+                  <span className={cn("relative flex h-7 w-12 items-center justify-center rounded-full", active && "bg-brand-100")}>
                     <Icon className="h-5 w-5" />
                     {!!badge && (
                       <span className="absolute -right-2.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] text-on-brand">{badge}</span>
@@ -133,13 +135,13 @@ export function PanelShell({ title, tabs, children }: { title: string; tabs: { h
         <div className="brand-bar">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2.5">
           <div className="flex items-center gap-3 min-w-0">
-            <Link href="/" aria-label="PedeJá"><BrandLogo size="sm" /></Link>
-            <span className="truncate font-semibold text-neutral-700">{title}</span>
+            <Link href="/" aria-label="PedeJá"><BrandLogo size="sm" onTeal /></Link>
+            <span className="truncate font-semibold text-neutral-900">{title}</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="hidden text-sm text-neutral-600 sm:inline">{user?.fullName}</span>
-            <LanguageSwitch />
-            <button className="rounded-md border px-2 py-1 text-xs text-neutral-800 hover:bg-neutral-50" onClick={async () => { await logout(); navigate("/entrar"); }}>
+            <span className="hidden text-sm text-neutral-900 sm:inline">{user?.fullName}</span>
+            <LanguageSwitch onColor />
+            <button className="rounded-md bg-white px-2 py-1 text-xs font-medium text-neutral-900 hover:bg-neutral-50" onClick={async () => { await logout(); navigate("/entrar"); }}>
               {t({ pt: "Sair", en: "Log out", fr: "Déconnexion" })}
             </button>
           </div>

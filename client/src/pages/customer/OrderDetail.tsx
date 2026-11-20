@@ -21,6 +21,7 @@ import { patch, post, queryClient } from "@/lib/api";
 import { useLang, useT, T, type Tr } from "@/lib/i18n";
 import { kz, dateTime, time, ORDER_STATUS, PAYMENT } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { poll } from "@/lib/live";
 import {
   AddressPicker, FINAL_STATUSES, PriceRow, Section, WhenPicker, OrderErrorAlert, PAYMENT_ICON, type SelectedOption,
 } from "./_orderingKit";
@@ -46,11 +47,21 @@ interface Detail {
   store: { id: number; name: string; phone: string; street: string; zone: string; latitude: number | null; longitude: number | null; logoUrl: string | null };
 }
 interface Tracking {
+  driverAssignedAt?: string | null; driverAtStoreAt?: string | null; driverAtCustomerAt?: string | null;
   status: string; updatedAt: string; estimatedDeliveryAt: string | null; scheduledFor: string | null;
   driverLocation: (Pt & { at: string }) | null; storeLocation: Pt | null; destination: Pt | null;
 }
 
 const STEPS = ["pending", "accepted", "preparing", "ready", "picked_up", "delivered"] as const;
+
+/** Momentos do estafeta (como no Deliveroo): têm prioridade sobre o texto do estado. */
+function liveHeadline(status: string, tr?: Tracking): Tr | null {
+  if (!tr) return null;
+  if (status === "picked_up" && tr.driverAtCustomerAt) return { pt: "O estafeta está à sua porta! 🛵", en: "Your rider is outside! 🛵", fr: "Votre livreur est devant chez vous ! 🛵" };
+  if (["accepted", "preparing", "ready"].includes(status) && tr.driverAtStoreAt) return { pt: "O estafeta já está no restaurante", en: "Your rider is at the restaurant", fr: "Votre livreur est au restaurant" };
+  if (["accepted", "preparing", "ready"].includes(status) && tr.driverAssignedAt) return { pt: "O estafeta vai a caminho do restaurante", en: "Your rider is heading to the restaurant", fr: "Votre livreur se rend au restaurant" };
+  return null;
+}
 
 const HEADLINE: Record<string, Tr> = {
   scheduled: { pt: "Encomenda agendada", en: "Order scheduled", fr: "Commande programmée" },
@@ -280,7 +291,7 @@ function OrderDetailInner({ id }: { id: string }) {
   const trackQ = useQuery<Tracking>({
     queryKey: [`/api/orders/${id}/tracking`],
     enabled: !!detailQ.data && !isFinal,
-    refetchInterval: 5_000,
+    refetchInterval: poll(5_000),
     staleTime: 0,
   });
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -360,7 +371,7 @@ function OrderDetailInner({ id }: { id: string }) {
               );
             })}
           </div>
-          <h2 className="mt-3 text-lg font-bold leading-tight">{t(HEADLINE[order.status] ?? ORDER_STATUS[order.status] ?? { pt: order.status, en: order.status, fr: order.status })}</h2>
+          <h2 className="mt-3 text-lg font-bold leading-tight">{t(liveHeadline(order.status, tr) ?? HEADLINE[order.status] ?? ORDER_STATUS[order.status] ?? { pt: order.status, en: order.status, fr: order.status })}</h2>
           {!!order.priorityFee && <p className="mt-1 text-xs font-semibold text-primary">⚡ {t({ pt: "Entrega prioritária", en: "Priority delivery", fr: "Livraison prioritaire" })}</p>}
         </div>
       ) : (

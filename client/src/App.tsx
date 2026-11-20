@@ -7,6 +7,7 @@ import { queryClient } from "@/lib/api";
 import { LanguageProvider } from "@/lib/i18n";
 import { AuthProvider } from "@/hooks/useAuth";
 import { CartProvider } from "@/context/CartContext";
+import { LiveProvider } from "@/lib/live";
 import { Loading } from "@/components/common";
 
 // Cliente
@@ -96,12 +97,14 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <LanguageProvider>
         <AuthProvider>
+          <LiveProvider>
           <CartProvider>
             <TooltipProvider>
               <Routes />
               <Toaster />
             </TooltipProvider>
           </CartProvider>
+          </LiveProvider>
         </AuthProvider>
       </LanguageProvider>
     </QueryClientProvider>

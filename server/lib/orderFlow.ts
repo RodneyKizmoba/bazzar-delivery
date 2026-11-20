@@ -12,6 +12,7 @@ import { assertMethodAvailable, refundOrderPayment, startOrderPayment } from "./
 import { notifyOrderStatus } from "./notify";
 import { notifyExternalDispatch } from "./dispatch";
 import { sendPosWebhook } from "./pos";
+import { publishOrder } from "./realtime";
 
 export type Actor = { kind: "customer" | "store" | "driver" | "admin" | "system"; userId?: number };
 
@@ -141,6 +142,7 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
   });
 
   void sendPosWebhook(created.storeId, "order.created", created.id);
+  publishOrder(created, "created");
   return created;
 }
 
@@ -208,6 +210,7 @@ export async function changeStatus(orderId: number, to: OrderStatus, actor: Acto
   const [cust] = await db.select({ phone: users.phone }).from(users).where(eq(users.id, result.customerId));
   if (cust) notifyOrderStatus(cust.phone, result.orderNumber, to);
   void sendPosWebhook(result.storeId, "order.status_changed", result.id);
+  publishOrder(result);
   if (to === "ready") {
     const [store] = await db.select().from(stores).where(eq(stores.id, result.storeId));
     if (store) {
@@ -220,19 +223,40 @@ export async function changeStatus(orderId: number, to: OrderStatus, actor: Acto
 
 /** Estafeta aceita uma entrega disponível (sem corrida entre estafetas). */
 export async function claimDelivery(orderId: number, driverId: number): Promise<Order> {
-  return db.transaction(async (tx) => {
+  const claimed = await db.transaction(async (tx) => {
     await tx.select({ id: users.id }).from(users).where(eq(users.id, driverId)).for("update");
     const [active] = await tx.select({ id: orders.id }).from(orders)
       .where(and(eq(orders.driverId, driverId), inArray(orders.status, ["accepted", "preparing", "ready", "picked_up"])));
     if (active) throw conflict("Já tem uma entrega em curso. Termine-a antes de aceitar outra.", "DRIVER_BUSY");
     const [updated] = await tx.update(orders)
-      .set({ driverId, updatedAt: new Date() })
+      .set({ driverId, driverAssignedAt: new Date(), updatedAt: new Date() })
       .where(and(eq(orders.id, orderId), sql`${orders.driverId} is null`, inArray(orders.status, ["accepted", "preparing", "ready"])))
       .returning();
     if (!updated) throw conflict("Esta entrega já não está disponível.", "NOT_AVAILABLE");
     await tx.insert(orderEvents).values({ orderId, status: updated.status, actorId: driverId, note: "Estafeta atribuído" });
     return updated;
   });
+  publishOrder(claimed, "assigned");
+  return claimed;
+}
+
+/** O estafeta chegou à loja (antes de recolher) ou ao cliente (depois de recolher). */
+export async function markArrived(orderId: number, driverId: number, at: "store" | "customer"): Promise<Order> {
+  const done = await db.transaction(async (tx) => {
+    const [o] = await tx.select().from(orders).where(eq(orders.id, orderId)).for("update");
+    if (!o || o.driverId !== driverId) throw notFound("Entrega não encontrada");
+    const ok = at === "store" ? ["accepted", "preparing", "ready"].includes(o.status) : o.status === "picked_up";
+    if (!ok) throw conflict(at === "store" ? "Já recolheu esta encomenda." : "Recolha primeiro a encomenda na loja.", "BAD_STEP");
+    const now = new Date();
+    const patch = at === "store" ? { driverAtStoreAt: o.driverAtStoreAt ?? now } : { driverAtCustomerAt: o.driverAtCustomerAt ?? now };
+    const [updated] = await tx.update(orders).set({ ...patch, updatedAt: now }).where(eq(orders.id, orderId)).returning();
+    if (at === "store" ? !o.driverAtStoreAt : !o.driverAtCustomerAt) {
+      await tx.insert(orderEvents).values({ orderId, status: o.status, actorId: driverId, note: at === "store" ? "Estafeta chegou à loja" : "Estafeta chegou ao cliente" });
+    }
+    return updated;
+  });
+  publishOrder(done, at === "store" ? "at_store" : "at_customer");
+  return done;
 }
 
 /** Alterar encomenda (itens, morada, notas, hora) enquanto a loja ainda não a aceitou. */
@@ -240,7 +264,7 @@ export async function modifyOrder(
   orderId: number, user: User,
   patch: { lines?: CartLine[]; addressId?: number; notes?: string | null; scheduledFor?: Date | null },
 ): Promise<Order> {
-  return db.transaction(async (tx) => {
+  const modified = await db.transaction(async (tx) => {
     const [order] = await tx.select().from(orders).where(eq(orders.id, orderId)).for("update");
     if (!order) throw notFound("Encomenda não encontrada");
     if (order.customerId !== user.id) throw forbidden();
@@ -319,6 +343,8 @@ export async function modifyOrder(
     await tx.insert(orderEvents).values({ orderId: order.id, status: updated.status, actorId: user.id, note: "Encomenda alterada pelo cliente" });
     return updated;
   });
+  publishOrder(modified, "updated");
+  return modified;
 }
 
 /** Liberta encomendas agendadas para a loja quando falta o tempo de preparação + 15 min. */
@@ -344,7 +370,7 @@ export async function releaseScheduledOrders(): Promise<number> {
 
 /** A loja confirma uma encomenda agendada (ex.: bolo para daqui a 2 dias) sem a pôr já em preparação. */
 export async function confirmScheduled(orderId: number, ownerId: number): Promise<Order> {
-  return db.transaction(async (tx) => {
+  const confirmed = await db.transaction(async (tx) => {
     const [order] = await tx.select().from(orders).where(eq(orders.id, orderId)).for("update");
     if (!order) throw notFound("Encomenda não encontrada");
     const [store] = await tx.select().from(stores).where(eq(stores.id, order.storeId));
@@ -355,4 +381,6 @@ export async function confirmScheduled(orderId: number, ownerId: number): Promis
     await tx.insert(orderEvents).values({ orderId: order.id, status: "scheduled", actorId: ownerId, note: "Confirmada pela loja" });
     return updated;
   });
+  publishOrder(confirmed, "updated");
+  return confirmed;
 }

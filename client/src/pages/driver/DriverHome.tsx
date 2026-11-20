@@ -17,6 +17,7 @@ import { ApiError, post, queryClient } from "@/lib/api";
 import { useLang, useT, T } from "@/lib/i18n";
 import { kz, time, PAYMENT } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { poll } from "@/lib/live";
 
 /** Separadores da área do estafeta (reutilizados em DriverHistory). */
 export function useDriverTabs() {
@@ -35,7 +36,8 @@ interface Addr { label: string; street: string; zone: string; city: string; refe
 interface DStore { id: number; name: string; street: string; zone: string; phone: string; latitude: number | null; longitude: number | null }
 export interface DriverOrder {
   id: number; orderNumber: string; status: string; total: number; deliveryFee: number; paymentMethod: string;
-  collectCash: number; deliveryAddress: Addr; notes: string | null; priority?: boolean; riderTip?: number; cutlery?: boolean; estimatedDeliveryAt: string | null; createdAt: string;
+  collectCash: number; deliveryAddress: Addr; notes: string | null; priority?: boolean; riderTip?: number; cutlery?: boolean;
+  driverAtStoreAt?: string | null; driverAtCustomerAt?: string | null; estimatedDeliveryAt: string | null; createdAt: string;
   store: DStore;
 }
 interface CurrentOrder extends DriverOrder {
@@ -76,7 +78,7 @@ function DriverContent() {
   const [geoError, setGeoError] = useState<string | null>(null);
   const [myPos, setMyPos] = useState<{ latitude: number; longitude: number } | null>(null);
   const lastSent = useRef(0);
-  const currentQ = useQuery<{ order: CurrentOrder | null }>({ queryKey: [CURRENT], refetchInterval: 5000 });
+  const currentQ = useQuery<{ order: CurrentOrder | null }>({ queryKey: [CURRENT], refetchInterval: poll(5000) });
   const current = currentQ.data?.order ?? null;
   const hasCurrent = !!current;
   const hasCurrentRef = useRef(hasCurrent);
@@ -172,6 +174,17 @@ function CurrentDelivery({ order, myPos }: { order: CurrentOrder; myPos: { latit
     },
     onError: (err: Error) => toast({ variant: "destructive", title: t(T.error), description: err.message }),
   });
+  // "Cheguei": avisa a loja / o cliente na hora (via actualizações ao vivo)
+  const arrived = useMutation({
+    mutationFn: (at: "store" | "customer") => post(`/api/driver/orders/${order.id}/arrived`, { at }),
+    onSuccess: (_d, at) => {
+      queryClient.invalidateQueries({ queryKey: [CURRENT] });
+      toast({ title: at === "store"
+        ? t({ pt: "A loja sabe que chegou", en: "The store knows you've arrived", fr: "Le magasin sait que vous êtes là" })
+        : t({ pt: "O cliente foi avisado de que está à porta", en: "The customer knows you're outside", fr: "Le client sait que vous êtes devant" }) });
+    },
+    onError: (err: Error) => toast({ variant: "destructive", title: t(T.error), description: err.message }),
+  });
 
   return (
     <article className="space-y-3 rounded-xl border-2 border-primary bg-white p-4 shadow-sm">
@@ -250,6 +263,16 @@ function CurrentDelivery({ order, myPos }: { order: CurrentOrder; myPos: { latit
         </div>
       )}
 
+      {order.status !== "picked_up" && !order.driverAtStoreAt && (
+        <Button size="lg" variant="outline" className="h-12 w-full border-2 border-primary text-base font-bold" disabled={arrived.isPending} onClick={() => arrived.mutate("store")}>
+          📍 {t({ pt: "Cheguei à loja", en: "I'm at the store", fr: "Je suis au magasin" })}
+        </Button>
+      )}
+      {order.status === "picked_up" && !order.driverAtCustomerAt && (
+        <Button size="lg" variant="outline" className="h-12 w-full border-2 border-primary text-base font-bold" disabled={arrived.isPending} onClick={() => arrived.mutate("customer")}>
+          🏠 {t({ pt: "Cheguei ao cliente", en: "I'm at the customer", fr: "Je suis chez le client" })}
+        </Button>
+      )}
       {(order.status === "accepted" || order.status === "preparing") && (
         <p className="rounded-lg bg-sky-50 p-3 text-center font-medium text-sky-900">{t({ pt: "A loja está a preparar a encomenda", en: "The store is preparing the order", fr: "Le magasin prépare la commande" })}</p>
       )}
@@ -290,7 +313,7 @@ function AvailableList({ onClaimError, myPos }: { onClaimError: (e: Error) => vo
   const t = useT();
   const { lang } = useLang();
   const { toast } = useToast();
-  const { data, isLoading, error, refetch } = useQuery<{ orders: DriverOrder[] }>({ queryKey: [AVAILABLE], refetchInterval: 5000 });
+  const { data, isLoading, error, refetch } = useQuery<{ orders: DriverOrder[] }>({ queryKey: [AVAILABLE], refetchInterval: poll(5000) });
   const claim = useMutation({
     mutationFn: (id: number) => post(`/api/driver/orders/${id}/claim`),
     onSuccess: () => {

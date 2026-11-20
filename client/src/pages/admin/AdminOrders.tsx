@@ -13,6 +13,7 @@ import { post, queryClient } from "@/lib/api";
 import { useLang, useT, T } from "@/lib/i18n";
 import { kz, dateTime, ORDER_STATUS, PAYMENT } from "@/lib/format";
 import { AdminPage } from "./AdminDashboard";
+import { poll } from "@/lib/live";
 
 /** Transições permitidas ao admin (espelha server/lib/orderFlow.ts). */
 const ADMIN_NEXT: Record<string, string[]> = {
@@ -44,7 +45,7 @@ function OrdersContent() {
   if (status !== "all") qs.set("status", status);
   if (unassigned) qs.set("unassigned", "1");
   const url = `/api/admin/orders${qs.toString() ? `?${qs}` : ""}`;
-  const { data, isLoading, error, refetch } = useQuery<{ orders: AdminOrder[] }>({ queryKey: [url], refetchInterval: 10_000 });
+  const { data, isLoading, error, refetch } = useQuery<{ orders: AdminOrder[] }>({ queryKey: [url], refetchInterval: poll(10_000) });
   const driversQ = useQuery<{ drivers: Driver[] }>({ queryKey: ["/api/admin/drivers"], refetchInterval: 15_000 });
   const driverName = (id: number | null) => (id ? driversQ.data?.drivers.find((d) => d.id === id)?.fullName ?? `#${id}` : null);
 

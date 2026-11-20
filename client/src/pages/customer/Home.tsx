@@ -266,13 +266,13 @@ export default function Home() {
   return (
     <CustomerShell bare>
       {/* Deliveroo: "Agora · Localização ▾" e a pesquisa cinzenta */}
-      <div className="px-4 pb-1 pt-3">
+      <div className="bg-brand-500 px-4 pb-4 pt-1">
         <div className="flex items-end justify-between gap-2">
           <div className="min-w-0">
-            <span id="zone-label" className="block text-xs text-neutral-500">{t({ pt: "Agora · entregar em", en: "Now · deliver to", fr: "Maintenant · livrer à" })}</span>
+            <span id="zone-label" className="block text-xs font-medium text-neutral-900/80">{t({ pt: "Agora · entregar em", en: "Now · deliver to", fr: "Maintenant · livrer à" })}</span>
             <Select value={zone || "__all"} onValueChange={chooseZone}>
-              <SelectTrigger aria-labelledby="zone-label" className="h-auto w-auto gap-1 border-0 bg-transparent p-0 text-lg font-bold text-neutral-900 shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:text-primary [&>svg]:opacity-100">
-                <MapPin className="mr-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
+              <SelectTrigger aria-labelledby="zone-label" className="h-auto w-auto gap-1 border-0 bg-transparent p-0 text-lg font-bold text-neutral-900 shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:text-neutral-900 [&>svg]:opacity-100">
+                <MapPin className="mr-0.5 h-4 w-4 shrink-0 text-neutral-900" aria-hidden />
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="max-h-72">
@@ -281,7 +281,7 @@ export default function Home() {
               </SelectContent>
             </Select>
           </div>
-          <span className="shrink-0 pb-0.5 text-sm text-neutral-500">{greet}{firstName ? `, ${firstName}` : ""}</span>
+          <span className="shrink-0 pb-0.5 text-sm font-medium text-neutral-900/80">{greet}{firstName ? `, ${firstName}` : ""}</span>
         </div>
 
         <form onSubmit={submit} role="search" className="relative mt-3">
@@ -289,7 +289,7 @@ export default function Home() {
           <SearchIcon className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-neutral-500" aria-hidden />
           <Input id="home-search" value={q} onChange={(e) => setQ(e.target.value)} enterKeyHint="search"
             placeholder={t({ pt: "Restaurantes, pratos, lojas…", en: "Restaurants, dishes, shops…", fr: "Restaurants, plats, magasins…" })}
-            className="h-12 rounded-xl border-0 bg-neutral-100 pl-11 text-base shadow-none focus-visible:ring-2 focus-visible:ring-primary" />
+            className="h-12 rounded-xl border-0 bg-white pl-11 text-base shadow-sm focus-visible:ring-2 focus-visible:ring-neutral-900" />
         </form>
       </div>
 
@@ -304,7 +304,7 @@ export default function Home() {
         {CUISINE_TILES.map((c) => (
           <Link key={c.key} href={`/pesquisa?q=${encodeURIComponent(c.q)}${zq}`}
             className="group flex w-[4.5rem] shrink-0 flex-col items-center gap-1.5">
-            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-neutral-100 transition-transform duration-200 group-hover:-translate-y-0.5 group-active:scale-95">
+            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-50 ring-1 ring-brand-100 transition-transform duration-200 group-hover:-translate-y-0.5 group-active:scale-95">
               <CategoryArt kind={c.key} className="h-12 w-12" />
             </span>
             <span className="line-clamp-2 text-center text-[13px] font-medium leading-tight text-neutral-900">{t(c)}</span>
@@ -327,11 +327,11 @@ export default function Home() {
 
       {/* PedeJá Plus */}
       <div className="px-4 pt-7">
-        <Link href="/plus" className="flex items-center gap-3 rounded-xl bg-brand-100 p-4">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-on-brand"><Crown className="h-6 w-6" aria-hidden /></span>
+        <Link href="/plus" className="flex items-center gap-3 rounded-xl bg-brand-500 p-4 shadow-sm">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-primary"><Crown className="h-6 w-6" aria-hidden /></span>
           <div className="min-w-0 flex-1">
             <p className="font-bold text-neutral-900">PedeJá Plus</p>
-            <p className="text-sm text-neutral-700">
+            <p className="text-sm text-neutral-900">
               {meta.data
                 ? t({
                   pt: `Entregas grátis acima de ${kz(meta.data.plus.freeDeliveryMinOrder)} por ${kz(meta.data.plus.monthlyPrice)}/mês`,
@@ -341,7 +341,7 @@ export default function Home() {
                 : t({ pt: "Entregas grátis e vantagens exclusivas", en: "Free delivery and exclusive perks", fr: "Livraison gratuite et avantages exclusifs" })}
             </p>
           </div>
-          <ChevronRight className="h-5 w-5 shrink-0 text-primary" aria-hidden />
+          <ChevronRight className="h-5 w-5 shrink-0 text-neutral-900" aria-hidden />
         </Link>
       </div>
 
@@ -411,7 +411,7 @@ function ServiceRow({ zq }: { zq: string }) {
       {tiles.map((tile) => {
         const body = (
           <>
-            <span className="relative flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-xl bg-neutral-100">
+            <span className="relative flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-xl bg-brand-50 ring-1 ring-brand-100">
               <CategoryArt kind={tile.art} className="h-14 w-14" />
               {!tile.href && <span className="absolute -top-1.5 right-0 rounded-full bg-neutral-900 px-1.5 py-0.5 text-[9px] font-bold uppercase text-white">{soon}</span>}
             </span>

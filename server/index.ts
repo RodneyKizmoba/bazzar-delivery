@@ -21,6 +21,7 @@ import { webhookRouter } from "./routes/webhooks";
 import { posRouter } from "./routes/pos";
 import { ensureAdmin, seedDemoData, seedLaunchData } from "./seed";
 import { applyStockPhotos } from "./lib/stockPhotos";
+import { attachRealtime } from "./lib/realtime";
 import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
@@ -69,7 +70,7 @@ app.use("/api", (req, res, next) => {
 });
 
 const PgSession = connectPgSimple(session);
-app.use(session({
+const sessionMiddleware = session({
   store: new PgSession({ pool, tableName: "sessions", createTableIfMissing: true }),
   secret: config.sessionSecret,
   name: "pedeja.sid",
@@ -82,7 +83,8 @@ app.use(session({
     secure: config.isProd && process.env.COOKIE_SECURE !== "false",
     sameSite: "lax",
   },
-}));
+});
+app.use(sessionMiddleware);
 app.use(loadUser);
 
 // registo de pedidos à API (sem corpo de resposta, para não expor dados pessoais)
@@ -116,6 +118,7 @@ app.use(errorHandler);
   await applyStockPhotos().catch((e) => console.error("[fotos]", e));
 
   const server = createServer(app);
+  attachRealtime(server, sessionMiddleware);
   if (config.isProd) serveStatic(app);
   else await setupVite(app, server);
 

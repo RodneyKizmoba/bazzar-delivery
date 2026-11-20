@@ -188,6 +188,9 @@ customerRouter.get("/orders/:id/tracking", requireAuth, ah(async (req, res) => {
     updatedAt: order.updatedAt,
     estimatedDeliveryAt: order.estimatedDeliveryAt,
     scheduledFor: order.scheduledFor,
+    driverAssignedAt: order.driverAssignedAt,
+    driverAtStoreAt: order.driverAtStoreAt,
+    driverAtCustomerAt: order.driverAtCustomerAt,
     driverLocation: order.driverLatitude != null && order.driverLongitude != null
       ? { latitude: order.driverLatitude, longitude: order.driverLongitude, at: order.driverLocationAt }
       : null,
