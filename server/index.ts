@@ -55,6 +55,21 @@ app.use("/api", rateLimit({
 }));
 
 app.use(express.json({ limit: "200kb" }));
+
+// O código de entrega nunca sai pela API dentro de uma encomenda (nem para a loja, nem para o estafeta, nem para o POS).
+// Só o cliente (e o admin) o recebe, num campo à parte "deliveryCode" na página da encomenda.
+function stripPins(v: unknown, depth = 0): unknown {
+  if (depth > 8 || v === null || typeof v !== "object" || v instanceof Date) return v;
+  if (Array.isArray(v)) return v.map((x) => stripPins(x, depth + 1));
+  const out: Record<string, unknown> = {};
+  for (const [k, x] of Object.entries(v as Record<string, unknown>)) if (k !== "deliveryPin") out[k] = stripPins(x, depth + 1);
+  return out;
+}
+app.use("/api", (_req, res, next) => {
+  const json = res.json.bind(res);
+  res.json = (body: unknown) => json(stripPins(body));
+  next();
+});
 app.use(express.urlencoded({ extended: false, limit: "50kb" }));
 
 // Proteção CSRF simples: pedidos que alteram dados têm de vir da própria aplicação (Origin igual ao Host)

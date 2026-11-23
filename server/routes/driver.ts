@@ -9,6 +9,7 @@ import { changeStatus, claimDelivery, markArrived } from "../lib/orderFlow";
 import { publishLocation } from "../lib/realtime";
 import { acceptOffer, declineOffer, distanceKm, setPresence, touchPresence } from "../lib/dispatchEngine";
 import { config } from "../config";
+import { account } from "../lib/settlement";
 
 export const driverRouter = Router();
 driverRouter.use(requireRole("driver"));
@@ -33,6 +34,7 @@ function summary(o: typeof orders.$inferSelect, s: typeof stores.$inferSelect) {
     cutlery: o.cutlery,
     estimatedDeliveryAt: o.estimatedDeliveryAt,
     readyEstimateAt: o.readyEstimateAt,
+    pinRequired: !!o.deliveryPin,
     payout: o.deliveryFee + o.riderTip,
     tripKm: s.latitude != null && s.longitude != null && o.deliveryAddress.latitude != null && o.deliveryAddress.longitude != null
       ? Math.round(distanceKm({ latitude: s.latitude, longitude: s.longitude }, { latitude: o.deliveryAddress.latitude, longitude: o.deliveryAddress.longitude! }) * 10) / 10
@@ -106,8 +108,8 @@ driverRouter.post("/orders/:id/claim", ah(async (req, res) => {
 }));
 
 driverRouter.post("/orders/:id/status", ah(async (req, res) => {
-  const { status } = parse(z.object({ status: z.enum(["picked_up", "delivered"]) }), req.body);
-  const order = await changeStatus(idParam(req), status, { kind: "driver", userId: req.user!.id });
+  const { status, pin } = parse(z.object({ status: z.enum(["picked_up", "delivered"]), pin: z.string().trim().regex(/^\d{4}$/, "O código tem 4 dígitos.").optional().nullable() }), req.body);
+  const order = await changeStatus(idParam(req), status, { kind: "driver", userId: req.user!.id }, null, { pin });
   res.json({ order });
 }));
 
@@ -167,6 +169,11 @@ driverRouter.get("/earnings", ah(async (req, res) => {
     last30Days: await sum(new Date(Date.now() - 30 * 86_400_000)),
     daily: days,
   });
+}));
+
+/** Carteira: o que a PedeJá me deve, numerário em mão e movimentos. */
+driverRouter.get("/wallet", ah(async (req, res) => {
+  res.json({ ...(await account("driver", req.user!.id)), cashLimit: config.riderCashLimit });
 }));
 
 driverRouter.get("/orders/:id", ah(async (req, res) => {

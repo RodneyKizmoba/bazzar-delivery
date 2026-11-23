@@ -3,7 +3,9 @@ import { Guard, Loading, ErrorState, EmptyState } from "@/components/common";
 import { PanelShell } from "@/components/AppShell";
 import { useLang, useT } from "@/lib/i18n";
 import { kz, dateTime } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { useDriverTabs, useDriverTitle, type DriverOrder } from "./DriverHome";
+import { BalanceLine, LedgerList, type Account } from "@/components/Money";
 
 export default function DriverHistory() {
   const tabs = useDriverTabs();
@@ -11,9 +13,35 @@ export default function DriverHistory() {
   return (
     <Guard roles={["driver"]}>
       <PanelShell title={title} tabs={tabs}>
-        <div className="mx-auto max-w-xl"><HistoryContent /></div>
+        <div className="mx-auto max-w-xl space-y-4"><Wallet /><HistoryContent /></div>
       </PanelShell>
     </Guard>
+  );
+}
+
+/** Carteira: o que a PedeJá lhe deve, numerário em mão (a entregar) e movimentos. */
+function Wallet() {
+  const t = useT();
+  const { data } = useQuery<Account & { cashLimit: number }>({ queryKey: ["/api/driver/wallet"] });
+  if (!data) return null;
+  const nearLimit = data.cashHeld >= data.cashLimit * 0.8;
+  return (
+    <section className="rounded-xl border bg-white p-4">
+      <h2 className="text-lg font-bold">{t({ pt: "Carteira", en: "Wallet", fr: "Portefeuille" })}</h2>
+      <BalanceLine balance={data.balance} />
+      {data.cashHeld > 0 && (
+        <div className={cn("mt-3 rounded-lg p-3 text-sm", nearLimit ? "bg-red-50 text-red-800" : "bg-brand-50 text-brand-900")} role={nearLimit ? "alert" : undefined}>
+          <p className="font-semibold">💵 {t({ pt: `Numerário em mão: ${kz(data.cashHeld)}`, en: `Cash in hand: ${kz(data.cashHeld)}`, fr: `Espèces en main : ${kz(data.cashHeld)}` })}</p>
+          <p className="text-xs">{nearLimit
+            ? t({ pt: `Limite ${kz(data.cashLimit)}: entregue o numerário à PedeJá para continuar a receber encomendas pagas em dinheiro.`, en: `Limit ${kz(data.cashLimit)}: hand the cash to PedeJá to keep getting cash orders.`, fr: `Limite ${kz(data.cashLimit)} : remettez les espèces à PedeJá pour continuer à recevoir des commandes en espèces.` })
+            : t({ pt: `Entregue-o à PedeJá. Limite: ${kz(data.cashLimit)}.`, en: `Hand it to PedeJá. Limit: ${kz(data.cashLimit)}.`, fr: `Remettez-les à PedeJá. Limite : ${kz(data.cashLimit)}.` })}</p>
+        </div>
+      )}
+      <details className="mt-3">
+        <summary className="cursor-pointer text-sm font-semibold text-brand-800">{t({ pt: "Ver movimentos", en: "See activity", fr: "Voir les mouvements" })}</summary>
+        <LedgerList entries={data.entries} />
+      </details>
+    </section>
   );
 }
 

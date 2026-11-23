@@ -13,6 +13,7 @@ export function useAdminTabs() {
     { href: "/admin", label: t({ pt: "Resumo", en: "Overview", fr: "Résumé" }) },
     { href: "/admin/encomendas", label: t({ pt: "Encomendas", en: "Orders", fr: "Commandes" }) },
     { href: "/admin/despacho", label: t({ pt: "Despacho", en: "Dispatch", fr: "Dispatch" }) },
+    { href: "/admin/financas", label: t({ pt: "Finanças", en: "Finance", fr: "Finances" }) },
     { href: "/admin/lojas", label: t({ pt: "Lojas", en: "Stores", fr: "Magasins" }) },
     { href: "/admin/utilizadores", label: t({ pt: "Utilizadores", en: "Users", fr: "Utilisateurs" }) },
     { href: "/admin/promocoes", label: t({ pt: "Promoções", en: "Promotions", fr: "Promotions" }) },

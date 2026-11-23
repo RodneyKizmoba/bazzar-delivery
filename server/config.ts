@@ -50,6 +50,13 @@ export const config = {
   dispatchLeadMin: num("DISPATCH_LEAD_MIN", 3), // margem: oferecer uns minutos antes do necessário
   presenceStaleMin: num("PRESENCE_STALE_MIN", 10), // sem GPS há mais de 10 min: deixa de receber ofertas
 
+  // Dinheiro
+  commissionPct: num("COMMISSION_PCT", 15), // comissão PedeJá sobre o valor da comida (cada loja pode ter a sua)
+  riderCashLimit: num("RIDER_CASH_LIMIT", 50000), // acima disto o estafeta tem de entregar o numerário antes de levar mais encomendas pagas em dinheiro
+  // Código de entrega (PIN): sempre nas encomendas já pagas e nas em numerário a partir deste valor
+  pinCashMinTotal: num("PIN_CASH_MIN_TOTAL", 20000),
+  pinMaxAttempts: num("PIN_MAX_ATTEMPTS", 5),
+
   // Portal externo de estafetas (opcional)
   driverPortalUrl: process.env.DRIVER_PORTAL_URL || "",
   driverPortalApiKey: process.env.DRIVER_PORTAL_API_KEY || "",

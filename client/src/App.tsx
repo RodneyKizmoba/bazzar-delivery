@@ -42,6 +42,8 @@ const DriverHistory = lazy(() => import("@/pages/driver/DriverHistory"));
 // Admin
 const AdminDashboard = lazy(() => import("@/pages/admin/AdminDashboard"));
 const AdminOrders = lazy(() => import("@/pages/admin/AdminOrders"));
+const PartnerPayouts = lazy(() => import("@/pages/partner/PartnerPayouts"));
+const AdminFinance = lazy(() => import("@/pages/admin/AdminFinance"));
 const AdminDispatch = lazy(() => import("@/pages/admin/AdminDispatch"));
 const AdminStores = lazy(() => import("@/pages/admin/AdminStores"));
 const AdminUsers = lazy(() => import("@/pages/admin/AdminUsers"));
@@ -76,6 +78,7 @@ function Routes() {
         <Route path="/parceiro/loja" component={PartnerStore} />
         <Route path="/parceiro/avaliacoes" component={PartnerReviews} />
         <Route path="/parceiro/estatisticas" component={PartnerStats} />
+        <Route path="/parceiro/pagamentos" component={PartnerPayouts} />
 
         <Route path="/estafeta" component={DriverHome} />
         <Route path="/estafeta/historico" component={DriverHistory} />
@@ -83,6 +86,7 @@ function Routes() {
         <Route path="/admin" component={AdminDashboard} />
         <Route path="/admin/encomendas" component={AdminOrders} />
         <Route path="/admin/despacho" component={AdminDispatch} />
+        <Route path="/admin/financas" component={AdminFinance} />
         <Route path="/admin/lojas" component={AdminStores} />
         <Route path="/admin/utilizadores" component={AdminUsers} />
         <Route path="/admin/promocoes" component={AdminPromos} />

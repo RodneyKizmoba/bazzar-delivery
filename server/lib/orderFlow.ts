@@ -1,5 +1,5 @@
 import { and, eq, inArray, lte, ne, sql } from "drizzle-orm";
-import { randomBytes } from "crypto";
+import { randomBytes, randomInt } from "crypto";
 import { db, type DbOrTx } from "../db";
 import {
   addresses, orderEvents, orderItems, orders, pointsLedger, promoCodes, stores, users,
@@ -13,6 +13,7 @@ import { notifyOrderStatus } from "./notify";
 import { notifyExternalDispatch } from "./dispatch";
 import { sendPosWebhook } from "./pos";
 import { publishOffer, publishOrder } from "./realtime";
+import { cashHeld, settleDeliveredOrder } from "./settlement";
 import { assertNotReservedForOther, closeOffersOnClaim, dispatchTimes } from "./dispatchEngine";
 
 export type Actor = { kind: "customer" | "store" | "driver" | "admin" | "system"; userId?: number };
@@ -114,6 +115,8 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
       promoCode: quote.promo?.code ?? null,
       paymentMethod: input.paymentMethod,
       estimatedDeliveryAt: etaBase,
+      // código de entrega: sempre se já está pago; em numerário a partir de PIN_CASH_MIN_TOTAL
+      deliveryPin: input.paymentMethod !== "cash" || quote.total >= config.pinCashMinTotal ? String(randomInt(0, 10000)).padStart(4, "0") : null,
     }).returning();
 
     await tx.insert(orderItems).values(quote.lines.map((l, i) => ({
@@ -148,7 +151,8 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
 }
 
 /** Mudança de estado com bloqueio de linha, validação de transição e efeitos colaterais. */
-export async function changeStatus(orderId: number, to: OrderStatus, actor: Actor, note?: string | null, opts: { prepMinutes?: number } = {}): Promise<Order> {
+export async function changeStatus(orderId: number, to: OrderStatus, actor: Actor, note?: string | null, opts: { prepMinutes?: number; pin?: string | null } = {}): Promise<Order> {
+  if (to === "delivered" && actor.kind === "driver") await checkDeliveryPin(orderId, actor.userId!, opts.pin);
   const result = await db.transaction(async (tx) => {
     const [order] = await tx.select().from(orders).where(eq(orders.id, orderId)).for("update");
     if (!order) throw notFound("Encomenda não encontrada");
@@ -209,6 +213,9 @@ export async function changeStatus(orderId: number, to: OrderStatus, actor: Acto
       if (order.paymentMethod === "cash") {
         await tx.execute(sql`update payments set status = 'paid', updated_at = now() where order_id = ${order.id}`);
       }
+      await settleDeliveredOrder(tx, updated);
+      const [withMoney] = await tx.select().from(orders).where(eq(orders.id, order.id));
+      Object.assign(updated, withMoney);
       const earned = Math.floor(order.total / config.kzPerPointEarned);
       await addPoints(tx, order.customerId, earned, "order_earned", order.id);
       // bónus de convite: primeira entrega do convidado
@@ -244,6 +251,24 @@ export async function changeStatus(orderId: number, to: OrderStatus, actor: Acto
   return result;
 }
 
+/**
+ * Código de entrega: o estafeta só marca "entregue" com o código que o cliente vê na app.
+ * As tentativas erradas ficam gravadas (fora da transacção principal); à 5.ª bloqueia e o suporte resolve.
+ */
+async function checkDeliveryPin(orderId: number, driverId: number, pin?: string | null) {
+  const [o] = await db.select({ pin: orders.deliveryPin, tries: orders.deliveryPinAttempts, driverId: orders.driverId }).from(orders).where(eq(orders.id, orderId));
+  if (!o || o.driverId !== driverId || !o.pin) return; // sem código: as outras regras decidem
+  if (o.tries >= config.pinMaxAttempts) {
+    throw conflict("Demasiadas tentativas com o código errado. Ligue ao suporte PedeJá para concluir a entrega.", "PIN_LOCKED");
+  }
+  if (!pin) throw badRequest("Peça ao cliente o código de entrega de 4 dígitos.", "PIN_REQUIRED");
+  if (pin.trim() !== o.pin) {
+    await db.update(orders).set({ deliveryPinAttempts: sql`${orders.deliveryPinAttempts} + 1` }).where(eq(orders.id, orderId));
+    const left = config.pinMaxAttempts - o.tries - 1;
+    throw badRequest(left > 0 ? `Código errado. Restam ${left} tentativas.` : "Código errado. Ligue ao suporte PedeJá.", "BAD_PIN");
+  }
+}
+
 /** Estafeta aceita uma entrega disponível (sem corrida entre estafetas). */
 export async function claimDelivery(orderId: number, driverId: number): Promise<Order> {
   const claimed = await db.transaction(async (tx) => {
@@ -251,8 +276,11 @@ export async function claimDelivery(orderId: number, driverId: number): Promise<
     const [active] = await tx.select({ id: orders.id }).from(orders)
       .where(and(eq(orders.driverId, driverId), inArray(orders.status, ["accepted", "preparing", "ready", "picked_up"])));
     if (active) throw conflict("Já tem uma entrega em curso. Termine-a antes de aceitar outra.", "DRIVER_BUSY");
-    await tx.select({ id: orders.id }).from(orders).where(eq(orders.id, orderId)).for("update");
+    const [target] = await tx.select({ id: orders.id, paymentMethod: orders.paymentMethod }).from(orders).where(eq(orders.id, orderId)).for("update");
     await assertNotReservedForOther(tx, orderId, driverId);
+    if (target?.paymentMethod === "cash" && (await cashHeld(tx, driverId)) >= config.riderCashLimit) {
+      throw conflict(`Tem demasiado numerário em mão (limite ${config.riderCashLimit} Kz). Entregue-o à PedeJá para voltar a levar encomendas pagas em dinheiro.`, "CASH_LIMIT");
+    }
     const [updated] = await tx.update(orders)
       .set({ driverId, driverAssignedAt: new Date(), updatedAt: new Date() })
       .where(and(eq(orders.id, orderId), sql`${orders.driverId} is null`, inArray(orders.status, ["accepted", "preparing", "ready"])))

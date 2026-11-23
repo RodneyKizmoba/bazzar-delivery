@@ -1209,6 +1209,136 @@ async function main() {
   });
 
   // =========================================================================
+  await section("Delivery PIN, settlement (commission, store & rider accounts), payouts, cash limit", async () => {
+    const reg = new Client("rmoney");
+    const rr = await reg.post("/api/auth/register", { username: `rmoney_${uniq}`, password: "Teste#2026xx", fullName: "Rider Money", phone: "+244923222011", userType: "driver" });
+    const rid = rr.body.user.id;
+    await admin.patch(`/api/admin/users/${rid}`, { isApproved: true });
+    const rm = new Client("rmoney2"); await rm.login(`rmoney_${uniq}`, "Teste#2026xx");
+    const storeBefore = (await loja.get("/api/partner/finance")).body;
+    check("store finance readable (default 15% commission)", storeBefore.commissionPct === 15 && typeof storeBefore.balance === "number", storeBefore);
+    const prep = async (body: any) => {
+      const o = await cli.post("/api/orders", { storeId: 1, addressId: addrTalatona, ...body });
+      const id = o.body.order.id;
+      await loja.post(`/api/partner/orders/${id}/status`, { status: "accepted" });
+      await loja.post(`/api/partner/orders/${id}/status`, { status: "preparing" });
+      await loja.post(`/api/partner/orders/${id}/status`, { status: "ready" });
+      return { id, order: o.body.order };
+    };
+
+    // --- PIN on a paid order
+    const P = await prep({ items: [FRANGO], paymentMethod: "multicaixa_express", riderTip: 300 });
+    check("paid order: PIN not in the create response", !("deliveryPin" in P.order), Object.keys(P.order).filter((k) => /pin/i.test(k)));
+    let r = await cli.get(`/api/orders/${P.id}`);
+    const code = r.body.order.deliveryCode;
+    check("customer sees a 4-digit delivery code", /^\d{4}$/.test(code ?? "") && r.body.order.pinRequired === true && !("deliveryPin" in r.body.order), r.body.order.deliveryCode);
+    r = await loja.get("/api/partner/orders?scope=active");
+    const so = r.body.orders.find((x: any) => x.id === P.id);
+    check("store never sees the code", so && !("deliveryPin" in so) && !so.deliveryCode && !JSON.stringify(so).includes(`"${code}"`), so && Object.keys(so));
+    r = await rm.post(`/api/driver/orders/${P.id}/claim`);
+    check("rider claims paid order", r.status === 200 && !("deliveryPin" in r.body.order), r.body);
+    r = await rm.get("/api/driver/current");
+    check("rider sees 'PIN required' but not the code", r.body.order.pinRequired === true && !JSON.stringify(r.body).includes(`"${code}"`), r.body.order?.pinRequired);
+    r = await loja.get(`/api/orders/${P.id}`);
+    check("store opening the order page gets no code", r.status === 200 && r.body.order.deliveryCode === null, r.body.order?.deliveryCode);
+    r = await rm.get(`/api/orders/${P.id}`);
+    check("rider opening the order page gets no code", r.status === 200 && r.body.order.deliveryCode === null, r.body.order?.deliveryCode);
+    await rm.post(`/api/driver/orders/${P.id}/status`, { status: "picked_up" });
+    r = await rm.post(`/api/driver/orders/${P.id}/status`, { status: "delivered" });
+    check("deliver without code -> 400 PIN_REQUIRED", r.status === 400 && r.body.code === "PIN_REQUIRED", r.body);
+    const wrong = code === "0000" ? "1111" : "0000";
+    r = await rm.post(`/api/driver/orders/${P.id}/status`, { status: "delivered", pin: wrong });
+    check("wrong code -> 400 BAD_PIN with tries left", r.status === 400 && r.body.code === "BAD_PIN" && /Restam 4/.test(r.body.message), r.body);
+    r = await rm.post(`/api/driver/orders/${P.id}/status`, { status: "delivered", pin: "12a4" });
+    check("malformed code rejected (400)", r.status === 400, r.status);
+    r = await rm.post(`/api/driver/orders/${P.id}/status`, { status: "delivered", pin: code });
+    check("right code -> delivered", r.status === 200 && r.body.order.status === "delivered", r.body);
+    r = await cli.get(`/api/orders/${P.id}`);
+    check("code hidden after delivery", r.body.order.deliveryCode === null, r.body.order.deliveryCode);
+
+    // --- settlement of P
+    const op = r.body.order;
+    check("order settled: 15% of food, store gets the rest, rider fee+tip", op.commissionPct === 15 && op.commissionAmount === Math.round(op.subtotal * 0.15) && op.storeEarning === op.subtotal - op.commissionAmount && op.riderEarning === op.deliveryFee + 300 && op.settledAt, op);
+    r = await loja.get("/api/partner/finance");
+    check("store balance grows by its earning", r.body.balance - storeBefore.balance === op.storeEarning && r.body.entries[0].kind === "order_earning", { before: storeBefore.balance, after: r.body.balance });
+    let w = (await rm.get("/api/driver/wallet")).body;
+    check("rider wallet: owed fee + tip, no cash in hand (paid online)", w.balance === op.riderEarning && w.cashHeld === 0 && w.cashLimit === 50000, w);
+
+    // --- cash order: rider owes the cash; big cash order needs a PIN too
+    const C = await prep({ items: [{ ...FRANGO, quantity: 12 }], paymentMethod: "cash" });
+    r = await cli.get(`/api/orders/${C.id}`);
+    const ccode = r.body.order.deliveryCode;
+    check("cash order above 20 000 Kz gets a code", /^\d{4}$/.test(ccode ?? ""), r.body.order.total);
+    const small = await cli.post("/api/orders", { storeId: 1, addressId: addrTalatona, items: [FRANGO], paymentMethod: "cash" });
+    r = await cli.get(`/api/orders/${small.body.order.id}`);
+    check("small cash order has no code", r.body.order.pinRequired === false && r.body.order.deliveryCode === null, r.body.order);
+    await rm.post(`/api/driver/orders/${C.id}/claim`);
+    await rm.post(`/api/driver/orders/${C.id}/status`, { status: "picked_up" });
+    r = await rm.post(`/api/driver/orders/${C.id}/status`, { status: "delivered", pin: ccode });
+    check("cash order delivered with code", r.status === 200, r.body);
+    const total = r.body.order.total;
+    w = (await rm.get("/api/driver/wallet")).body;
+    check("rider holds the cash and owes it", w.cashHeld === total && w.balance === op.riderEarning + r.body.order.riderEarning - total, w);
+
+    // --- cash limit (50 000 Kz): no more cash orders, card orders still OK
+    await loja.post(`/api/partner/orders/${small.body.order.id}/status`, { status: "accepted" });
+    r = await rm.post(`/api/driver/orders/${small.body.order.id}/claim`);
+    check("over the cash limit -> 409 CASH_LIMIT for cash orders", r.status === 409 && r.body.code === "CASH_LIMIT", r.body);
+    const fin = (await admin.get("/api/admin/finance")).body;
+    const rowR = fin.riders.find((x: any) => x.id === rid);
+    check("admin finance shows rider cash in hand", rowR && rowR.cashHeld === total, rowR);
+    check("admin finance totals: commission, net, store list", fin.totals.commission >= op.commissionAmount && typeof fin.totals.platformNet === "number" && fin.stores.some((x: any) => x.id === 1), fin.totals);
+
+    // --- admin records money movements
+    r = await admin.post("/api/admin/ledger", { partyType: "driver", partyId: rid, kind: "cash_deposit", amount: total, reference: "REC-1" });
+    check("admin records cash handed in -> cash in hand back to 0", r.status === 201 && r.body.cashHeld === 0, r.body);
+    r = await rm.post(`/api/driver/orders/${small.body.order.id}/claim`);
+    check("after handing in cash the rider can take cash orders again", r.status === 200, r.body);
+    await rm.post(`/api/admin/ledger`, {});
+    const sb = (await loja.get("/api/partner/finance")).body.balance;
+    r = await admin.post("/api/admin/ledger", { partyType: "store", partyId: 1, kind: "payout", amount: 5000, reference: "TRF-77", note: "Multicaixa" });
+    check("admin pays the store -> store balance down", r.status === 201 && r.body.balance === sb - 5000 && r.body.entries[0].reference === "TRF-77", r.body);
+    r = await admin.post("/api/admin/ledger", { partyType: "store", partyId: 1, kind: "payout", amount: -5 });
+    check("negative payout rejected (400)", r.status === 400, r.status);
+    r = await admin.post("/api/admin/ledger", { partyType: "store", partyId: 1, kind: "cash_deposit", amount: 5 });
+    check("stores can't 'hand in cash' (400)", r.status === 400, r.status);
+    r = await admin.post("/api/admin/ledger", { partyType: "driver", partyId: 1, kind: "payout", amount: 5 });
+    check("payout to a non-rider id rejected (404)", r.status === 404, r.status);
+    r = await loja.post("/api/admin/ledger", { partyType: "store", partyId: 1, kind: "adjustment", amount: 999999 });
+    check("store can't write to the ledger (403)", r.status === 403, r.status);
+    r = await rm.get("/api/partner/finance");
+    check("rider can't read store finance (403)", r.status === 403, r.status);
+    r = await admin.get(`/api/admin/finance/driver/${rid}`);
+    check("admin sees a rider's statement", r.status === 200 && r.body.entries.some((e: any) => e.kind === "cash_deposit" && e.reference === "REC-1"), r.body.entries?.length);
+
+    // --- per-store commission
+    r = await admin.patch("/api/admin/stores/1", { commissionPct: 10 });
+    check("admin sets store commission to 10%", r.status === 200 && r.body.store.commissionPct === 10, r.body);
+    await rm.post(`/api/driver/orders/${small.body.order.id}/status`, { status: "picked_up" }).catch(() => {});
+    // small order was only 'accepted' — move it on
+    await loja.post(`/api/partner/orders/${small.body.order.id}/status`, { status: "preparing" });
+    await loja.post(`/api/partner/orders/${small.body.order.id}/status`, { status: "ready" });
+    await rm.post(`/api/driver/orders/${small.body.order.id}/status`, { status: "picked_up" });
+    r = await rm.post(`/api/driver/orders/${small.body.order.id}/status`, { status: "delivered" });
+    check("next order uses the store's 10% commission", r.body.order?.commissionPct === 10 && r.body.order.commissionAmount === Math.round(r.body.order.subtotal * 0.1), r.body.order);
+    await admin.patch("/api/admin/stores/1", { commissionPct: null });
+
+    // --- 5 wrong codes lock it; admin finishes
+    const L = await prep({ items: [FRANGO], paymentMethod: "multicaixa_express" });
+    const lcode = (await cli.get(`/api/orders/${L.id}`)).body.order.deliveryCode;
+    await rm.post(`/api/driver/orders/${L.id}/claim`);
+    await rm.post(`/api/driver/orders/${L.id}/status`, { status: "picked_up" });
+    const bad = lcode === "9999" ? "8888" : "9999";
+    for (let i = 0; i < 5; i++) await rm.post(`/api/driver/orders/${L.id}/status`, { status: "delivered", pin: bad });
+    r = await rm.post(`/api/driver/orders/${L.id}/status`, { status: "delivered", pin: lcode });
+    check("after 5 wrong codes even the right one is locked (PIN_LOCKED)", r.status === 409 && r.body.code === "PIN_LOCKED", r.body);
+    r = await admin.post(`/api/admin/orders/${L.id}/status`, { status: "delivered", note: "confirmado por telefone" });
+    check("support (admin) can complete a locked delivery", r.status === 200 && r.body.order.status === "delivered" && r.body.order.settledAt, r.body);
+    r = await admin.get("/api/admin/orders");
+    check("admin order list never carries the raw PIN field", !JSON.stringify(r.body).includes('"deliveryPin"'), "found deliveryPin");
+  });
+
+  // =========================================================================
   await section("Scheduled release (scheduler)", async () => {
     const o = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash", scheduledFor: inMin(32) });
     check("scheduled order (32 min) created", o.status === 201 && o.body.order.status === "scheduled", o.body);

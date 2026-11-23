@@ -38,7 +38,7 @@ export interface DriverOrder {
   id: number; orderNumber: string; status: string; total: number; deliveryFee: number; paymentMethod: string;
   collectCash: number; deliveryAddress: Addr; notes: string | null; priority?: boolean; riderTip?: number; cutlery?: boolean;
   driverAtStoreAt?: string | null; driverAtCustomerAt?: string | null; estimatedDeliveryAt: string | null; createdAt: string;
-  readyEstimateAt?: string | null; payout?: number; tripKm?: number | null;
+  readyEstimateAt?: string | null; payout?: number; tripKm?: number | null; pinRequired?: boolean;
   store: DStore;
 }
 interface CurrentOrder extends DriverOrder {
@@ -284,6 +284,8 @@ function CurrentDelivery({ order, myPos }: { order: CurrentOrder; myPos: { latit
   const { lang } = useLang();
   const { toast } = useToast();
   const [confirm, setConfirm] = useState(false);
+  const [pin, setPin] = useState("");
+  const [pinError, setPinError] = useState<string | null>(null);
   const a = order.deliveryAddress;
   const dest = pt(a.latitude, a.longitude);
   const storePt = pt(order.store.latitude, order.store.longitude);
@@ -300,7 +302,7 @@ function CurrentDelivery({ order, myPos }: { order: CurrentOrder; myPos: { latit
   ].filter(Boolean) as { label: string; km: number }[];
 
   const setStatus = useMutation({
-    mutationFn: (status: "picked_up" | "delivered") => post(`/api/driver/orders/${order.id}/status`, { status }),
+    mutationFn: (status: "picked_up" | "delivered") => post(`/api/driver/orders/${order.id}/status`, status === "delivered" && order.pinRequired ? { status, pin } : { status }),
     onSuccess: (_d, status) => {
       queryClient.invalidateQueries({ queryKey: [CURRENT] });
       queryClient.invalidateQueries({ queryKey: [AVAILABLE] });
@@ -308,7 +310,10 @@ function CurrentDelivery({ order, myPos }: { order: CurrentOrder; myPos: { latit
       setConfirm(false);
       toast({ title: status === "delivered" ? t({ pt: "Entrega concluída. Obrigado!", en: "Delivery completed. Thanks!", fr: "Livraison terminée. Merci !" }) : t({ pt: "Encomenda recolhida", en: "Order picked up", fr: "Commande récupérée" }) });
     },
-    onError: (err: Error) => toast({ variant: "destructive", title: t(T.error), description: err.message }),
+    onError: (err: Error) => {
+      if (err instanceof ApiError && ["BAD_PIN", "PIN_REQUIRED", "PIN_LOCKED"].includes(err.code ?? "")) { setPinError(err.message); setPin(""); }
+      else toast({ variant: "destructive", title: t(T.error), description: err.message });
+    },
   });
   // "Cheguei": avisa a loja / o cliente na hora (via actualizações ao vivo)
   const arrived = useMutation({
@@ -433,9 +438,22 @@ function CurrentDelivery({ order, myPos }: { order: CurrentOrder; myPos: { latit
                 : t({ pt: "Confirme que entregou a encomenda ao cliente.", en: "Confirm you handed the order to the customer.", fr: "Confirmez avoir remis la commande au client." })}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {order.pinRequired && (
+            <div className="space-y-2">
+              <label htmlFor="delivery-pin" className="block text-sm font-semibold">
+                🔒 {t({ pt: "Código de entrega (peça ao cliente)", en: "Delivery code (ask the customer)", fr: "Code de livraison (demandez au client)" })}
+              </label>
+              <input id="delivery-pin" inputMode="numeric" autoComplete="one-time-code" maxLength={4} value={pin}
+                onChange={(e) => { setPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setPinError(null); }}
+                className="h-14 w-full rounded-lg border-2 border-primary text-center font-mono text-3xl tracking-[0.6em] outline-none focus:ring-2 focus:ring-primary"
+                placeholder="••••" aria-invalid={!!pinError} aria-describedby={pinError ? "pin-err" : undefined} />
+              {pinError && <p id="pin-err" role="alert" className="rounded bg-red-50 p-2 text-sm text-red-700">{pinError}</p>}
+            </div>
+          )}
           <AlertDialogFooter>
-            <AlertDialogCancel>{t(T.cancel)}</AlertDialogCancel>
-            <AlertDialogAction className="bg-green-700 hover:bg-green-800" onClick={(e) => { e.preventDefault(); setStatus.mutate("delivered"); }}>
+            <AlertDialogCancel onClick={() => { setPin(""); setPinError(null); }}>{t(T.cancel)}</AlertDialogCancel>
+            <AlertDialogAction className="bg-green-700 hover:bg-green-800" disabled={setStatus.isPending || (!!order.pinRequired && pin.length !== 4)}
+              onClick={(e) => { e.preventDefault(); setStatus.mutate("delivered"); }}>
               {t(T.confirm)}
             </AlertDialogAction>
           </AlertDialogFooter>

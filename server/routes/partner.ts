@@ -9,6 +9,8 @@ import {
 import { ah, forbidden, idParam, notFound, parse } from "../lib/http";
 import { requireRole } from "../lib/auth";
 import { changeStatus, confirmScheduled, delayPrep } from "../lib/orderFlow";
+import { account } from "../lib/settlement";
+import { config } from "../config";
 import { assertSafeWebhookUrl, newApiKey, newWebhookSecret, sendPosWebhook, withoutSecrets } from "../lib/pos";
 
 export const partnerRouter = Router();
@@ -68,6 +70,12 @@ partnerRouter.post("/orders/:id/status", ah(async (req, res) => {
   }), req.body);
   const order = await changeStatus(idParam(req), status, { kind: "store", userId: req.user!.id }, note, { prepMinutes });
   res.json({ order });
+}));
+
+/** Pagamentos: saldo a receber da PedeJá, comissão e movimentos. */
+partnerRouter.get("/finance", ah(async (req, res) => {
+  const s = await myStore(req);
+  res.json({ ...(await account("store", s.id)), commissionPct: s.commissionPct ?? config.commissionPct, payoutMethod: s.payoutMethod, payoutReference: s.payoutReference });
 }));
 
 /** "Preciso de mais tempo": +5, +10 ou +15 minutos. */

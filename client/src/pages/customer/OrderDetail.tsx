@@ -35,7 +35,7 @@ interface OrderFull {
   priorityFee?: number; riderTip?: number; cutlery?: boolean;
   paymentMethod: string; paymentStatus: string; cancelReason: string | null; estimatedDeliveryAt: string | null;
   createdAt: string; deliveredAt: string | null;
-  canCancel: boolean; canModify: boolean; canReview: boolean;
+  canCancel: boolean; canModify: boolean; canReview: boolean; deliveryCode?: string | null; pinRequired?: boolean;
 }
 interface OrderItemRow { id: number; menuItemId: number; name: string; unitPrice: number; quantity: number; selectedOptions: SelectedOption[]; specialInstructions: string | null; addedBy: string | null }
 interface OrderEvent { id: number; status: string; note: string | null; createdAt: string }
@@ -392,6 +392,16 @@ function OrderDetailInner({ id }: { id: string }) {
           <p className="mt-2 text-sm text-white/90">{order.cancelReason}</p>
         ) : null}
       </div>
+      )}
+
+      {order.deliveryCode && (
+        <div className="flex items-center gap-4 rounded-2xl border-2 border-primary bg-brand-50 p-4" aria-live="polite">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold">🔒 {t({ pt: "Código de entrega", en: "Delivery code", fr: "Code de livraison" })}</p>
+            <p className="text-xs text-neutral-600">{t({ pt: "Diga este código ao estafeta só quando receber a encomenda.", en: "Give this code to the rider only when you receive your order.", fr: "Donnez ce code au livreur seulement à la réception de la commande." })}</p>
+          </div>
+          <p className="font-mono text-3xl font-extrabold tracking-[0.25em] text-brand-900">{order.deliveryCode}</p>
+        </div>
       )}
 
       {/* Stepper */}

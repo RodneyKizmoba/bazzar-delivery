@@ -9,6 +9,9 @@ import { changeStatus } from "../lib/orderFlow";
 import { STORE_THEME_IDS } from "@shared/themes";
 import { withoutSecrets } from "../lib/pos";
 import { closeOffersOnClaim, redispatch } from "../lib/dispatchEngine";
+import { account } from "../lib/settlement";
+import { config } from "../config";
+import { ledgerEntries } from "@shared/schema";
 import { publishOffer, publishOrder } from "../lib/realtime";
 
 export const adminRouter = Router();
@@ -51,6 +54,71 @@ adminRouter.post("/orders/:id/status", ah(async (req, res) => {
   const { status, note } = parse(z.object({ status: z.enum(ORDER_STATUSES), note: z.string().trim().max(300).optional().nullable() }), req.body);
   const order = await changeStatus(idParam(req), status, { kind: "admin", userId: req.user!.id }, note);
   res.json({ order });
+}));
+
+// ---------------------------------------------------------------------------
+// Finanças: receita PedeJá, saldos de lojas e estafetas, pagamentos
+// ---------------------------------------------------------------------------
+adminRouter.get("/finance", ah(async (req, res) => {
+  const days = Math.min(365, Math.max(1, Number(req.query.days) || 30));
+  const since = new Date(Date.now() - days * 86_400_000);
+  const [t] = await db.select({
+    orders: sql<number>`count(*)::int`,
+    gmv: sql<number>`coalesce(sum(${orders.total}),0)::int`,
+    food: sql<number>`coalesce(sum(${orders.subtotal}),0)::int`,
+    commission: sql<number>`coalesce(sum(${orders.commissionAmount}),0)::int`,
+    priorityFees: sql<number>`coalesce(sum(${orders.priorityFee}),0)::int`,
+    discounts: sql<number>`coalesce(sum(${orders.discount}),0)::int`,
+    riderPay: sql<number>`coalesce(sum(${orders.riderEarning}),0)::int`,
+    storePay: sql<number>`coalesce(sum(${orders.storeEarning}),0)::int`,
+  }).from(orders).where(and(eq(orders.status, "delivered"), gte(orders.deliveredAt, since)));
+  const storeRows = await db.execute(sql`
+    select s.id, s.name, s.payout_method as "payoutMethod", s.payout_reference as "payoutReference",
+      coalesce(s.commission_pct, ${config.commissionPct})::float as "commissionPct", s.commission_pct is not null as "customCommission",
+      coalesce((select sum(l.amount) from ledger_entries l where l.party_type = 'store' and l.party_id = s.id), 0)::int as balance
+    from stores s where s.is_approved order by balance desc, s.name`);
+  const riderRows = await db.execute(sql`
+    select u.id, u.full_name as name, u.phone,
+      coalesce((select sum(l.amount) from ledger_entries l where l.party_type = 'driver' and l.party_id = u.id), 0)::int as balance,
+      greatest(0, coalesce((select -sum(l.amount) from ledger_entries l where l.party_type = 'driver' and l.party_id = u.id
+        and l.kind in ('cash_collected','cash_deposit')), 0))::int as "cashHeld"
+    from users u where u.user_type = 'driver' and u.is_approved order by "cashHeld" desc, u.full_name`);
+  res.json({
+    days, totals: { ...t, platformNet: t.commission + t.priorityFees - t.discounts },
+    defaultCommissionPct: config.commissionPct, riderCashLimit: config.riderCashLimit,
+    stores: storeRows.rows, riders: riderRows.rows,
+  });
+}));
+
+adminRouter.get("/finance/:type/:id", ah(async (req, res) => {
+  const type = req.params.type === "store" ? "store" : req.params.type === "driver" ? "driver" : null;
+  if (!type) throw notFound();
+  res.json(await account(type, idParam(req), 200));
+}));
+
+/** Registar um pagamento à loja/estafeta, numerário entregue pelo estafeta, ou um ajuste. */
+adminRouter.post("/ledger", ah(async (req, res) => {
+  const b = parse(z.object({
+    partyType: z.enum(["store", "driver"]), partyId: z.number().int().positive(),
+    kind: z.enum(["payout", "cash_deposit", "adjustment"]),
+    amount: z.number().int().refine((n) => n !== 0, "Valor não pode ser 0").refine((n) => Math.abs(n) <= 100_000_000, "Valor demasiado alto"),
+    note: z.string().trim().max(300).optional().nullable(), reference: z.string().trim().max(80).optional().nullable(),
+  }), req.body);
+  if (b.kind === "cash_deposit" && b.partyType !== "driver") throw badRequest("Só estafetas entregam numerário.");
+  if (b.kind !== "adjustment" && b.amount < 0) throw badRequest("Indique um valor positivo.");
+  if (b.partyType === "store") {
+    const [s] = await db.select({ id: stores.id }).from(stores).where(eq(stores.id, b.partyId));
+    if (!s) throw notFound("Loja não encontrada");
+  } else {
+    const [u] = await db.select({ t: users.userType }).from(users).where(eq(users.id, b.partyId));
+    if (!u || u.t !== "driver") throw notFound("Estafeta não encontrado");
+  }
+  // pagamento: a PedeJá pagou-lhes (saldo desce); numerário entregue: o estafeta pagou à PedeJá (dívida desce)
+  const amount = b.kind === "payout" ? -b.amount : b.amount;
+  const [entry] = await db.insert(ledgerEntries).values({
+    partyType: b.partyType, partyId: b.partyId, kind: b.kind, amount, note: b.note || null, reference: b.reference || null, createdBy: req.user!.id,
+  }).returning();
+  res.status(201).json({ entry, ...(await account(b.partyType, b.partyId, 20)) });
 }));
 
 /** Centro de despacho: estafetas online, entregas à espera e últimas ofertas. */
@@ -128,7 +196,7 @@ adminRouter.get("/stores", ah(async (req, res) => {
 adminRouter.patch("/stores/:id", ah(async (req, res) => {
   const input = parse(z.object({
     isApproved: z.boolean().optional(), isChain: z.boolean().optional(), isOpen: z.boolean().optional(), isHomeBusiness: z.boolean().optional(),
-    deliveryFee: z.number().int().min(0).optional(), theme: z.enum(STORE_THEME_IDS).nullable().optional(), zonesServed: z.array(z.string().trim().min(2).max(60)).optional(),
+    deliveryFee: z.number().int().min(0).optional(), commissionPct: z.number().min(0).max(50).nullable().optional(), theme: z.enum(STORE_THEME_IDS).nullable().optional(), zonesServed: z.array(z.string().trim().min(2).max(60)).optional(),
   }), req.body);
   const [s] = await db.update(stores).set(input).where(eq(stores.id, idParam(req))).returning();
   if (!s) throw notFound("Loja não encontrada");

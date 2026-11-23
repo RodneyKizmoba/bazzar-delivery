@@ -26,6 +26,7 @@ export function usePartnerTabs() {
     { href: "/parceiro/loja", label: t({ pt: "Loja", en: "Store", fr: "Magasin" }) },
     { href: "/parceiro/avaliacoes", label: t({ pt: "Avaliações", en: "Reviews", fr: "Avis" }) },
     { href: "/parceiro/estatisticas", label: t({ pt: "Estatísticas", en: "Statistics", fr: "Statistiques" }) },
+    { href: "/parceiro/pagamentos", label: t({ pt: "Pagamentos", en: "Payouts", fr: "Paiements" }) },
   ];
 }
 

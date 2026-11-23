@@ -170,6 +170,10 @@ customerRouter.get("/orders/:id", requireAuth, ah(async (req, res) => {
       canCancel: (config.cancellableStatuses as readonly string[]).includes(order.status),
       canModify: (config.modifiableStatuses as readonly string[]).includes(order.status),
       canReview: order.status === "delivered" && !review && order.customerId === req.user!.id,
+      // código de entrega: só para o cliente (e admin), enquanto a encomenda está a caminho
+      deliveryCode: order.deliveryPin && (order.customerId === req.user!.id || req.user!.userType === "admin")
+        && !["delivered", "cancelled", "rejected"].includes(order.status) ? order.deliveryPin : null,
+      pinRequired: !!order.deliveryPin,
     },
     items,
     events,

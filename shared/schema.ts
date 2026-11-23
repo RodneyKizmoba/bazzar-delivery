@@ -104,6 +104,7 @@ export const stores = pgTable("stores", {
   deliveryFee: integer("delivery_fee").notNull().default(1000),
   minOrder: integer("min_order").notNull().default(0),
   prepTimeMin: integer("prep_time_min").notNull().default(20),
+  commissionPct: real("commission_pct"), // comissão PedeJá desta loja (%); vazio = valor geral (COMMISSION_PCT)
   deliveryTimeMin: integer("delivery_time_min").notNull().default(35), // estimativa total
   ratingAvg: real("rating_avg").notNull().default(0),
   ratingCount: integer("rating_count").notNull().default(0),
@@ -202,6 +203,15 @@ export const orders = pgTable("orders", {
   dispatchAt: timestamp("dispatch_at"),
   dispatchRound: integer("dispatch_round").notNull().default(0),
   dispatchFailedAt: timestamp("dispatch_failed_at"), // ninguém aceitou: lista aberta + alerta ao admin
+  // código de entrega: o cliente diz-o ao estafeta; só então a encomenda fica "entregue"
+  deliveryPin: text("delivery_pin"),
+  deliveryPinAttempts: integer("delivery_pin_attempts").notNull().default(0),
+  // acerto de contas, calculado na entrega
+  commissionPct: real("commission_pct"),
+  commissionAmount: integer("commission_amount"),
+  storeEarning: integer("store_earning"),
+  riderEarning: integer("rider_earning"),
+  settledAt: timestamp("settled_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
   deliveredAt: timestamp("delivered_at"),
@@ -237,6 +247,28 @@ export const orderEvents = pgTable("order_events", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 export type OrderEvent = typeof orderEvents.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// Contas: quanto a PedeJá deve a cada loja e estafeta (positivo) ou eles devem (negativo)
+// ---------------------------------------------------------------------------
+export const LEDGER_KINDS = ["order_earning", "cash_collected", "payout", "cash_deposit", "adjustment"] as const;
+export type LedgerKind = (typeof LEDGER_KINDS)[number];
+export const ledgerEntries = pgTable("ledger_entries", {
+  id: serial("id").primaryKey(),
+  partyType: text("party_type").$type<"store" | "driver">().notNull(),
+  partyId: integer("party_id").notNull(), // stores.id ou users.id
+  orderId: integer("order_id").references(() => orders.id),
+  kind: text("kind").$type<LedgerKind>().notNull(),
+  amount: integer("amount").notNull(), // Kz; + a PedeJá deve, − deve à PedeJá
+  note: text("note"),
+  reference: text("reference"), // nº da transferência / recibo
+  createdBy: integer("created_by"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [
+  index("ledger_party_idx").on(t.partyType, t.partyId),
+  uniqueIndex("ledger_order_once_idx").on(t.partyType, t.partyId, t.orderId, t.kind),
+]);
+export type LedgerEntry = typeof ledgerEntries.$inferSelect;
 
 // ---------------------------------------------------------------------------
 // Despacho (estafetas online e ofertas de entrega)

@@ -43,6 +43,13 @@
       "when": 1795422132467,
       "tag": "0005_dispatch",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795423438067,
+      "tag": "0006_money_and_pin",
+      "breakpoints": true
     }
   ]
 }

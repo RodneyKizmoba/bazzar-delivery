@@ -48,7 +48,7 @@ export function dispatchTimes(now: Date, readyAt: Date, priority: boolean) {
 
 type Candidate = { id: number; km: number | null; idleMin: number };
 
-async function candidatesFor(orderId: number, store: { latitude: number | null; longitude: number | null }): Promise<Candidate[]> {
+async function candidatesFor(orderId: number, store: { latitude: number | null; longitude: number | null }, isCash: boolean): Promise<Candidate[]> {
   const staleMin = config.presenceStaleMin;
   const rows = await db.execute(sql`
     select u.id, p.latitude, p.longitude,
@@ -62,6 +62,8 @@ async function candidatesFor(orderId: number, store: { latitude: number | null; 
       and not exists (select 1 from orders o where o.driver_id = u.id and o.status in ('accepted','preparing','ready','picked_up'))
       and not exists (select 1 from dispatch_offers d where d.driver_id = u.id and d.status = 'pending')
       and not exists (select 1 from dispatch_offers d where d.driver_id = u.id and d.order_id = ${orderId})
+      and (${!isCash} or coalesce((select -sum(l.amount) from ledger_entries l where l.party_type = 'driver' and l.party_id = u.id
+             and l.kind in ('cash_collected','cash_deposit')), 0) < ${config.riderCashLimit})
   `);
   const list: Candidate[] = (rows.rows as any[]).map((r) => {
     const km = r.latitude != null && r.longitude != null && store.latitude != null && store.longitude != null
@@ -102,7 +104,7 @@ export async function advanceOrder(orderId: number, now = new Date()): Promise<O
     if (o.dispatchRound >= config.dispatchMaxRounds) return giveUp();
 
     const [store] = await tx.select({ latitude: stores.latitude, longitude: stores.longitude }).from(stores).where(eq(stores.id, o.storeId));
-    const cands = await candidatesFor(orderId, store ?? { latitude: null, longitude: null });
+    const cands = await candidatesFor(orderId, store ?? { latitude: null, longitude: null }, o.paymentMethod === "cash");
     const best = cands[0];
     if (!best) {
       const since = (o.dispatchAt ?? o.updatedAt).getTime();
