@@ -8,7 +8,7 @@ import {
 } from "@shared/schema";
 import { ah, forbidden, idParam, notFound, parse } from "../lib/http";
 import { requireRole } from "../lib/auth";
-import { changeStatus, confirmScheduled } from "../lib/orderFlow";
+import { changeStatus, confirmScheduled, delayPrep } from "../lib/orderFlow";
 import { assertSafeWebhookUrl, newApiKey, newWebhookSecret, sendPosWebhook, withoutSecrets } from "../lib/pos";
 
 export const partnerRouter = Router();
@@ -61,11 +61,19 @@ partnerRouter.post("/orders/:id/confirm", ah(async (req, res) => {
 }));
 
 partnerRouter.post("/orders/:id/status", ah(async (req, res) => {
-  const { status, note } = parse(z.object({
+  const { status, note, prepMinutes } = parse(z.object({
     status: z.enum(["accepted", "rejected", "preparing", "ready"]),
     note: z.string().trim().max(300).optional().nullable(),
+    prepMinutes: z.number().int().min(5).max(120).optional(), // tempo de preparação desta encomenda (ao aceitar)
   }), req.body);
-  const order = await changeStatus(idParam(req), status, { kind: "store", userId: req.user!.id }, note);
+  const order = await changeStatus(idParam(req), status, { kind: "store", userId: req.user!.id }, note, { prepMinutes });
+  res.json({ order });
+}));
+
+/** "Preciso de mais tempo": +5, +10 ou +15 minutos. */
+partnerRouter.post("/orders/:id/delay", ah(async (req, res) => {
+  const { minutes } = parse(z.object({ minutes: z.union([z.literal(5), z.literal(10), z.literal(15)]) }), req.body);
+  const order = await delayPrep(idParam(req), req.user!.id, minutes);
   res.json({ order });
 }));
 

@@ -38,6 +38,7 @@ export interface DriverOrder {
   id: number; orderNumber: string; status: string; total: number; deliveryFee: number; paymentMethod: string;
   collectCash: number; deliveryAddress: Addr; notes: string | null; priority?: boolean; riderTip?: number; cutlery?: boolean;
   driverAtStoreAt?: string | null; driverAtCustomerAt?: string | null; estimatedDeliveryAt: string | null; createdAt: string;
+  readyEstimateAt?: string | null; payout?: number; tripKm?: number | null;
   store: DStore;
 }
 interface CurrentOrder extends DriverOrder {
@@ -71,64 +72,106 @@ export default function DriverHome() {
   );
 }
 
+interface Offer {
+  offerSeconds?: number; id: number; expiresAt: string; secondsLeft: number; distanceKm: number | null; payout: number;
+  order: DriverOrder;
+}
+interface Presence { isOnline: boolean; latitude?: number | null; longitude?: number | null; locationAt?: string | null }
+const PRESENCE = "/api/driver/presence";
+const OFFERS = "/api/driver/offers";
+
 function DriverContent() {
   const t = useT();
   const { toast } = useToast();
-  const [sharing, setSharing] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
   const [myPos, setMyPos] = useState<{ latitude: number; longitude: number } | null>(null);
   const lastSent = useRef(0);
+  const presenceQ = useQuery<{ presence: Presence; autoDispatch: boolean; offerSeconds: number }>({ queryKey: [PRESENCE] });
+  const online = !!presenceQ.data?.presence.isOnline;
   const currentQ = useQuery<{ order: CurrentOrder | null }>({ queryKey: [CURRENT], refetchInterval: poll(5000) });
   const current = currentQ.data?.order ?? null;
   const hasCurrent = !!current;
   const hasCurrentRef = useRef(hasCurrent);
   hasCurrentRef.current = hasCurrent;
 
-  // Partilha de localização: só com o interruptor ligado e uma entrega em curso.
+  const geoMsg = (err: GeolocationPositionError) => err.code === err.PERMISSION_DENIED
+    ? t({ pt: "Permissão de localização negada. Active-a nas definições do navegador.", en: "Location permission denied. Enable it in your browser settings.", fr: "Autorisation de localisation refusée. Activez-la dans les paramètres du navigateur." })
+    : err.code === err.POSITION_UNAVAILABLE
+      ? t({ pt: "Localização indisponível. Verifique o GPS.", en: "Location unavailable. Check your GPS.", fr: "Position indisponible. Vérifiez le GPS." })
+      : t({ pt: "Não foi possível obter a localização (tempo esgotado).", en: "Couldn't get location (timeout).", fr: "Impossible d'obtenir la position (délai dépassé)." });
+
+  const goOnline = useMutation({
+    mutationFn: async (on: boolean) => {
+      let pos: { latitude: number; longitude: number } | null = null;
+      if (on && "geolocation" in navigator) {
+        pos = await new Promise((resolve) => navigator.geolocation.getCurrentPosition(
+          (p) => resolve({ latitude: p.coords.latitude, longitude: p.coords.longitude }),
+          (err) => { setGeoError(geoMsg(err)); resolve(null); },
+          { enableHighAccuracy: true, timeout: 15_000, maximumAge: 10_000 },
+        ));
+        if (pos) setMyPos(pos);
+      }
+      return post(PRESENCE, { online: on, ...(pos ?? {}) });
+    },
+    onSuccess: (_d, on) => {
+      queryClient.invalidateQueries({ queryKey: [PRESENCE] });
+      queryClient.invalidateQueries({ queryKey: [OFFERS] });
+      toast({ title: on ? t({ pt: "Está online — vai receber entregas", en: "You're online — deliveries will come to you", fr: "Vous êtes en ligne — vous recevrez des livraisons" }) : t({ pt: "Está offline", en: "You're offline", fr: "Vous êtes hors ligne" }) });
+    },
+    onError: (err: Error) => toast({ variant: "destructive", title: t(T.error), description: err.message }),
+  });
+
+  // GPS: ligado enquanto está online ou com uma entrega em curso.
+  // Envia a posição a cada 5 s durante a entrega (o cliente vê-o no mapa) e a cada 15 s à espera (para receber as entregas mais perto).
+  const tracking = online || hasCurrent;
   useEffect(() => {
-    if (!sharing) return;
+    if (!tracking) return;
     if (!("geolocation" in navigator)) {
       setGeoError(t({ pt: "Este dispositivo não suporta geolocalização.", en: "This device doesn't support geolocation.", fr: "Cet appareil ne prend pas en charge la géolocalisation." }));
       return;
     }
-    setGeoError(null);
     const id = navigator.geolocation.watchPosition(
       (pos) => {
         const p = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
         setMyPos(p);
         setGeoError(null);
         const now = Date.now();
-        if (hasCurrentRef.current && now - lastSent.current >= 10_000) {
+        if (now - lastSent.current >= (hasCurrentRef.current ? 5_000 : 15_000)) {
           lastSent.current = now;
           post("/api/driver/location", p).catch(() => { /* nova tentativa na próxima posição */ });
         }
       },
-      (err) => {
-        setGeoError(err.code === err.PERMISSION_DENIED
-          ? t({ pt: "Permissão de localização negada. Active-a nas definições do navegador.", en: "Location permission denied. Enable it in your browser settings.", fr: "Autorisation de localisation refusée. Activez-la dans les paramètres du navigateur." })
-          : err.code === err.POSITION_UNAVAILABLE
-            ? t({ pt: "Localização indisponível. Verifique o GPS.", en: "Location unavailable. Check your GPS.", fr: "Position indisponible. Vérifiez le GPS." })
-            : t({ pt: "Não foi possível obter a localização (tempo esgotado).", en: "Couldn't get location (timeout).", fr: "Impossible d'obtenir la position (délai dépassé)." }));
-      },
+      (err) => setGeoError(geoMsg(err)),
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 20_000 },
     );
     return () => navigator.geolocation.clearWatch(id);
-  }, [sharing]);
+  }, [tracking]);
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border bg-white p-3">
+      <div className={cn("rounded-xl border p-3", online ? "border-primary bg-brand-50" : "bg-white")}>
         <div className="flex items-center justify-between gap-3">
-          <Label htmlFor="share-loc" className="text-base font-medium">{t({ pt: "Partilhar localização", en: "Share location", fr: "Partager la position" })}</Label>
-          <Switch id="share-loc" checked={sharing} onCheckedChange={setSharing} />
+          <div>
+            <Label htmlFor="rider-online" className="text-base font-bold">
+              {online ? t({ pt: "Online", en: "Online", fr: "En ligne" }) : t({ pt: "Offline", en: "Offline", fr: "Hors ligne" })}
+            </Label>
+            <p className="text-xs text-neutral-600">
+              {online
+                ? t({ pt: "Recebe entregas perto de si. O GPS está ligado.", en: "You get deliveries near you. GPS is on.", fr: "Vous recevez des livraisons proches. GPS activé." })
+                : t({ pt: "Ligue para começar a receber entregas.", en: "Switch on to start getting deliveries.", fr: "Activez pour recevoir des livraisons." })}
+            </p>
+          </div>
+          <Switch id="rider-online" checked={online} disabled={goOnline.isPending || presenceQ.isLoading} onCheckedChange={(v) => goOnline.mutate(v)} />
         </div>
-        <p className="mt-1 text-xs text-neutral-500">
-          {sharing
-            ? hasCurrent
-              ? t({ pt: "O cliente vê a sua posição durante a entrega.", en: "The customer sees your position during the delivery.", fr: "Le client voit votre position pendant la livraison." })
-              : t({ pt: "Mostramos as entregas mais perto de si primeiro. O cliente só vê a sua posição durante uma entrega.", en: "We show the nearest deliveries first. Customers only see your position during a delivery.", fr: "Les livraisons les plus proches apparaissent en premier. Le client ne voit votre position que pendant une livraison." })
-            : t({ pt: "Desligado.", en: "Off.", fr: "Désactivé." })}
-        </p>
+        {tracking && (
+          <p className="mt-2 flex items-center gap-1 text-xs text-neutral-600">
+            <Navigation className="h-3 w-3" />
+            {myPos
+              ? t({ pt: `GPS: ${myPos.latitude.toFixed(4)}, ${myPos.longitude.toFixed(4)}`, en: `GPS: ${myPos.latitude.toFixed(4)}, ${myPos.longitude.toFixed(4)}`, fr: `GPS : ${myPos.latitude.toFixed(4)}, ${myPos.longitude.toFixed(4)}` })
+              : t({ pt: "A procurar sinal GPS…", en: "Looking for GPS signal…", fr: "Recherche du signal GPS…" })}
+            {hasCurrent && <> · {t({ pt: "o cliente vê-o no mapa", en: "the customer sees you on the map", fr: "le client vous voit sur la carte" })}</>}
+          </p>
+        )}
         {geoError && <p className="mt-2 rounded bg-red-50 p-2 text-sm text-red-700" role="alert">{geoError}</p>}
       </div>
 
@@ -137,9 +180,102 @@ function DriverContent() {
       ) : current ? (
         <CurrentDelivery order={current} myPos={myPos} />
       ) : (
-        <AvailableList myPos={myPos} onClaimError={(e) => toast({ variant: "destructive", title: t(T.error), description: e.message })} />
+        <>
+          {online && <OfferCard myPos={myPos} />}
+          <AvailableList myPos={myPos} onClaimError={(e) => toast({ variant: "destructive", title: t(T.error), description: e.message })} />
+        </>
       )}
     </div>
+  );
+}
+
+/** Oferta de entrega só para mim, com contagem decrescente (Deliveroo: aceitar ou recusar em 30 s). */
+function OfferCard({ myPos }: { myPos: LL | null }) {
+  const t = useT();
+  const { lang } = useLang();
+  const { toast } = useToast();
+  const beep = useBeep();
+  const { data } = useQuery<{ offer: Offer | null }>({ queryKey: [OFFERS], refetchInterval: poll(5000, 30_000) });
+  const offer = data?.offer ?? null;
+  const [left, setLeft] = useState(0);
+  const seen = useRef<number | null>(null);
+  useEffect(() => {
+    if (!offer) return;
+    if (seen.current !== offer.id) {
+      seen.current = offer.id;
+      beep();
+      try { navigator.vibrate?.([300, 100, 300, 100, 300]); } catch { /* sem vibração */ }
+      try {
+        if ("Notification" in window && Notification.permission === "granted" && document.hidden) {
+          new Notification(t({ pt: "Nova entrega para si", en: "New delivery for you", fr: "Nouvelle livraison pour vous" }), {
+            body: `${offer.order.store.name} → ${offer.order.deliveryAddress.zone} · ${kz(offer.payout)}`, tag: "pedeja-offer",
+          });
+        }
+      } catch { /* sem notificações */ }
+    }
+    const end = new Date(offer.expiresAt).getTime();
+    const tick = () => {
+      const s = Math.max(0, Math.round((end - Date.now()) / 1000));
+      setLeft(s);
+      if (s === 0) queryClient.invalidateQueries({ queryKey: [OFFERS] });
+    };
+    tick();
+    const id = setInterval(tick, 500);
+    return () => clearInterval(id);
+  }, [offer?.id]);
+
+  const done = () => {
+    queryClient.invalidateQueries({ queryKey: [OFFERS] });
+    queryClient.invalidateQueries({ queryKey: [CURRENT] });
+    queryClient.invalidateQueries({ queryKey: [AVAILABLE] });
+  };
+  const accept = useMutation({
+    mutationFn: (id: number) => post(`/api/driver/offers/${id}/accept`),
+    onSuccess: () => { done(); toast({ title: t({ pt: "Entrega aceite — boa viagem!", en: "Delivery accepted — ride safe!", fr: "Livraison acceptée — bonne route !" }) }); },
+    onError: (err: Error) => { done(); toast({ variant: "destructive", title: t(T.error), description: err.message }); },
+  });
+  const decline = useMutation({
+    mutationFn: (id: number) => post(`/api/driver/offers/${id}/decline`),
+    onSuccess: done,
+    onError: done,
+  });
+
+  if (!offer || left <= 0) return null;
+  const o = offer.order;
+  const sp = pt(o.store.latitude, o.store.longitude);
+  const toStore = myPos && sp ? km(myPos, sp) : offer.distanceKm;
+  const total = offer.offerSeconds ?? 30;
+  return (
+    <section aria-live="assertive" className="overflow-hidden rounded-2xl border-2 border-primary bg-white shadow-lg">
+      <div className="h-1.5 bg-neutral-100"><div className="h-full bg-primary transition-all" style={{ width: `${Math.min(100, (left / total) * 100)}%` }} /></div>
+      <div className="space-y-3 p-4">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="text-xs font-semibold uppercase text-primary">{t({ pt: "Nova entrega para si", en: "New delivery for you", fr: "Nouvelle livraison pour vous" })}</p>
+            <p className="text-3xl font-extrabold text-neutral-900">{kz(offer.payout)}</p>
+            {!!o.riderTip && <p className="text-xs font-semibold text-green-700">{t({ pt: `inclui ${kz(o.riderTip)} de gorjeta`, en: `includes ${kz(o.riderTip)} tip`, fr: `dont ${kz(o.riderTip)} de pourboire` })}</p>}
+          </div>
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xl font-extrabold text-brand-900" aria-label={t({ pt: `${left} segundos`, en: `${left} seconds`, fr: `${left} secondes` })}>{left}</div>
+        </div>
+        <div className="space-y-1 text-sm">
+          <p className="flex items-center gap-1.5"><StoreIcon className="h-4 w-4 text-primary" /><strong>{o.store.name}</strong>
+            {toStore != null && <span className="text-neutral-600">· {fmtKm(toStore)} {t({ pt: "até à loja", en: "to store", fr: "jusqu'au magasin" })}</span>}</p>
+          <p className="flex items-center gap-1.5"><MapPin className="h-4 w-4 text-green-700" />{o.deliveryAddress.zone}
+            {o.tripKm != null && <span className="text-neutral-600">· {fmtKm(o.tripKm)} {t({ pt: "de entrega", en: "delivery leg", fr: "de livraison" })}</span>}</p>
+          {o.readyEstimateAt && <p className="flex items-center gap-1.5 text-neutral-600"><Clock className="h-4 w-4" />{t({ pt: "Comida pronta às", en: "Food ready at", fr: "Repas prêt à" })} {time(o.readyEstimateAt, lang)}</p>}
+          {o.collectCash > 0 && <p className="flex items-center gap-1.5 font-semibold text-brand-800"><Banknote className="h-4 w-4" />{t({ pt: "Cobrar", en: "Collect", fr: "Encaisser" })} {kz(o.collectCash)}</p>}
+          {o.priority && <p className="font-semibold text-primary">⚡ {t({ pt: "Prioritária", en: "Priority", fr: "Prioritaire" })}</p>}
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" className="h-12 flex-1" disabled={decline.isPending || accept.isPending} onClick={() => decline.mutate(offer.id)}>
+            {t({ pt: "Recusar", en: "Decline", fr: "Refuser" })}
+          </Button>
+          <Button className="h-12 flex-[2] text-base font-bold" disabled={accept.isPending || decline.isPending} onClick={() => accept.mutate(offer.id)}>
+            {t({ pt: "Aceitar entrega", en: "Accept delivery", fr: "Accepter" })}
+          </Button>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -387,13 +523,15 @@ function AvailableList({ onClaimError, myPos }: { onClaimError: (e: Error) => vo
                   <p className="text-sm text-neutral-600">{o.store.zone} → <strong>{o.deliveryAddress.zone}</strong></p>
                 </div>
                 <div className="text-right">
-                  <p className="text-lg font-bold text-green-700">{kz(o.deliveryFee)}</p>
+                  <p className="text-lg font-bold text-green-700">{kz(o.payout ?? o.deliveryFee)}</p>
                   <p className="text-[11px] text-neutral-500">{t({ pt: "ganho", en: "earning", fr: "gain" })}</p>
                 </div>
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-neutral-600">
                 <StatusBadge status={o.status} />
-                <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />{time(o.createdAt, lang)}</span>
+                <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />{o.readyEstimateAt
+                  ? t({ pt: `pronta às ${time(o.readyEstimateAt, lang)}`, en: `ready at ${time(o.readyEstimateAt, lang)}`, fr: `prête à ${time(o.readyEstimateAt, lang)}` })
+                  : time(o.createdAt, lang)}</span>
                 {dist !== null && <span className="inline-flex items-center gap-1"><Navigation className="h-3 w-3" />{t({ pt: `loja a ${fmtKm(dist)}`, en: `store ${fmtKm(dist)} away`, fr: `magasin à ${fmtKm(dist)}` })}</span>}
                 {o.priority && <span className="rounded-full bg-primary px-2 py-0.5 font-bold text-on-brand">⚡ {t({ pt: "Prioritária", en: "Priority", fr: "Prioritaire" })}</span>}
                 {!!o.riderTip && <span className="rounded-full bg-green-100 px-2 py-0.5 font-bold text-green-800">+{kz(o.riderTip)} {t({ pt: "gorjeta", en: "tip", fr: "pourboire" })}</span>}

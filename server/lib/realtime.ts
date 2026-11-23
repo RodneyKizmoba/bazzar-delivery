@@ -24,6 +24,8 @@ type Channel = `user:${number}` | `store:${number}` | `driver:${number}` | "driv
 export type LiveEvent =
   | { type: "order"; id: number; status: string; at: string; step?: "assigned" | "at_store" | "at_customer" | "created" | "updated" }
   | { type: "location"; id: number; at: string }
+  | { type: "offer"; id: number; offerId: number; status: "new" | "gone"; at: string }
+  | { type: "dispatch"; id: number; status: "failed"; at: string }
   | { type: "hello"; channels: number };
 
 const channels = new Map<string, Set<WebSocket>>();
@@ -150,6 +152,16 @@ export function publishOrder(order: Pick<Order, "id" | "status" | "customerId" |
 /** Nova posição do estafeta: só para o cliente da encomenda (e admin). */
 export function publishLocation(order: Pick<Order, "id" | "customerId">) {
   publish([`user:${order.customerId}`, "admin"], { type: "location", id: order.id, at: new Date().toISOString() });
+}
+
+/** Oferta de entrega para um estafeta (nova ou retirada). Só id; os detalhes vêm de /api/driver/offers. */
+export function publishOffer(driverId: number, orderId: number, offerId: number, status: "new" | "gone") {
+  publish([`driver:${driverId}`], { type: "offer", id: orderId, offerId, status, at: new Date().toISOString() });
+}
+
+/** Ninguém aceitou a entrega: alerta para o admin e lista aberta para todos os estafetas. */
+export function publishDispatchFailed(orderId: number) {
+  publish(["admin", "drivers"], { type: "dispatch", id: orderId, status: "failed", at: new Date().toISOString() });
 }
 
 export function liveStats() {

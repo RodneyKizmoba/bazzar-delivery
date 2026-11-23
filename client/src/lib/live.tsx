@@ -11,6 +11,8 @@ import { useAuth } from "@/hooks/useAuth";
 type LiveEvent =
   | { type: "order"; id: number; status: string; at: string; step?: string }
   | { type: "location"; id: number; at: string }
+  | { type: "offer"; id: number; offerId: number; status: "new" | "gone"; at: string }
+  | { type: "dispatch"; id: number; status: "failed"; at: string }
   | { type: "hello"; channels: number };
 
 const LiveContext = createContext(false);
@@ -28,7 +30,7 @@ export function usePollInterval(fallbackMs: number, liveMs = 60_000) {
 }
 export const useLive = () => useContext(LiveContext);
 
-const ORDER_KEYS = /^\/api\/(orders|partner\/orders|partner\/stats|driver\/(available|current|history|earnings)|admin\/(orders|dashboard|stats))/;
+const ORDER_KEYS = /^\/api\/(orders|partner\/orders|partner\/stats|driver\/(available|current|history|earnings|offers)|admin\/(orders|dashboard|stats|dispatch))/;
 
 function refreshOrders(id?: number) {
   void queryClient.invalidateQueries({
@@ -64,6 +66,12 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         try { ev = JSON.parse(m.data); } catch { return; }
         if (ev.type === "order") refreshOrders(ev.id);
         else if (ev.type === "location") void queryClient.invalidateQueries({ queryKey: [`/api/orders/${ev.id}/tracking`] });
+        else if (ev.type === "offer") {
+          void queryClient.invalidateQueries({ queryKey: ["/api/driver/offers"] });
+          void queryClient.invalidateQueries({ queryKey: ["/api/driver/available"] });
+        } else if (ev.type === "dispatch") {
+          void queryClient.invalidateQueries({ predicate: (q) => /^\/api\/(driver\/available|admin\/(dispatch|orders|dashboard))/.test(String(q.queryKey[0])) });
+        }
       };
       ws.onclose = () => {
         liveNow = false;

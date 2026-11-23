@@ -45,7 +45,10 @@ export interface PartnerOrder {
   driverAtStoreAt?: string | null; subtotal: number; total: number; deliveryFee: number;
   paymentMethod: string; paymentStatus: string; driverId: number | null; groupOrderId: number | null;
   cancelReason: string | null; items: PartnerOrderItem[];
+  prepMinutes?: number | null; readyEstimateAt?: string | null;
 }
+
+const PREP_CHOICES = [10, 15, 20, 30, 45];
 
 const ORDERS_ACTIVE = "/api/partner/orders?scope=active";
 const ORDERS_HISTORY = "/api/partner/orders?scope=history";
@@ -222,14 +225,24 @@ function OrderCard({ order }: { order: PartnerOrder }) {
   const { toast } = useToast();
   const [rejectOpen, setRejectOpen] = useState(false);
   const [reason, setReason] = useState("");
+  const [prep, setPrep] = useState<number | null>(null);
   const mins = minutesSince(order.createdAt);
 
   const setStatus = useMutation({
-    mutationFn: (v: { status: string; note?: string }) => post(`/api/partner/orders/${order.id}/status`, v),
+    mutationFn: (v: { status: string; note?: string; prepMinutes?: number }) => post(`/api/partner/orders/${order.id}/status`, v),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [ORDERS_ACTIVE] });
       queryClient.invalidateQueries({ queryKey: [ORDERS_HISTORY] });
       setRejectOpen(false);
+    },
+    onError: (err: Error) => toast({ variant: "destructive", title: t(T.error), description: err.message }),
+  });
+
+  const delay = useMutation({
+    mutationFn: (minutes: number) => post(`/api/partner/orders/${order.id}/delay`, { minutes }),
+    onSuccess: (_d, minutes) => {
+      queryClient.invalidateQueries({ queryKey: [ORDERS_ACTIVE] });
+      toast({ title: t({ pt: `Mais ${minutes} min — o cliente e o estafeta foram avisados`, en: `${minutes} more min — customer and rider updated`, fr: `${minutes} min de plus — client et livreur prévenus` }) });
     },
     onError: (err: Error) => toast({ variant: "destructive", title: t(T.error), description: err.message }),
   });
@@ -343,13 +356,34 @@ function OrderCard({ order }: { order: PartnerOrder }) {
         )}
         {order.status === "pending" && (
           <>
-            <Button className="flex-1" disabled={setStatus.isPending} onClick={() => setStatus.mutate({ status: "accepted" })}>
+            <div className="w-full" role="group" aria-label={t({ pt: "Tempo de preparação", en: "Prep time", fr: "Temps de préparation" })}>
+              <p className="mb-1 text-xs font-semibold text-neutral-600">{t({ pt: "Pronta em quanto tempo?", en: "Ready in how long?", fr: "Prête dans combien de temps ?" })}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {PREP_CHOICES.map((m) => (
+                  <button key={m} type="button" aria-pressed={prep === m} onClick={() => setPrep(prep === m ? null : m)}
+                    className={cn("min-h-9 rounded-full border px-3 text-sm font-semibold", prep === m ? "border-primary bg-brand-100 text-brand-900" : "bg-white text-neutral-700")}>
+                    {m} min
+                  </button>
+                ))}
+              </div>
+            </div>
+            <Button className="flex-1" disabled={setStatus.isPending} onClick={() => setStatus.mutate({ status: "accepted", ...(prep ? { prepMinutes: prep } : {}) })}>
               {t({ pt: "Aceitar", en: "Accept", fr: "Accepter" })}
             </Button>
             <Button variant="outline" className="flex-1 text-red-700" disabled={setStatus.isPending} onClick={() => setRejectOpen(true)}>
               {t({ pt: "Recusar", en: "Reject", fr: "Refuser" })}
             </Button>
           </>
+        )}
+        {(order.status === "accepted" || order.status === "preparing") && order.readyEstimateAt && (
+          <div className="flex w-full flex-wrap items-center gap-1.5 text-xs">
+            <span className="font-semibold text-neutral-700">⏱ {t({ pt: "Pronta às", en: "Ready at", fr: "Prête à" })} {time(order.readyEstimateAt, lang)}</span>
+            <span className="text-neutral-500">· {t({ pt: "Precisa de mais tempo?", en: "Need more time?", fr: "Besoin de plus de temps ?" })}</span>
+            {[5, 10, 15].map((m) => (
+              <button key={m} type="button" disabled={delay.isPending} onClick={() => delay.mutate(m)}
+                className="min-h-8 rounded-full border px-2.5 font-semibold text-neutral-700 hover:bg-neutral-50">+{m}</button>
+            ))}
+          </div>
         )}
         {order.status === "accepted" && (
           <Button className="flex-1" disabled={setStatus.isPending} onClick={() => setStatus.mutate({ status: "preparing" })}>

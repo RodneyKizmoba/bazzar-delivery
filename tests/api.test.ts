@@ -1,6 +1,8 @@
 /**
  * PedeJá — API end-to-end + security test suite.
  * Run against a FRESH seeded DB:  npx tsx tests/api.test.ts
+ * The server must run with DISPATCH_OFFER_SECONDS=4 DISPATCH_TICK_MS=500 (fast dispatch timeouts), e.g.
+ *   DISPATCH_OFFER_SECONDS=4 DISPATCH_TICK_MS=500 bash scripts/local-server.sh
  * BASE env var overrides the server URL (default http://localhost:5055).
  */
 import WebSocket from "ws";
@@ -1053,6 +1055,157 @@ async function main() {
     await loja.patch(`/api/partner/items/1/availability`, { isAvailable: true });
     r = await loja.del(`/api/partner/items/${itemId}`);
     check("delete unused item -> 204", r.status === 204, r.status);
+  });
+
+  // =========================================================================
+  await section("Dispatch engine (offers one rider at a time, prep time, timeouts)", async () => {
+    // Server for this suite runs with DISPATCH_OFFER_SECONDS=4 and DISPATCH_TICK_MS=500 (see tests/README or run command).
+    const STORE = { latitude: -8.9172, longitude: 13.1846 }; // loja 1
+    const unap = new Client("unap");
+    await unap.post("/api/auth/register", { username: `unap_${uniq}`, password: "Teste#2026xx", fullName: "Por Aprovar", phone: "+244923222009", userType: "driver" });
+    let r = await unap.post("/api/driver/presence", { online: true });
+    check("unapproved rider can't go online (403)", r.status === 403, r.status);
+
+    const mk = async (tag: string, phone: string) => {
+      const c = new Client(tag);
+      const reg = await c.post("/api/auth/register", { username: `${tag}_${uniq}`, password: "Teste#2026xx", fullName: `Rider ${tag}`, phone, userType: "driver" });
+      await admin.patch(`/api/admin/users/${reg.body.user.id}`, { isApproved: true });
+      await c.login(`${tag}_${uniq}`, "Teste#2026xx");
+      return { c, id: reg.body.user.id as number };
+    };
+    const r1 = await mk("rnear", "+244923222001");
+    const r2 = await mk("rfar", "+244923222002");
+    r = await r1.c.post("/api/driver/presence", { online: true, ...STORE });
+    check("approved rider goes online with GPS", r.status === 200 && r.body.presence.isOnline === true && r.body.presence.latitude === STORE.latitude, r.body);
+    r = await r2.c.post("/api/driver/presence", { online: true, latitude: STORE.latitude + 0.027, longitude: STORE.longitude });
+    check("second rider online ~3 km away", r.status === 200 && r.body.presence.isOnline, r.body);
+    r = await r1.c.get("/api/driver/presence");
+    check("presence readable by the rider", r.status === 200 && r.body.presence.isOnline && r.body.offerSeconds === 4, r.body);
+    const liveR2 = await openLive(r2.c);
+    const liveAdmin = await openLive(admin);
+
+    // --- prep time chosen by the store
+    let o = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash" });
+    const A = o.body.order.id;
+    r = await loja.post(`/api/partner/orders/${A}/status`, { status: "accepted", prepMinutes: 3 });
+    check("prepMinutes below 5 rejected (400)", r.status === 400, r.status);
+    const t0 = Date.now();
+    r = await loja.post(`/api/partner/orders/${A}/status`, { status: "accepted", prepMinutes: 30 });
+    const readyAt = new Date(r.body.order?.readyEstimateAt).getTime();
+    check("store accepts with 30 min prep: prepMinutes + ready time saved", r.status === 200 && r.body.order.prepMinutes === 30 && Math.abs(readyAt - t0 - 30 * 60_000) < 15_000, r.body.order);
+    check("customer ETA = ready time + ride", new Date(r.body.order.estimatedDeliveryAt).getTime() > readyAt, r.body.order.estimatedDeliveryAt);
+    r = await loja.post(`/api/partner/orders/${A}/delay`, { minutes: 10 });
+    check("store 'needs 10 more min' moves the ready time", r.status === 200 && new Date(r.body.order.readyEstimateAt).getTime() - readyAt > 9.5 * 60_000 && r.body.order.prepMinutes === 40, r.body.order);
+    r = await loja.post(`/api/partner/orders/${A}/delay`, { minutes: 7 });
+    check("delay only allows +5/+10/+15 (400)", r.status === 400, r.status);
+    r = await loja2.post(`/api/partner/orders/${A}/delay`, { minutes: 5 });
+    check("other store can't delay this order (403)", r.status === 403, r.status);
+
+    // --- smart timing: food ready in 40 min, so nobody is called yet
+    await sleep(1500);
+    r = await r1.c.get("/api/driver/offers");
+    check("smart timing: no offer while the food is far from ready", r.status === 200 && r.body.offer === null, r.body);
+    r = await r1.c.get("/api/driver/available");
+    check("…but it stays visible on the open list (with ready time)", r.body.orders.some((x: any) => x.id === A && x.readyEstimateAt), r.body.orders?.map((x: any) => x.id));
+
+    // --- ready: offer goes to the nearest rider only
+    await loja.post(`/api/partner/orders/${A}/status`, { status: "preparing" });
+    await loja.post(`/api/partner/orders/${A}/status`, { status: "ready" });
+    let offer: any = null;
+    for (let i = 0; i < 10 && !offer; i++) { await sleep(400); offer = (await r1.c.get("/api/driver/offers")).body.offer; }
+    check("ready -> offer to the NEAREST rider within ~1s", offer && offer.order.id === A && offer.distanceKm < 0.5, offer);
+    check("offer shows payout (fee + tip), store, drop-off zone, countdown", offer && offer.payout === offer.order.deliveryFee + offer.order.riderTip && offer.order.store.name && offer.order.deliveryAddress.zone && offer.secondsLeft > 0 && offer.secondsLeft <= 4, offer);
+    r = await r2.c.get("/api/driver/offers");
+    check("farther rider gets no offer at the same time", r.body.offer === null, r.body);
+    r = await r2.c.get("/api/driver/available");
+    check("reserved order hidden from other riders' open list", !r.body.orders.some((x: any) => x.id === A), r.body.orders?.map((x: any) => x.id));
+    r = await r2.c.post(`/api/driver/orders/${A}/claim`);
+    check("other rider can't grab a reserved order (409 OFFERED_TO_OTHER)", r.status === 409 && r.body.code === "OFFERED_TO_OTHER", r.body);
+    r = await r2.c.post(`/api/driver/offers/${offer.id}/accept`);
+    check("rider can't accept someone else's offer (404)", r.status === 404, r.status);
+
+    // --- decline -> next rider immediately
+    r = await r1.c.post(`/api/driver/offers/${offer.id}/decline`);
+    check("nearest rider declines", r.status === 200, r.body);
+    let offer2: any = null;
+    for (let i = 0; i < 10 && !offer2; i++) { await sleep(300); offer2 = (await r2.c.get("/api/driver/offers")).body.offer; }
+    check("decline -> offered to the next rider straight away", offer2 && offer2.order.id === A && offer2.distanceKm > 2.5 && offer2.distanceKm < 3.5, offer2);
+    check("live: next rider gets an 'offer new' event", !!(await waitFor(liveR2.events, (e: any) => e.type === "offer" && e.id === A && e.status === "new")), liveR2.events);
+    r = await r1.c.get("/api/driver/offers");
+    check("declined order is not offered again to the same rider", r.body.offer === null, r.body);
+
+    // --- no answer -> expires; nobody left -> open list + admin alert
+    await sleep(4800);
+    r = await r2.c.get("/api/driver/offers");
+    check("offer expires after the timeout (4s in tests, 30s live)", r.body.offer === null, r.body);
+    r = await r2.c.post(`/api/driver/offers/${offer2.id}/accept`);
+    check("accepting an expired offer -> 409 OFFER_EXPIRED", r.status === 409 && r.body.code === "OFFER_EXPIRED", r.body);
+    let failed = false;
+    for (let i = 0; i < 40 && !failed; i++) {
+      await sleep(1000);
+      const d = (await admin.get("/api/admin/dispatch")).body;
+      failed = d.waiting?.some((w: any) => w.id === A && w.dispatchFailedAt);
+    }
+    check("nobody accepts -> marked failed (admin dispatch board)", failed, "not failed");
+    check("live: admin gets a 'dispatch failed' alert", !!(await waitFor(liveAdmin.events, (e: any) => e.type === "dispatch" && e.id === A)), liveAdmin.events.slice(-5));
+    const board = (await admin.get("/api/admin/dispatch")).body;
+    const logA = board.offers.filter((x: any) => x.orderId === A).map((x: any) => x.status).sort();
+    check("offer log shows declined + no answer", JSON.stringify(logA) === JSON.stringify(["declined", "expired"]), logA);
+    check("board lists online riders", board.riders.filter((x: any) => [r1.id, r2.id].includes(x.id) && x.isOnline).length === 2, board.riders);
+    r = await r1.c.get("/api/driver/available");
+    check("failed order back on the open list for everyone", r.body.orders.some((x: any) => x.id === A), r.body.orders?.map((x: any) => x.id));
+    r = await admin.post(`/api/admin/orders/${A}/redispatch`);
+    check("admin 'try again' restarts auto dispatch", r.status === 200 && r.body.order.dispatchFailedAt === null, r.body);
+    r = await r1.c.post(`/api/driver/orders/${A}/claim`);
+    // after redispatch nobody is eligible (both already asked) so the open list still works
+    check("rider takes it from the open list", r.status === 200 && r.body.order.driverId === r1.id, r.body);
+
+    // --- B: r1 busy -> r2 gets it and accepts
+    o = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash" });
+    const B = o.body.order.id;
+    await loja.post(`/api/partner/orders/${B}/status`, { status: "accepted", prepMinutes: 5 });
+    await loja.post(`/api/partner/orders/${B}/status`, { status: "preparing" });
+    await loja.post(`/api/partner/orders/${B}/status`, { status: "ready" });
+    let ob: any = null;
+    for (let i = 0; i < 10 && !ob; i++) { await sleep(400); ob = (await r2.c.get("/api/driver/offers")).body.offer; }
+    check("busy rider skipped: offer goes to the free one", ob && ob.order.id === B, ob);
+    r = await r2.c.post(`/api/driver/offers/${ob.id}/accept`);
+    check("rider accepts the offer -> assigned", r.status === 200 && r.body.order.driverId === r2.id && r.body.order.driverAssignedAt, r.body);
+    r = await r2.c.post(`/api/driver/offers/${ob.id}/accept`);
+    check("accepting twice -> 409", r.status === 409, r.status);
+    const logB = (await admin.get("/api/admin/dispatch")).body.offers.find((x: any) => x.id === ob.id);
+    check("offer log: accepted", logB?.status === "accepted", logB);
+
+    // finish B and A
+    for (const [c, id] of [[r2.c, B], [r1.c, A]] as const) {
+      await c.post(`/api/driver/orders/${id}/status`, { status: "picked_up" });
+      await c.post(`/api/driver/orders/${id}/status`, { status: "delivered" });
+    }
+
+    // --- C: rider goes offline while holding an offer -> declined, passed on
+    o = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash" });
+    const C = o.body.order.id;
+    await loja.post(`/api/partner/orders/${C}/status`, { status: "accepted" });
+    await loja.post(`/api/partner/orders/${C}/status`, { status: "preparing" });
+    await loja.post(`/api/partner/orders/${C}/status`, { status: "ready" });
+    let oc: any = null;
+    for (let i = 0; i < 10 && !oc; i++) { await sleep(400); oc = (await r1.c.get("/api/driver/offers")).body.offer; }
+    check("C offered to nearest free rider", oc && oc.order.id === C, oc);
+    r = await r1.c.post("/api/driver/presence", { online: false });
+    check("rider goes offline", r.status === 200 && r.body.presence.isOnline === false, r.body);
+    let oc2: any = null;
+    for (let i = 0; i < 10 && !oc2; i++) { await sleep(300); oc2 = (await r2.c.get("/api/driver/offers")).body.offer; }
+    check("going offline hands the offer to the next rider", oc2 && oc2.order.id === C, oc2);
+    // admin assigns manually: offer closed
+    r = await admin.post(`/api/admin/orders/${C}/assign-driver`, { driverId: r2.id });
+    check("admin assigns manually", r.status === 200 && r.body.order.driverId === r2.id, r.body);
+    r = await r2.c.get("/api/driver/offers");
+    check("manual assignment closes the open offer", r.body.offer === null, r.body);
+    r = await admin.post(`/api/admin/orders/${C}/status`, { status: "cancelled", note: "teste" });
+    await r2.c.post("/api/driver/presence", { online: false });
+    r = await cli.get(`/api/driver/offers`);
+    check("customers can't read rider offers (403)", r.status === 403, r.status);
+    liveR2.ws.close(); liveAdmin.ws.close();
   });
 
   // =========================================================================

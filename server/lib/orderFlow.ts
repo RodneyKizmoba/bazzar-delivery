@@ -12,7 +12,8 @@ import { assertMethodAvailable, refundOrderPayment, startOrderPayment } from "./
 import { notifyOrderStatus } from "./notify";
 import { notifyExternalDispatch } from "./dispatch";
 import { sendPosWebhook } from "./pos";
-import { publishOrder } from "./realtime";
+import { publishOffer, publishOrder } from "./realtime";
+import { assertNotReservedForOther, closeOffersOnClaim, dispatchTimes } from "./dispatchEngine";
 
 export type Actor = { kind: "customer" | "store" | "driver" | "admin" | "system"; userId?: number };
 
@@ -147,7 +148,7 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
 }
 
 /** Mudança de estado com bloqueio de linha, validação de transição e efeitos colaterais. */
-export async function changeStatus(orderId: number, to: OrderStatus, actor: Actor, note?: string | null): Promise<Order> {
+export async function changeStatus(orderId: number, to: OrderStatus, actor: Actor, note?: string | null, opts: { prepMinutes?: number } = {}): Promise<Order> {
   const result = await db.transaction(async (tx) => {
     const [order] = await tx.select().from(orders).where(eq(orders.id, orderId)).for("update");
     if (!order) throw notFound("Encomenda não encontrada");
@@ -177,7 +178,29 @@ export async function changeStatus(orderId: number, to: OrderStatus, actor: Acto
     }
     if (to === "accepted") {
       const [store] = await tx.select().from(stores).where(eq(stores.id, order.storeId));
-      if (store && !order.scheduledFor) patch.estimatedDeliveryAt = new Date(now.getTime() + store.deliveryTimeMin * 60_000);
+      if (store) {
+        // a loja diz quanto tempo precisa para ESTA encomenda; o estafeta é chamado para chegar a essa hora
+        const prep = opts.prepMinutes ?? store.prepTimeMin;
+        const rideMin = Math.max(10, store.deliveryTimeMin - store.prepTimeMin);
+        let readyAt = new Date(now.getTime() + prep * 60_000);
+        if (order.scheduledFor) {
+          const wanted = new Date(order.scheduledFor.getTime() - rideMin * 60_000);
+          if (wanted > readyAt) readyAt = wanted;
+        } else {
+          patch.estimatedDeliveryAt = new Date(readyAt.getTime() + rideMin * 60_000);
+        }
+        patch.prepMinutes = prep;
+        Object.assign(patch, dispatchTimes(now, readyAt, order.priorityFee > 0));
+      }
+    }
+    if (to === "ready") {
+      // pronta mais cedo (ou à hora): procurar estafeta já
+      if (!order.readyEstimateAt || order.readyEstimateAt > now) patch.readyEstimateAt = now;
+      if (!order.dispatchAt || order.dispatchAt > now) patch.dispatchAt = now;
+      if (!order.scheduledFor && order.readyEstimateAt && order.readyEstimateAt > now && order.estimatedDeliveryAt) {
+        // pronta antes do previsto: a hora de chegada do cliente também avança
+        patch.estimatedDeliveryAt = new Date(order.estimatedDeliveryAt.getTime() - (order.readyEstimateAt.getTime() - now.getTime()));
+      }
     }
     const [updated] = await tx.update(orders).set(patch).where(eq(orders.id, order.id)).returning();
     await tx.insert(orderEvents).values({ orderId: order.id, status: to, actorId: actor.userId ?? null, note: note || null });
@@ -228,16 +251,20 @@ export async function claimDelivery(orderId: number, driverId: number): Promise<
     const [active] = await tx.select({ id: orders.id }).from(orders)
       .where(and(eq(orders.driverId, driverId), inArray(orders.status, ["accepted", "preparing", "ready", "picked_up"])));
     if (active) throw conflict("Já tem uma entrega em curso. Termine-a antes de aceitar outra.", "DRIVER_BUSY");
+    await tx.select({ id: orders.id }).from(orders).where(eq(orders.id, orderId)).for("update");
+    await assertNotReservedForOther(tx, orderId, driverId);
     const [updated] = await tx.update(orders)
       .set({ driverId, driverAssignedAt: new Date(), updatedAt: new Date() })
       .where(and(eq(orders.id, orderId), sql`${orders.driverId} is null`, inArray(orders.status, ["accepted", "preparing", "ready"])))
       .returning();
     if (!updated) throw conflict("Esta entrega já não está disponível.", "NOT_AVAILABLE");
     await tx.insert(orderEvents).values({ orderId, status: updated.status, actorId: driverId, note: "Estafeta atribuído" });
-    return updated;
+    const gone = await closeOffersOnClaim(tx, orderId, driverId);
+    return { updated, gone };
   });
-  publishOrder(claimed, "assigned");
-  return claimed;
+  for (const g of claimed.gone) publishOffer(g.driverId, orderId, g.offerId, "gone");
+  publishOrder(claimed.updated, "assigned");
+  return claimed.updated;
 }
 
 /** O estafeta chegou à loja (antes de recolher) ou ao cliente (depois de recolher). */
@@ -256,6 +283,31 @@ export async function markArrived(orderId: number, driverId: number, at: "store"
     return updated;
   });
   publishOrder(done, at === "store" ? "at_store" : "at_customer");
+  return done;
+}
+
+/** A loja precisa de mais tempo: adia "pronto às", a hora prevista e a chamada do estafeta. */
+export async function delayPrep(orderId: number, ownerId: number, minutes: number): Promise<Order> {
+  const done = await db.transaction(async (tx) => {
+    const [o] = await tx.select().from(orders).where(eq(orders.id, orderId)).for("update");
+    if (!o) throw notFound("Encomenda não encontrada");
+    const [store] = await tx.select().from(stores).where(eq(stores.id, o.storeId));
+    if (!store || store.ownerId !== ownerId) throw forbidden();
+    if (!["accepted", "preparing"].includes(o.status)) throw conflict("Só pode adiar enquanto prepara a encomenda.", "BAD_STEP");
+    const now = new Date();
+    const base = o.readyEstimateAt && o.readyEstimateAt > now ? o.readyEstimateAt : now;
+    const readyAt = new Date(base.getTime() + minutes * 60_000);
+    const shift = readyAt.getTime() - (o.readyEstimateAt?.getTime() ?? now.getTime());
+    const patch: Partial<Order> = {
+      readyEstimateAt: readyAt, prepMinutes: (o.prepMinutes ?? store.prepTimeMin) + minutes, updatedAt: now,
+      estimatedDeliveryAt: o.estimatedDeliveryAt && !o.scheduledFor ? new Date(o.estimatedDeliveryAt.getTime() + Math.max(0, shift)) : o.estimatedDeliveryAt,
+    };
+    if (!o.driverId) Object.assign(patch, { dispatchAt: dispatchTimes(now, readyAt, o.priorityFee > 0).dispatchAt });
+    const [updated] = await tx.update(orders).set(patch).where(eq(orders.id, orderId)).returning();
+    await tx.insert(orderEvents).values({ orderId, status: o.status, actorId: ownerId, note: `Loja precisa de mais ${minutes} min` });
+    return updated;
+  });
+  publishOrder(done, "updated");
   return done;
 }
 

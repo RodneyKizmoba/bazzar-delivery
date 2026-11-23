@@ -18,6 +18,7 @@ import { ApiError, post, put, queryClient } from "@/lib/api";
 import { useLang, useT, T, type Tr } from "@/lib/i18n";
 import { kz, time, PAYMENT } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { PinPicker } from "@/components/OrderMap";
 
 // ---------------------------------------------------------------------------
 // Tipos
@@ -330,6 +331,7 @@ export function AddressForm({ address, onDone, onCancel, submitLabel }: {
     address?.latitude != null && address?.longitude != null ? { latitude: address.latitude, longitude: address.longitude } : null,
   );
   const [locating, setLocating] = useState(false);
+  const [pinMap, setPinMap] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
   const save = useMutation({
@@ -419,7 +421,18 @@ export function AddressForm({ address, onDone, onCancel, submitLabel }: {
             <button type="button" aria-label={t(T.remove)} onClick={() => setCoords(null)}><X className="h-3 w-3" /></button>
           </span>
         )}
+        {!coords && !pinMap && (
+          <Button type="button" variant="ghost" size="sm" onClick={() => setPinMap(true)}>
+            <MapPin className="mr-1.5 h-4 w-4" />{t({ pt: "Marcar no mapa", en: "Pin on the map", fr: "Placer sur la carte" })}
+          </Button>
+        )}
       </div>
+      {(coords || pinMap) && (
+        <div className="space-y-1">
+          <PinPicker value={coords} onChange={setCoords} emoji="🏠" className="h-48 w-full overflow-hidden rounded-xl border" />
+          <p className="text-xs text-neutral-500">{t({ pt: "Toque no mapa ou arraste o pino até à sua porta: o estafeta vai directo a esse ponto.", en: "Tap the map or drag the pin to your door: the rider goes straight there.", fr: "Touchez la carte ou déplacez le repère jusqu'à votre porte : le livreur ira directement à ce point." })}</p>
+        </div>
+      )}
       {formError && <p className="text-sm text-red-600" role="alert">{formError}</p>}
       <div className="flex gap-2 pt-1">
         {onCancel && <Button type="button" variant="ghost" onClick={onCancel}>{t(T.cancel)}</Button>}

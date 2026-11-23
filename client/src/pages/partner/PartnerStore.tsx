@@ -15,6 +15,7 @@ import { del, patch, post, put, queryClient } from "@/lib/api";
 import { useT, T, type Tr } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { usePartnerTabs, usePartnerTitle } from "./PartnerOrders";
+import { PinPicker } from "@/components/OrderMap";
 
 export default function PartnerStore() {
   const tabs = usePartnerTabs();
@@ -34,6 +35,7 @@ interface Form {
   zonesServed: string[]; logoUrl: string; coverUrl: string; openingTime: string; closingTime: string;
   isOpen: boolean; deliveryFee: string; minOrder: string; prepTimeMin: string; deliveryTimeMin: string;
   minNoticeHours: string; maxOrdersPerDay: string; payoutMethod: string; payoutReference: string; theme: string;
+  pin: { latitude: number; longitude: number } | null;
 }
 
 function StoreForm() {
@@ -43,6 +45,16 @@ function StoreForm() {
   const metaQ = useQuery<{ zones: string[] }>({ queryKey: ["/api/meta"] });
   const [f, setF] = useState<Form | null>(null);
   const [cuisineInput, setCuisineInput] = useState("");
+  const [locating, setLocating] = useState(false);
+  const useHere = () => {
+    if (!("geolocation" in navigator)) return;
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (p) => { setF((x) => (x ? { ...x, pin: { latitude: p.coords.latitude, longitude: p.coords.longitude } } : x)); setLocating(false); },
+      () => { setLocating(false); toast({ variant: "destructive", title: t({ pt: "Não foi possível obter a localização", en: "Couldn't get your location", fr: "Position introuvable" }) }); },
+      { enableHighAccuracy: true, timeout: 15_000 },
+    );
+  };
 
   useEffect(() => {
     const s = storeQ.data?.store;
@@ -55,6 +67,7 @@ function StoreForm() {
         prepTimeMin: String(s.prepTimeMin ?? 20), deliveryTimeMin: String(s.deliveryTimeMin ?? 35),
         minNoticeHours: String(Math.round((s.minNoticeMin ?? 0) / 60)), maxOrdersPerDay: s.maxOrdersPerDay ? String(s.maxOrdersPerDay) : "",
         payoutMethod: s.payoutMethod ?? "", payoutReference: s.payoutReference ?? "", theme: s.theme ?? "",
+        pin: s.latitude != null && s.longitude != null ? { latitude: s.latitude, longitude: s.longitude } : null,
       });
     }
   }, [storeQ.data]);
@@ -115,6 +128,7 @@ function StoreForm() {
       minNoticeMin: Number(form.minNoticeHours) * 60, maxOrdersPerDay: form.maxOrdersPerDay === "" ? null : Number(form.maxOrdersPerDay),
       payoutMethod: form.payoutMethod || null, payoutReference: form.payoutReference.trim() || null,
       theme: form.theme || null,
+      latitude: form.pin?.latitude ?? null, longitude: form.pin?.longitude ?? null,
     });
   };
 
@@ -168,6 +182,19 @@ function StoreForm() {
           <Field id="st-street" label={{ pt: "Morada", en: "Address", fr: "Adresse" }} className="sm:col-span-2">
             <Input id="st-street" value={form.street} maxLength={200} onChange={(e) => set("street", e.target.value)} />
           </Field>
+        </div>
+      </Card>
+
+      <Card title={{ pt: "Localização no mapa", en: "Location on the map", fr: "Position sur la carte" }}>
+        <p className="mb-2 text-sm text-neutral-600">
+          {t({ pt: "Os estafetas usam este pino para chegar à loja, e mandamos cada entrega ao estafeta mais perto. Toque no mapa ou arraste o pino.", en: "Riders use this pin to reach the store, and each delivery goes to the nearest rider. Tap the map or drag the pin.", fr: "Les livreurs utilisent ce repère pour venir au magasin, et chaque livraison va au livreur le plus proche. Touchez la carte ou déplacez le repère." })}
+        </p>
+        <PinPicker value={form.pin} onChange={(p) => set("pin", p)} emoji="🏪" />
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <Button type="button" variant="outline" size="sm" disabled={locating} onClick={useHere}>
+            📍 {locating ? t({ pt: "A localizar…", en: "Locating…", fr: "Localisation…" }) : t({ pt: "Estou na loja: usar a minha localização", en: "I'm at the store: use my location", fr: "Je suis au magasin : utiliser ma position" })}
+          </Button>
+          {!form.pin && <span className="text-xs font-semibold text-red-700">{t({ pt: "Sem localização: os estafetas não a encontram no mapa.", en: "No location: riders can't find it on the map.", fr: "Pas de position : les livreurs ne la trouvent pas." })}</span>}
         </div>
       </Card>
 

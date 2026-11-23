@@ -9,3 +9,4 @@ vite.config.ts.*
 cookies.txt
 
 tests/screenshots
+.shots/

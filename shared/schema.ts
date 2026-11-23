@@ -196,6 +196,12 @@ export const orders = pgTable("orders", {
   driverAtStoreAt: timestamp("driver_at_store_at"),
   driverAtCustomerAt: timestamp("driver_at_customer_at"),
   externalDispatchId: text("external_dispatch_id"),
+  // despacho: tempo de preparação escolhido pela loja ao aceitar e quando começar a procurar estafeta
+  prepMinutes: integer("prep_minutes"),
+  readyEstimateAt: timestamp("ready_estimate_at"),
+  dispatchAt: timestamp("dispatch_at"),
+  dispatchRound: integer("dispatch_round").notNull().default(0),
+  dispatchFailedAt: timestamp("dispatch_failed_at"), // ninguém aceitou: lista aberta + alerta ao admin
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
   deliveredAt: timestamp("delivered_at"),
@@ -231,6 +237,38 @@ export const orderEvents = pgTable("order_events", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 export type OrderEvent = typeof orderEvents.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// Despacho (estafetas online e ofertas de entrega)
+// ---------------------------------------------------------------------------
+export const driverPresence = pgTable("driver_presence", {
+  userId: integer("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  isOnline: boolean("is_online").notNull().default(false),
+  latitude: real("latitude"),
+  longitude: real("longitude"),
+  locationAt: timestamp("location_at"),
+  onlineSince: timestamp("online_since"),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+export type DriverPresence = typeof driverPresence.$inferSelect;
+
+export const OFFER_STATUSES = ["pending", "accepted", "declined", "expired", "cancelled"] as const;
+export const dispatchOffers = pgTable("dispatch_offers", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+  driverId: integer("driver_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  status: text("status").$type<(typeof OFFER_STATUSES)[number]>().notNull().default("pending"),
+  round: integer("round").notNull(),
+  distanceKm: real("distance_km"),
+  payout: integer("payout").notNull(),
+  offeredAt: timestamp("offered_at").notNull().defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(),
+  respondedAt: timestamp("responded_at"),
+}, (t) => [
+  index("dispatch_offers_order_idx").on(t.orderId),
+  index("dispatch_offers_driver_idx").on(t.driverId, t.status),
+]);
+export type DispatchOffer = typeof dispatchOffers.$inferSelect;
 
 export const payments = pgTable("payments", {
   id: serial("id").primaryKey(),
@@ -472,6 +510,8 @@ export const storeUpdateSchema = z.object({
   minOrder: z.number().int().min(0).max(1000000),
   prepTimeMin: z.number().int().min(1).max(240),
   deliveryTimeMin: z.number().int().min(5).max(300),
+  latitude: z.number().min(-90).max(90).nullable(),
+  longitude: z.number().min(-180).max(180).nullable(),
   minNoticeMin: z.number().int().min(0).max(10080),
   maxOrdersPerDay: z.number().int().min(1).max(10000).nullable(),
   payoutMethod: z.enum(PAYOUT_METHODS).nullable(),

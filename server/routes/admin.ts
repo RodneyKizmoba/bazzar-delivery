@@ -8,6 +8,8 @@ import { publicUser, requireRole } from "../lib/auth";
 import { changeStatus } from "../lib/orderFlow";
 import { STORE_THEME_IDS } from "@shared/themes";
 import { withoutSecrets } from "../lib/pos";
+import { closeOffersOnClaim, redispatch } from "../lib/dispatchEngine";
+import { publishOffer, publishOrder } from "../lib/realtime";
 
 export const adminRouter = Router();
 adminRouter.use(requireRole("admin"));
@@ -51,6 +53,36 @@ adminRouter.post("/orders/:id/status", ah(async (req, res) => {
   res.json({ order });
 }));
 
+/** Centro de despacho: estafetas online, entregas à espera e últimas ofertas. */
+adminRouter.get("/dispatch", ah(async (_req, res) => {
+  const riders = await db.execute(sql`
+    select u.id, u.full_name as "name", u.phone, p.is_online as "isOnline", p.latitude, p.longitude, p.location_at as "locationAt",
+      (select o.id from orders o where o.driver_id = u.id and o.status in ('accepted','preparing','ready','picked_up') limit 1) as "currentOrderId"
+    from users u left join driver_presence p on p.user_id = u.id
+    where u.user_type = 'driver' and u.is_approved and u.is_active
+    order by p.is_online desc nulls last, u.full_name`);
+  const waiting = await db.execute(sql`
+    select o.id, o.order_number as "orderNumber", o.status, s.name as "storeName", o.ready_estimate_at as "readyEstimateAt",
+      o.dispatch_at as "dispatchAt", o.dispatch_round as "dispatchRound", o.dispatch_failed_at as "dispatchFailedAt", o.priority_fee > 0 as priority,
+      (select d.driver_id from dispatch_offers d where d.order_id = o.id and d.status = 'pending' limit 1) as "offeredTo"
+    from orders o join stores s on s.id = o.store_id
+    where o.driver_id is null and o.status in ('accepted','preparing','ready')
+    order by o.dispatch_failed_at nulls last, o.created_at`);
+  const offers = await db.execute(sql`
+    select d.id, d.order_id as "orderId", d.driver_id as "driverId", u.full_name as "driverName", d.status, d.round,
+      d.distance_km as "distanceKm", d.payout, d.offered_at as "offeredAt", d.responded_at as "respondedAt"
+    from dispatch_offers d join users u on u.id = d.driver_id order by d.id desc limit 50`);
+  // SQL directo devolve "timestamp" sem fuso: marcar como UTC para o browser mostrar a hora de Luanda certa
+  const utc = (rows: any[]) => rows.map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) =>
+    [k, typeof v === "string" && /^\d{4}-\d\d-\d\d[ T]\d\d:\d\d:\d\d(\.\d+)?$/.test(v) ? v.replace(" ", "T") + "Z" : v])));
+  res.json({ riders: utc(riders.rows), waiting: utc(waiting.rows), offers: utc(offers.rows) });
+}));
+
+adminRouter.post("/orders/:id/redispatch", ah(async (req, res) => {
+  const order = await redispatch(idParam(req));
+  res.json({ order });
+}));
+
 adminRouter.post("/orders/:id/assign-driver", ah(async (req, res) => {
   const { driverId } = parse(z.object({ driverId: z.number().int().positive().nullable() }), req.body);
   const id = idParam(req);
@@ -66,12 +98,20 @@ adminRouter.post("/orders/:id/assign-driver", ah(async (req, res) => {
       ));
       if (busy) throw conflict("Este estafeta já tem uma entrega em curso.", "DRIVER_BUSY");
     }
-    const [row] = await tx.update(orders).set({ driverId, updatedAt: new Date() })
+    const now = new Date();
+    const [row] = await tx.update(orders).set(driverId
+      ? { driverId, driverAssignedAt: now, driverAtStoreAt: null, updatedAt: now }
+      // sem estafeta: o despacho automático volta a procurar
+      : { driverId: null, driverAssignedAt: null, driverAtStoreAt: null, dispatchRound: 0, dispatchFailedAt: null, dispatchAt: now, updatedAt: now })
       .where(and(eq(orders.id, id), inArray(orders.status, ["accepted", "preparing", "ready", "picked_up"]))).returning();
     if (!row) throw conflict("Só é possível atribuir estafeta a encomendas aceites e não terminadas.");
-    return row;
+    const gone = await closeOffersOnClaim(tx, id, driverId ?? -1);
+    await tx.execute(sql`insert into order_events (order_id, status, actor_id, note) values (${id}, ${row.status}, ${req.user!.id}, ${driverId ? "Admin atribuiu estafeta" : "Admin retirou o estafeta"})`);
+    return { row, gone };
   });
-  res.json({ order: o });
+  for (const g of o.gone) publishOffer(g.driverId, id, g.offerId, "gone");
+  publishOrder(o.row, "assigned");
+  res.json({ order: o.row });
 }));
 
 // ---------------------------------------------------------------------------

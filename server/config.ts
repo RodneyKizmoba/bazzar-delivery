@@ -40,6 +40,16 @@ export const config = {
   cancellableStatuses: ["scheduled", "pending", "accepted"] as const,
   modifiableStatuses: ["scheduled", "pending"] as const,
 
+  // Despacho automático: oferece cada entrega ao melhor estafeta online, um de cada vez
+  autoDispatch: process.env.AUTO_DISPATCH !== "0",
+  dispatchOfferSeconds: num("DISPATCH_OFFER_SECONDS", 30),
+  dispatchMaxRounds: num("DISPATCH_MAX_ROUNDS", 5),
+  dispatchRadiusKm: num("DISPATCH_RADIUS_KM", 8),
+  dispatchTickMs: num("DISPATCH_TICK_MS", 5000),
+  riderSpeedKmh: num("RIDER_SPEED_KMH", 20), // média em Luanda, com trânsito
+  dispatchLeadMin: num("DISPATCH_LEAD_MIN", 3), // margem: oferecer uns minutos antes do necessário
+  presenceStaleMin: num("PRESENCE_STALE_MIN", 10), // sem GPS há mais de 10 min: deixa de receber ofertas
+
   // Portal externo de estafetas (opcional)
   driverPortalUrl: process.env.DRIVER_PORTAL_URL || "",
   driverPortalApiKey: process.env.DRIVER_PORTAL_API_KEY || "",
