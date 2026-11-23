@@ -523,6 +523,88 @@ try {
   await send();
   console.log("PASS validation: invalid formats, trimmed values and accepted length boundaries");
 
+  // Local validation messages must follow the language selected through LanguageSwitch.
+  // Compare the rendered messages as a set, without asserting their field associations.
+  const localizedValidation = {
+    en: {
+      fullName: "Enter your full name (min. 3 characters)",
+      username: "3–40 characters: letters, numbers, _ and .",
+      phone: "Invalid phone number", email: "Invalid email",
+      password: "At least 8 characters", confirm: "Passwords don't match",
+      terms: "You must accept the terms", required: "Required",
+    },
+    fr: {
+      fullName: "Nom complet (min. 3 caractères)",
+      username: "3–40 caractères : lettres, chiffres, _ et .",
+      phone: "Numéro de téléphone invalide", email: "Email invalide",
+      password: "8 caractères minimum", confirm: "Les mots de passe ne correspondent pas",
+      terms: "Vous devez accepter les conditions", required: "Champ obligatoire",
+    },
+  };
+  async function assertRenderedValidation(expected, label) {
+    const messages = Object.values(expected).sort();
+    await page.waitForFunction((count) =>
+      document.querySelectorAll('form [id$="-err"]').length === count,
+    {}, messages.length);
+    const rendered = await page.$$eval('form [id$="-err"]',
+      (errors) => errors.map((error) => error.textContent.trim()).sort());
+    assert.deepEqual(rendered, messages, `${label}: exact rendered validation messages`);
+  }
+  for (const lang of ["en", "fr"]) {
+    const message = localizedValidation[lang];
+    for (const role of ["customer", "supplier", "home", "driver"]) {
+      await open(role);
+      await switchLanguage(lang);
+      const supplier = ["supplier", "home"].includes(role);
+      const beforeRequired = registrations.length;
+      await page.click(submit);
+      await assertRenderedValidation({
+        fullName: message.fullName,
+        username: message.username,
+        phone: message.phone,
+        password: message.password,
+        terms: message.terms,
+        ...(supplier ? {
+          businessName: message.required,
+          businessPhone: message.phone,
+          businessStreet: message.required,
+          businessZone: message.required,
+        } : {}),
+      }, `${lang} ${role}: required values`);
+      assert.equal(registrations.length, beforeRequired, `${lang} ${role}: required validation must not send`);
+
+      await fill(common);
+      if (supplier) {
+        await fill(businessFields);
+        await select("b-zone", "Talatona");
+      }
+      await fill({
+        fullName: "ab", username: "a-", phone: "12345678",
+        email: "invalid", password: "1234567", confirm: "different",
+        ...(supplier ? { "b-phone": "12345678" } : {}),
+      });
+      const beforeInvalid = registrations.length;
+      await page.click(submit);
+      await assertRenderedValidation({
+        fullName: message.fullName,
+        username: message.username,
+        phone: message.phone,
+        email: message.email,
+        password: message.password,
+        confirm: message.confirm,
+        terms: message.terms,
+        ...(supplier ? { businessPhone: message.phone } : {}),
+      }, `${lang} ${role}: invalid formats and terms`);
+      assert.equal(registrations.length, beforeInvalid, `${lang} ${role}: invalid values must not send`);
+    }
+  }
+  // Restore the Portuguese, valid customer form state expected by the API tests below.
+  await open("customer");
+  await switchLanguage("pt");
+  await fill(common);
+  await page.click("#terms");
+  console.log("PASS validation: localized EN/FR required, format, confirmation and terms messages for all account types");
+
   // API errors are synthetic: exercise field mapping without any database writes.
   await send({ code: "USERNAME_TAKEN", message: "Este utilizador já existe." });
   await fieldErrors({ username: "Este utilizador já existe." });
