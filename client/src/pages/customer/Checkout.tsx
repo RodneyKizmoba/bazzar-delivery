@@ -20,6 +20,8 @@ import {
   useAddresses, useMeta, useQuote, WhenPicker, noticeLabel, type StoreDetail, type WhenMode,
 } from "./_orderingKit";
 
+import { handleRadioArrowKey } from "@/lib/radio-keyboard";
+
 function CheckoutInner() {
   const t = useT();
   const { lang } = useLang();
@@ -173,7 +175,7 @@ function CheckoutInner() {
 
       {mode === "now" && store && !pickup && !store.ownDelivery && (
         <Section title={t({ pt: "Opções de entrega", en: "Delivery options", fr: "Options de livraison" })} icon={<Bike className="h-4 w-4 text-primary" />}>
-          <div role="radiogroup" aria-label={t({ pt: "Opções de entrega", en: "Delivery options", fr: "Options de livraison" })} className="space-y-2">
+          <div role="radiogroup" aria-label={t({ pt: "Opções de entrega", en: "Delivery options", fr: "Options de livraison" })} onKeyDown={handleRadioArrowKey} className="space-y-2">
             {[
               { on: false, icon: <Bike className="h-5 w-5" />, title: t({ pt: "Normal", en: "Standard", fr: "Standard" }), sub: `~${store.deliveryTimeMin} ${t(T.minutes)}`, price: t({ pt: "Incluída", en: "Included", fr: "Incluse" }) },
               { on: true, icon: <Zap className="h-5 w-5" />, title: t({ pt: "Prioritária", en: "Priority", fr: "Prioritaire" }),
@@ -181,7 +183,8 @@ function CheckoutInner() {
                 price: `+${kz(q?.priorityOption?.fee ?? 500)}` },
             ].map((o) => (
               <button key={String(o.on)} type="button" role="radio" aria-checked={priorityPick === o.on} onClick={() => setPriority(o.on)}
-                className={cn("flex w-full items-center gap-3 rounded-xl border-2 px-3 py-3 text-left transition",
+                tabIndex={priorityPick === o.on ? 0 : -1}
+                className={cn("flex w-full items-center gap-3 rounded-xl border-2 px-3 py-3 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
                   priorityPick === o.on ? "border-primary bg-brand-50" : "border-neutral-200 hover:border-neutral-300")}>
                 <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full", priorityPick === o.on ? "bg-primary text-on-brand" : "bg-neutral-100 text-neutral-700")}>{o.icon}</span>
                 <span className="min-w-0 flex-1">
@@ -197,10 +200,11 @@ function CheckoutInner() {
 
       {!pickup && <Section title={t({ pt: "Gorjeta para o estafeta", en: "Tip your rider", fr: "Pourboire pour le livreur" })} icon={<HandCoins className="h-4 w-4 text-primary" />}>
         <p className="mb-2 text-xs text-neutral-500">{t({ pt: "100% da gorjeta vai para o estafeta.", en: "100% of the tip goes to your rider.", fr: "100 % du pourboire va au livreur." })}</p>
-        <div role="radiogroup" aria-label={t({ pt: "Gorjeta", en: "Tip", fr: "Pourboire" })} className="grid grid-cols-4 gap-2">
+        <div role="radiogroup" aria-label={t({ pt: "Gorjeta", en: "Tip", fr: "Pourboire" })} onKeyDown={handleRadioArrowKey} className="grid grid-cols-4 gap-2">
           {[0, 200, 500, 1000].map((v) => (
             <button key={v} type="button" role="radio" aria-checked={riderTip === v} onClick={() => setRiderTip(v)}
-              className={cn("rounded-xl border-2 py-2.5 text-sm font-semibold transition",
+              tabIndex={riderTip === v ? 0 : -1}
+              className={cn("rounded-xl border-2 py-2.5 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
                 riderTip === v ? "border-primary bg-brand-50 text-primary" : "border-neutral-200 text-neutral-800 hover:border-neutral-300")}>
               {v === 0 ? t({ pt: "Agora não", en: "Not now", fr: "Pas maintenant" }) : kz(v)}
             </button>

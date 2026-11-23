@@ -1,0 +1,64 @@
+[
+  {
+    "localPath": "/photos/catalog/angola-mufete.jpg",
+    "title": "Mufete - traditional food of Angola",
+    "sourcePage": "https://commons.wikimedia.org/wiki/File:Mufete_-_traditional_food_of_Angola.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/9/91/Mufete_-_traditional_food_of_Angola.jpg",
+    "author": "Jk-1987",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "locationEvidence": "Commons category: Images from Wiki Loves Africa 2014 in Angola.",
+    "usage": "Illustrative Angola food photograph, cropped in the interface; not an official business photograph."
+  },
+  {
+    "localPath": "/photos/catalog/angola-market.jpg",
+    "title": "Chợ quê - Lubango",
+    "sourcePage": "https://commons.wikimedia.org/wiki/File:Ch%E1%BB%A3_qu%C3%AA_-_Lubango.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/f/f2/Ch%E1%BB%A3_qu%C3%AA_-_Lubango.jpg",
+    "author": "Rubytuyen1986",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "locationEvidence": "Author description identifies the market as Lubango, Angola.",
+    "usage": "Illustrative market photograph, cropped in the interface; not an official business photograph."
+  },
+  {
+    "localPath": "/photos/catalog/service-medication.jpg",
+    "title": "Red and brown medication pill",
+    "source": "Unsplash",
+    "downloadUrl": "https://images.unsplash.com/photo-1622227922682-56c92e523e58?auto=format&fit=crop&w=640&q=75",
+    "licenseUrl": "https://unsplash.com/license",
+    "usage": "Illustrative photograph for the pharmacy service."
+  },
+  {
+    "localPath": "/photos/catalog/service-cosmetics.jpg",
+    "title": "Close-up photography of assorted cosmetics",
+    "source": "Unsplash",
+    "downloadUrl": "https://images.unsplash.com/photo-1512496015851-a90fb38ba796?auto=format&fit=crop&w=640&q=75",
+    "licenseUrl": "https://unsplash.com/license",
+    "usage": "Illustrative photograph for the beauty service."
+  },
+  {
+    "localPath": "/photos/catalog/service-gifts.jpg",
+    "title": "Wrapped gift box",
+    "source": "Unsplash",
+    "downloadUrl": "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?auto=format&fit=crop&w=640&q=75",
+    "licenseUrl": "https://unsplash.com/license",
+    "usage": "Illustrative photograph for the gifts service."
+  },
+  {
+    "localPath": "/photos/catalog/taxi.jpg",
+    "title": "Yellow taxi cab on road during daytime",
+    "source": "Unsplash",
+    "downloadUrl": "https://images.unsplash.com/photo-1628068147323-4b27e9ac750d?auto=format&fit=crop&w=640&q=75",
+    "licenseUrl": "https://unsplash.com/license",
+    "usage": "Illustrative photograph for a coming-soon service, not an official business photograph."
+  },
+  {
+    "localPath": "/photos/catalog/parcel.jpg",
+    "title": "Brown cardboard box on white table",
+    "source": "Unsplash",
+    "downloadUrl": "https://images.unsplash.com/photo-1595246007497-15e0ed4b8d96?auto=format&fit=crop&w=640&q=75",
+    "licenseUrl": "https://unsplash.com/license",
+    "usage": "Illustrative photograph for a coming-soon service, not an official business photograph."
+  }
+]

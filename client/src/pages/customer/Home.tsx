@@ -1,12 +1,13 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { HScroll } from "@/components/HScroll";
 import { PromoCarousel } from "@/components/PromoCarousel";
+import { CarouselImage, PhotoCarousel } from "@/components/PhotoCarousel";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Search as SearchIcon, MapPin, Star, Crown, ChevronRight } from "lucide-react";
 import { CustomerShell } from "@/components/AppShell";
 import { ErrorState, StoreImage } from "@/components/common";
-import { CategoryArt } from "@/components/CategoryArt";
+import { CategoryArt, CATEGORY_TILE_BG } from "@/components/CategoryArt";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -232,11 +233,11 @@ interface PopularItem { id: number; name: string; price: number; imageUrl: strin
 
 /** Atalhos de cozinha (como no Deliveroo): pesquisam pelo tipo de comida. */
 const CUISINE_TILES = [
-  { key: "burger", q: "Hambúrgueres", pt: "Hambúrgueres", en: "Burgers", fr: "Burgers" },
-  { key: "pizza", q: "Pizza", pt: "Pizza", en: "Pizza", fr: "Pizza" },
-  { key: "grill", q: "Grelhados", pt: "Grelhados", en: "Grill", fr: "Grillades" },
-  { key: "angolan", q: "Angolana", pt: "Angolana", en: "Angolan", fr: "Angolaise" },
-  { key: "sushi", q: "Sushi", pt: "Sushi", en: "Sushi", fr: "Sushi" },
+  { key: "burger", image: "burger.jpg", q: "Hambúrgueres", pt: "Hambúrgueres", en: "Burgers", fr: "Burgers" },
+  { key: "pizza", image: "pizza.jpg", q: "Pizza", pt: "Pizza", en: "Pizza", fr: "Pizza" },
+  { key: "grill", image: "chicken.jpg", q: "Grelhados", pt: "Grelhados", en: "Grill", fr: "Grillades" },
+  { key: "angolan", image: "angola-mufete.jpg", q: "Angolana", pt: "Angolana", en: "Angolan", fr: "Angolaise" },
+  { key: "sushi", image: "sushi.jpg", q: "Sushi", pt: "Sushi", en: "Sushi", fr: "Sushi" },
 ];
 
 export default function Home() {
@@ -311,23 +312,10 @@ export default function Home() {
       </div>
 
       {/* Serviços: Restaurantes, Mercado, Farmácia… (Envios e Táxi em breve) */}
-      <ServiceRow zq={zq} />
+      <ServiceGrid zq={zq} />
 
       {/* Publicidade */}
       <PromoCarousel />
-
-      {/* Cozinhas (Deliveroo: mosaicos redondos) */}
-      <HScroll className="mt-5 flex gap-3 px-4 pb-1" arrowSize="sm" label="Categorias">
-        {CUISINE_TILES.map((c) => (
-          <Link key={c.key} href={`/pesquisa?q=${encodeURIComponent(c.q)}${zq}`}
-            className="group flex w-[4.5rem] shrink-0 flex-col items-center gap-1.5">
-            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-50 ring-1 ring-brand-100 transition-transform duration-200 group-hover:-translate-y-0.5 group-active:scale-95">
-              <CategoryArt kind={c.key} className="h-12 w-12" />
-            </span>
-            <span className="line-clamp-2 text-center text-[13px] font-medium leading-tight text-neutral-900">{t(c)}</span>
-          </Link>
-        ))}
-      </HScroll>
 
       {/* Voltar a pedir */}
       {user?.userType === "customer" && <OrderAgain />}
@@ -340,6 +328,23 @@ export default function Home() {
       {/* Populares perto de si: lista com foto à esquerda */}
       <Section title={t({ pt: "Populares perto de si", en: "Popular near you", fr: "Populaires près de chez vous" })} href={`/pesquisa?sort=recommended${zq}`}>
         <StoreList url={storesUrl({ zone: z, sort: "recommended" })} emptyText={empty} />
+      </Section>
+
+      {/* O que lhe apetece? (Deliveroo: mosaicos de cozinha) */}
+      <Section title={t({ pt: "O que lhe apetece?", en: "What do you fancy?", fr: "Qu'est-ce qui vous tente ?" })}>
+        <PhotoCarousel label={t({ pt: "Categorias de cozinha", en: "Cuisine categories", fr: "Catégories de cuisine" })} className="px-3 pb-1">
+          {CUISINE_TILES.map((c) => (
+            <Link key={c.key} href={`/pesquisa?q=${encodeURIComponent(c.q)}${zq}`}
+              className="group flex w-[5.25rem] shrink-0 snap-start flex-col items-center gap-1.5 rounded-2xl pb-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+              <span className="relative flex h-[4.75rem] w-[4.75rem] items-center justify-center overflow-hidden rounded-2xl bg-neutral-100 transition-transform duration-200 group-hover:-translate-y-0.5 group-active:scale-95"
+                style={{ backgroundColor: CATEGORY_TILE_BG[c.key] ?? "#F1F5F9" }}>
+                <CarouselImage src={`/photos/catalog/${c.image}`} alt="" fallbackLabel={t({ pt: "Foto indisponível", en: "Photo unavailable", fr: "Photo indisponible" })}
+                  fallbackClassName="h-full w-full px-1" className="h-full w-full object-cover" />
+              </span>
+              <span className="line-clamp-2 text-center text-[13px] font-semibold leading-tight text-neutral-900">{t(c)}</span>
+            </Link>
+          ))}
+        </PhotoCarousel>
       </Section>
 
       {/* PedeJá Plus */}
@@ -441,6 +446,59 @@ function ServiceRow({ zq }: { zq: string }) {
           : <div key={tile.key} className={cn(cls, "opacity-70")} aria-disabled title={soon}>{body}</div>;
       })}
     </HScroll>
+  );
+}
+/** Mosaicos de serviços, ao estilo Talabat: comida em destaque, depois mercado, farmácia, envios, táxi… */
+function ServiceGrid({ zq }: { zq: string }) {
+  const t = useT();
+  const soon = t({ pt: "Em breve", en: "Soon", fr: "Bientôt" });
+  const tiles: { key: string; art: string; image?: string; label: string; sub?: string; href?: string }[] = [
+    { key: "food", art: "restaurant", image: "angola-mufete.jpg", label: t({ pt: "Comida", en: "Food", fr: "Repas" }), sub: t({ pt: "Restaurantes e take-away", en: "Restaurants & takeaway", fr: "Restaurants et à emporter" }), href: `/pesquisa?type=restaurant${zq}` },
+    { key: "grocery", art: "grocery", image: "angola-market.jpg", label: t({ pt: "Mercado", en: "Grocery", fr: "Épicerie" }), sub: t({ pt: "Compras do dia-a-dia", en: "Everyday shopping", fr: "Courses du quotidien" }), href: `/pesquisa?type=grocery${zq}` },
+    { key: "bakery", art: "bakery", image: "cake.jpg", label: t({ pt: "Bolos", en: "Cakes", fr: "Gâteaux" }), href: `/pesquisa?type=bakery${zq}` },
+    { key: "pharmacy", art: "pharmacy", image: "service-medication.jpg", label: t({ pt: "Farmácia", en: "Pharmacy", fr: "Pharmacie" }), href: `/pesquisa?type=pharmacy${zq}` },
+    { key: "flowers", art: "flowers", image: "roses.jpg", label: t({ pt: "Flores", en: "Flowers", fr: "Fleurs" }), href: `/pesquisa?type=flowers${zq}` },
+    { key: "beauty", art: "beauty", image: "service-cosmetics.jpg", label: t({ pt: "Beleza", en: "Beauty", fr: "Beauté" }), href: `/pesquisa?type=beauty${zq}` },
+    { key: "retail", art: "retail", image: "service-gifts.jpg", label: t({ pt: "Presentes", en: "Gifts", fr: "Cadeaux" }), href: `/pesquisa?type=retail${zq}` },
+    { key: "parcel", art: "parcel", image: "parcel.jpg", label: t({ pt: "Envios", en: "Send", fr: "Envois" }) },
+    { key: "taxi", art: "taxi", image: "taxi.jpg", label: t({ pt: "Táxi", en: "Taxi", fr: "Taxi" }) },
+  ];
+  const Tile = ({ tile }: { tile: (typeof tiles)[number] }) => {
+    const body = (
+      <>
+        {tile.image && <CarouselImage src={`/photos/catalog/${tile.image}`} alt="" fallbackLabel={t({ pt: "Foto indisponível", en: "Photo unavailable", fr: "Photo indisponible" })}
+          fallbackClassName="absolute inset-0" className={cn("absolute inset-0 h-full w-full object-cover", tile.key === "grocery" && "object-bottom")} />}
+        <span aria-hidden className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-black/10" />
+        {!tile.href && <span className="absolute right-2 top-2 rounded-full bg-neutral-900/85 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-white">{soon}</span>}
+        <span className="relative z-[1] mt-auto block w-full text-left text-white">
+          <span className="block text-sm font-extrabold leading-tight">{tile.label}</span>
+          {tile.sub && <span className="mt-0.5 block text-[10px] leading-tight text-white/90">{tile.sub}</span>}
+        </span>
+      </>
+    );
+    const cls = cn("relative flex h-[7.5rem] shrink-0 snap-start flex-col overflow-hidden rounded-2xl p-3 shadow-sm transition-transform active:scale-[0.98]",
+      tile.sub ? "w-[11.5rem] sm:w-[13rem]" : "w-[8.25rem] sm:w-[9rem]",
+      !tile.href && "cursor-not-allowed");
+    const style = { backgroundColor: CATEGORY_TILE_BG[tile.art] ?? "#F1F5F9" };
+    return tile.href
+      ? <Link href={tile.href} className={cn(cls, "hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary")} style={style}>{body}</Link>
+      : <div className={cn(cls, "opacity-85")} style={style} aria-disabled="true" title={soon}>{body}</div>;
+  };
+  return (
+    <section aria-label={t({ pt: "Serviços", en: "Services", fr: "Services" })} className="mx-3 mt-3 rounded-3xl bg-white p-3 shadow-lg">
+      <PhotoCarousel label={t({ pt: "Serviços disponíveis", en: "Available services", fr: "Services disponibles" })} className="pb-1">
+        {tiles.map((tile) => <Tile key={tile.key} tile={tile} />)}
+      </PhotoCarousel>
+      <p className="mt-2 text-[10px] leading-relaxed text-neutral-600">
+        {t({ pt: "Fotos de Angola", en: "Photos from Angola", fr: "Photos d’Angola" })}:{" "}
+        <a href="https://commons.wikimedia.org/wiki/File:Mufete_-_traditional_food_of_Angola.jpg" target="_blank" rel="noreferrer" className="underline">Mufete — Jk-1987</a>
+        {" · "}
+        <a href="https://commons.wikimedia.org/wiki/File:Ch%E1%BB%A3_qu%C3%AA_-_Lubango.jpg" target="_blank" rel="noreferrer" className="underline">Lubango — Rubytuyen1986</a>
+        {" · "}
+        <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noreferrer" className="underline">CC BY-SA 4.0</a>
+        {" · "}{t({ pt: "recorte de apresentação", en: "cropped for display", fr: "recadrées pour l’affichage" })}
+      </p>
+    </section>
   );
 }
 
