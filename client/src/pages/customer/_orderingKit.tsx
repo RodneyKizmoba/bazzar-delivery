@@ -49,6 +49,7 @@ export interface Quote {
   isPlus: boolean; plusSavings: number; plusFreeDeliveryMinOrder: number;
   priorityFee?: number; riderTip?: number; priorityOption?: { fee: number; minutesSaved: number };
   serviceFee?: number; smallOrderFee?: number; smallOrderMin?: number; deliveryKm?: number | null; busyLevel?: number;
+  fulfilment?: "delivery" | "pickup" | "store_delivery";
   feeRules?: { serviceFeePct: number; serviceFeeMin: number; serviceFeeMax: number };
 }
 
@@ -60,6 +61,7 @@ export interface QuoteBody {
   priority?: boolean;
   riderTip?: number;
   addressId?: number | null;
+  fulfilment?: "pickup";
 }
 
 export interface StoreSummary {
@@ -67,6 +69,7 @@ export interface StoreSummary {
   zonesServed: string[]; isOpenNow: boolean; openingTime: string; closingTime: string;
   deliveryFee: number; minOrder: number; deliveryTimeMin: number; latitude: number | null; longitude: number | null;
   isHomeBusiness?: boolean; minNoticeMin?: number; maxAheadHours?: number;
+  offersPickup?: boolean; ownDelivery?: boolean; sponsored?: boolean; prepTimeMin?: number;
 }
 
 /** Texto "24 h" / "2 dias" para a antecedência mínima. */
@@ -532,7 +535,7 @@ function FeeInfo({ children }: { children: React.ReactNode }) {
   return <span className="block text-[11px] font-normal leading-snug text-neutral-500">{children}</span>;
 }
 
-export function QuoteBreakdown({ quote }: { quote: Pick<Quote, "subtotal" | "deliveryFee" | "baseDeliveryFee" | "discount" | "pointsRedeemed" | "pointsDiscount" | "total" | "promoCode" | "plusSavings" | "priorityFee" | "riderTip" | "serviceFee" | "smallOrderFee" | "smallOrderMin" | "deliveryKm" | "busyLevel" | "feeRules"> }) {
+export function QuoteBreakdown({ quote }: { quote: Pick<Quote, "subtotal" | "deliveryFee" | "baseDeliveryFee" | "discount" | "pointsRedeemed" | "pointsDiscount" | "total" | "promoCode" | "plusSavings" | "priorityFee" | "riderTip" | "serviceFee" | "smallOrderFee" | "smallOrderMin" | "deliveryKm" | "busyLevel" | "feeRules" | "fulfilment"> }) {
   const t = useT();
   const fr = quote.feeRules;
   return (
@@ -543,7 +546,7 @@ export function QuoteBreakdown({ quote }: { quote: Pick<Quote, "subtotal" | "del
           <FeeInfo>{t({ pt: `Mínimo da loja ${kz(quote.smallOrderMin ?? 0)}: junte ${kz(quote.smallOrderFee)} em produtos para não pagar esta taxa.`, en: `Store minimum ${kz(quote.smallOrderMin ?? 0)}: add ${kz(quote.smallOrderFee)} of items to avoid this fee.`, fr: `Minimum ${kz(quote.smallOrderMin ?? 0)} : ajoutez ${kz(quote.smallOrderFee)} d'articles pour éviter ces frais.` })}</FeeInfo></>}
           value={kz(quote.smallOrderFee)} />
       )}
-      <PriceRow label={<>{t(T.deliveryFee)}
+      {quote.fulfilment !== "pickup" && <PriceRow label={<>{t(T.deliveryFee)}
         {(quote.deliveryKm != null || !!quote.busyLevel) && (
           <FeeInfo>
             {quote.deliveryKm != null && t({ pt: `${quote.deliveryKm.toFixed(1).replace(".", ",")} km da loja`, en: `${quote.deliveryKm.toFixed(1)} km from the store`, fr: `${quote.deliveryKm.toFixed(1).replace(".", ",")} km du magasin` })}
@@ -556,7 +559,7 @@ export function QuoteBreakdown({ quote }: { quote: Pick<Quote, "subtotal" | "del
             <span className="text-[11px] font-semibold text-brand-700">{t({ pt: "Grátis com Plus", en: "Free with Plus", fr: "Gratuit avec Plus" })}</span>
           </span>
         ) : quote.deliveryFee === 0 ? <span className="font-semibold text-green-700">{t(T.free)}</span> : kz(quote.deliveryFee)
-      } />
+      } />}
       {!!quote.serviceFee && (
         <PriceRow label={<>{t({ pt: "Taxa de serviço", en: "Service fee", fr: "Frais de service" })}
           {fr && <FeeInfo>{t({ pt: `${fr.serviceFeePct}% da comida (mín. ${kz(fr.serviceFeeMin)}, máx. ${kz(fr.serviceFeeMax)}). Ajuda a manter a app e o apoio ao cliente.`, en: `${fr.serviceFeePct}% of food (min ${kz(fr.serviceFeeMin)}, max ${kz(fr.serviceFeeMax)}). Keeps the app and support running.`, fr: `${fr.serviceFeePct} % des plats (min ${kz(fr.serviceFeeMin)}, max ${kz(fr.serviceFeeMax)}). Finance l'app et le support.` })}</FeeInfo>}</>}

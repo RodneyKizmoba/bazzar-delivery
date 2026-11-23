@@ -3,7 +3,7 @@ import { randomBytes, randomInt } from "crypto";
 import { db, type DbOrTx } from "../db";
 import {
   addresses, dispatchOffers, driverPresence, orderEvents, orderItems, orders, pointsLedger, promoCodes, stores, users,
-  type CartLine, type Order, type OrderStatus, type PaymentMethod, type User,
+  type CartLine, type Fulfilment, type Order, type OrderStatus, type PaymentMethod, type User,
 } from "@shared/schema";
 import { config } from "../config";
 import { badRequest, conflict, forbidden, notFound } from "./http";
@@ -13,7 +13,7 @@ import { notifyOrderStatus } from "./notify";
 import { notifyExternalDispatch } from "./dispatch";
 import { sendPosWebhook } from "./pos";
 import { publishOffer, publishOrder } from "./realtime";
-import { settleDeliveredOrder } from "./settlement";
+import { cashHeld, settleDeliveredOrder } from "./settlement";
 import { hasLL, roadKm, waitFeeFor } from "./fees";
 import { riderPayQuote, assertNotReservedForOther, closeOffersOnClaim, dispatchTimes } from "./dispatchEngine";
 
@@ -31,7 +31,18 @@ const TRANSITIONS: Record<Actor["kind"], Partial<Record<OrderStatus, OrderStatus
   system: { scheduled: ["pending"] },
 };
 
-export function canTransition(actor: Actor["kind"], from: OrderStatus, to: OrderStatus) {
+/** Recolha e entrega pela própria loja: a loja (não o estafeta PedeJá) fecha a encomenda. */
+const STORE_RUN: Record<Exclude<Fulfilment, "delivery">, Partial<Record<OrderStatus, OrderStatus[]>>> = {
+  pickup: { ready: ["delivered"] }, // cliente levantou ao balcão
+  store_delivery: { ready: ["picked_up"], picked_up: ["delivered"] }, // saiu com o estafeta da loja / entregue
+};
+
+export function canTransition(actor: Actor["kind"], from: OrderStatus, to: OrderStatus, fulfilment: Fulfilment = "delivery") {
+  if (fulfilment !== "delivery") {
+    if (actor === "driver") return false;
+    if (actor === "store" && STORE_RUN[fulfilment][from]?.includes(to)) return true;
+    if (actor === "admin" && fulfilment === "pickup" && from === "ready" && to === "delivered") return true;
+  }
   return TRANSITIONS[actor][from]?.includes(to) ?? false;
 }
 
@@ -51,7 +62,8 @@ export interface CreateOrderInput {
   user: User;
   storeId: number;
   lines: (CartLine & { addedBy?: string | null })[];
-  addressId: number;
+  addressId?: number | null;
+  fulfilment?: Fulfilment;
   paymentMethod: PaymentMethod;
   notes?: string | null;
   scheduledFor?: Date | null;
@@ -71,27 +83,28 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
   }
   const created = await db.transaction(async (tx) => {
     const [user] = await tx.select().from(users).where(eq(users.id, input.user.id)).for("update");
-    const [addr] = await tx.select().from(addresses).where(eq(addresses.id, input.addressId));
-    if (!addr || addr.userId !== user.id) throw badRequest("Morada inválida.", "INVALID_ADDRESS");
+    const pickup = input.fulfilment === "pickup";
+    const [addr] = input.addressId ? await tx.select().from(addresses).where(eq(addresses.id, input.addressId)) : [];
+    if (!pickup && (!addr || addr.userId !== user.id)) throw badRequest("Morada inválida.", "INVALID_ADDRESS");
 
     if (input.priority && input.scheduledFor) {
       throw badRequest("A entrega prioritária não se aplica a encomendas agendadas.", "PRIORITY_NOT_FOR_SCHEDULED");
     }
     const quote = await buildQuote(tx, {
       storeId: input.storeId, lines: input.lines, user, promoCode: input.promoCode, usePoints: input.usePoints,
-      priority: !!input.priority, riderTip: input.riderTip ?? 0, destination: addr,
+      priority: !!input.priority, riderTip: input.riderTip ?? 0, destination: pickup ? null : addr, fulfilment: input.fulfilment,
     });
     const store = quote.store;
     validateSchedule(input.scheduledFor ?? null, store);
     assertStoreCanTakeOrder(store, input.scheduledFor ?? null);
     await tx.execute(sql`select pg_advisory_xact_lock(${store.id})`); // evita ultrapassar a capacidade diária em pedidos simultâneos
     await assertDailyCapacity(tx, store, input.scheduledFor ?? new Date());
-    if (store.zonesServed.length > 0 && !store.zonesServed.some((z) => z.toLowerCase() === addr.zone.toLowerCase())) {
-      throw conflict(`${store.name} não entrega na zona "${addr.zone}".`, "ZONE_NOT_SERVED");
+    if (!pickup && store.zonesServed.length > 0 && !store.zonesServed.some((z) => z.toLowerCase() === addr!.zone.toLowerCase())) {
+      throw conflict(`${store.name} não entrega na zona "${addr!.zone}".`, "ZONE_NOT_SERVED");
     }
 
     const now = new Date();
-    const etaMin = input.priority ? Math.max(10, store.deliveryTimeMin - config.priorityMinutesSaved) : store.deliveryTimeMin;
+    const etaMin = pickup ? store.prepTimeMin : input.priority ? Math.max(10, store.deliveryTimeMin - config.priorityMinutesSaved) : store.deliveryTimeMin;
     const etaBase = input.scheduledFor ?? new Date(now.getTime() + etaMin * 60_000);
     const [order] = await tx.insert(orders).values({
       orderNumber: newOrderNumber(),
@@ -100,10 +113,11 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
       groupOrderId: input.groupOrderId ?? null,
       status: input.scheduledFor ? "scheduled" : "pending",
       scheduledFor: input.scheduledFor ?? null,
-      deliveryAddress: {
-        label: addr.label, street: addr.street, zone: addr.zone, city: addr.city,
-        reference: addr.reference, latitude: addr.latitude, longitude: addr.longitude,
-      },
+      fulfilment: quote.fulfilment,
+      // recolha: guarda a morada da loja (onde o cliente vai levantar)
+      deliveryAddress: pickup
+        ? { label: "Recolha na loja", street: store.street, zone: store.zone, city: "Luanda", reference: null, latitude: store.latitude, longitude: store.longitude }
+        : { label: addr!.label, street: addr!.street, zone: addr!.zone, city: addr!.city, reference: addr!.reference, latitude: addr!.latitude, longitude: addr!.longitude },
       notes: input.notes || null,
       subtotal: quote.subtotal,
       deliveryFee: quote.deliveryFee,
@@ -157,7 +171,7 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
 
 /** Mudança de estado com bloqueio de linha, validação de transição e efeitos colaterais. */
 export async function changeStatus(orderId: number, to: OrderStatus, actor: Actor, note?: string | null, opts: { prepMinutes?: number; pin?: string | null } = {}): Promise<Order> {
-  if (to === "delivered" && actor.kind === "driver") await checkDeliveryPin(orderId, actor.userId!, opts.pin);
+  if (to === "delivered" && (actor.kind === "driver" || actor.kind === "store")) await checkDeliveryPin(orderId, actor, opts.pin);
   const result = await db.transaction(async (tx) => {
     const [order] = await tx.select().from(orders).where(eq(orders.id, orderId)).for("update");
     if (!order) throw notFound("Encomenda não encontrada");
@@ -171,7 +185,7 @@ export async function changeStatus(orderId: number, to: OrderStatus, actor: Acto
     }
     if (actor.kind === "driver" && to === "picked_up" && !order.driverId) throw conflict("Aceite a entrega primeiro.");
 
-    if (!canTransition(actor.kind, order.status, to)) {
+    if (!canTransition(actor.kind, order.status, to, order.fulfilment)) {
       if (actor.kind === "customer" && to === "cancelled") {
         throw conflict("A loja já começou a preparar a encomenda; já não é possível cancelar. Contacte o suporte.", "NOT_CANCELLABLE");
       }
@@ -194,7 +208,7 @@ export async function changeStatus(orderId: number, to: OrderStatus, actor: Acto
       if (store) {
         // a loja diz quanto tempo precisa para ESTA encomenda; o estafeta é chamado para chegar a essa hora
         const prep = opts.prepMinutes ?? store.prepTimeMin;
-        const rideMin = Math.max(10, store.deliveryTimeMin - store.prepTimeMin);
+        const rideMin = order.fulfilment === "pickup" ? 0 : Math.max(10, store.deliveryTimeMin - store.prepTimeMin);
         let readyAt = new Date(now.getTime() + prep * 60_000);
         if (order.scheduledFor) {
           const wanted = new Date(order.scheduledFor.getTime() - rideMin * 60_000);
@@ -203,13 +217,14 @@ export async function changeStatus(orderId: number, to: OrderStatus, actor: Acto
           patch.estimatedDeliveryAt = new Date(readyAt.getTime() + rideMin * 60_000);
         }
         patch.prepMinutes = prep;
-        Object.assign(patch, dispatchTimes(now, readyAt, order.priorityFee > 0));
+        if (order.fulfilment === "delivery") Object.assign(patch, dispatchTimes(now, readyAt, order.priorityFee > 0));
+        else patch.readyEstimateAt = readyAt;
       }
     }
     if (to === "ready") {
       // pronta mais cedo (ou à hora): procurar estafeta já
       if (!order.readyEstimateAt || order.readyEstimateAt > now) patch.readyEstimateAt = now;
-      if (!order.dispatchAt || order.dispatchAt > now) patch.dispatchAt = now;
+      if (order.fulfilment === "delivery" && (!order.dispatchAt || order.dispatchAt > now)) patch.dispatchAt = now;
       if (!order.scheduledFor && order.readyEstimateAt && order.readyEstimateAt > now && order.estimatedDeliveryAt) {
         // pronta antes do previsto: a hora de chegada do cliente também avança
         patch.estimatedDeliveryAt = new Date(order.estimatedDeliveryAt.getTime() - (order.readyEstimateAt.getTime() - now.getTime()));
@@ -264,9 +279,11 @@ export async function changeStatus(orderId: number, to: OrderStatus, actor: Acto
  * Código de entrega: o estafeta só marca "entregue" com o código que o cliente vê na app.
  * As tentativas erradas ficam gravadas (fora da transacção principal); à 5.ª bloqueia e o suporte resolve.
  */
-async function checkDeliveryPin(orderId: number, driverId: number, pin?: string | null) {
-  const [o] = await db.select({ pin: orders.deliveryPin, tries: orders.deliveryPinAttempts, driverId: orders.driverId }).from(orders).where(eq(orders.id, orderId));
-  if (!o || o.driverId !== driverId || !o.pin) return; // sem código: as outras regras decidem
+async function checkDeliveryPin(orderId: number, actor: Actor, pin?: string | null) {
+  const [o] = await db.select({ pin: orders.deliveryPin, tries: orders.deliveryPinAttempts, driverId: orders.driverId, ownerId: stores.ownerId })
+    .from(orders).innerJoin(stores, eq(stores.id, orders.storeId)).where(eq(orders.id, orderId));
+  const mine = actor.kind === "driver" ? o?.driverId === actor.userId : o?.ownerId === actor.userId;
+  if (!o || !mine || !o.pin) return; // sem código ou não é dele: as outras regras decidem
   if (o.tries >= config.pinMaxAttempts) {
     throw conflict("Demasiadas tentativas com o código errado. Ligue ao suporte PedeJá para concluir a entrega.", "PIN_LOCKED");
   }
@@ -287,13 +304,16 @@ export async function claimDelivery(orderId: number, driverId: number): Promise<
     if (active) throw conflict("Já tem uma entrega em curso. Termine-a antes de aceitar outra.", "DRIVER_BUSY");
     const [target] = await tx.select().from(orders).where(eq(orders.id, orderId)).for("update");
     await assertNotReservedForOther(tx, orderId, driverId);
+    if (target?.paymentMethod === "cash" && (await cashHeld(tx, driverId)) >= config.riderCashLimit) {
+      throw conflict(`Tem demasiado numerário em mão (limite ${config.riderCashLimit} Kz). Entregue-o à PedeJá para voltar a levar encomendas pagas em dinheiro.`, "CASH_LIMIT");
+    }
     // o valor mostrado na oferta é o que fica; vindo da lista aberta calcula-se agora
     const [myOffer] = target ? await tx.select({ d: dispatchOffers.payDetail }).from(dispatchOffers)
       .where(and(eq(dispatchOffers.orderId, orderId), eq(dispatchOffers.driverId, driverId), eq(dispatchOffers.status, "pending"))) : [];
     const pay = myOffer?.d ?? (target ? await riderPayQuote(tx, target, driverId) : null);
     const [updated] = await tx.update(orders)
       .set({ driverId, driverAssignedAt: new Date(), updatedAt: new Date(), riderPay: pay?.total ?? null, riderPayDetail: pay })
-      .where(and(eq(orders.id, orderId), sql`${orders.driverId} is null`, inArray(orders.status, ["accepted", "preparing", "ready"])))
+      .where(and(eq(orders.id, orderId), sql`${orders.driverId} is null`, eq(orders.fulfilment, "delivery"), inArray(orders.status, ["accepted", "preparing", "ready"])))
       .returning();
     if (!updated) throw conflict("Esta entrega já não está disponível.", "NOT_AVAILABLE");
     await tx.insert(orderEvents).values({ orderId, status: updated.status, actorId: driverId, note: "Estafeta atribuído" });
@@ -392,6 +412,7 @@ export async function modifyOrder(
     }
 
     if (patch.addressId) {
+      if (order.fulfilment === "pickup") throw badRequest("Esta encomenda é para levantar na loja: não tem morada de entrega.", "PICKUP_NO_ADDRESS");
       const [addr] = await tx.select().from(addresses).where(eq(addresses.id, patch.addressId));
       if (!addr || addr.userId !== user.id) throw badRequest("Morada inválida.");
       const [store] = await tx.select().from(stores).where(eq(stores.id, order.storeId));
@@ -410,6 +431,7 @@ export async function modifyOrder(
       const quote = await buildQuote(tx, {
         storeId: order.storeId, lines: patch.lines, user: { ...freshUser, loyaltyPoints: 0 }, promoCode: null,
         destination: (update.deliveryAddress as Order["deliveryAddress"] | undefined) ?? order.deliveryAddress, busyLevel: order.busyLevel as 0 | 1 | 2,
+        fulfilment: order.fulfilment === "pickup" ? "pickup" : undefined,
       });
       let discount = 0;
       if (order.promoCode) {

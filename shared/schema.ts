@@ -26,6 +26,9 @@ export const STORE_TYPES = ["restaurant", "bakery", "grocery", "pharmacy", "beau
 export const PAYOUT_METHODS = ["multicaixa_express", "unitel_money", "bank_transfer"] as const;
 // tipo de veículo do estafeta: muda a velocidade estimada, o valor por entrega e o mínimo por hora
 export const VEHICLE_TYPES = ["moto", "car", "ebike", "bike"] as const;
+// como a encomenda chega ao cliente: estafeta PedeJá, recolha no balcão, ou estafetas da própria loja
+export const FULFILMENTS = ["delivery", "pickup", "store_delivery"] as const;
+export type Fulfilment = (typeof FULFILMENTS)[number];
 export type VehicleType = (typeof VEHICLE_TYPES)[number];
 
 // ---------------------------------------------------------------------------
@@ -86,6 +89,8 @@ export const stores = pgTable("stores", {
   isChain: boolean("is_chain").notNull().default(false),
   // Negócio caseiro (ex.: senhora que faz bolos em casa): sem loja física, pode exigir encomenda antecipada
   isHomeBusiness: boolean("is_home_business").notNull().default(false),
+  offersPickup: boolean("offers_pickup").notNull().default(false), // cliente pode levantar no balcão
+  ownDelivery: boolean("own_delivery").notNull().default(false), // a loja entrega com os seus estafetas
   minNoticeMin: integer("min_notice_min").notNull().default(0), // >0 = só por encomenda antecipada
   maxOrdersPerDay: integer("max_orders_per_day"), // limite de capacidade diária (null = sem limite)
   payoutMethod: text("payout_method"), // multicaixa_express | unitel_money | bank_transfer
@@ -175,6 +180,7 @@ export const orders = pgTable("orders", {
   driverId: integer("driver_id").references(() => users.id),
   groupOrderId: integer("group_order_id"),
   status: text("status").$type<OrderStatus>().notNull(),
+  fulfilment: text("fulfilment").$type<Fulfilment>().notNull().default("delivery"),
   scheduledFor: timestamp("scheduled_for"),
   // morada copiada no momento da encomenda (histórico estável)
   deliveryAddress: jsonb("delivery_address").$type<{
@@ -267,7 +273,7 @@ export type OrderEvent = typeof orderEvents.$inferSelect;
 // ---------------------------------------------------------------------------
 // Contas: quanto a PedeJá deve a cada loja e estafeta (positivo) ou eles devem (negativo)
 // ---------------------------------------------------------------------------
-export const LEDGER_KINDS = ["order_earning", "cash_collected", "payout", "cash_deposit", "adjustment"] as const;
+export const LEDGER_KINDS = ["order_earning", "cash_collected", "payout", "cash_deposit", "adjustment", "ads"] as const;
 export type LedgerKind = (typeof LEDGER_KINDS)[number];
 export const ledgerEntries = pgTable("ledger_entries", {
   id: serial("id").primaryKey(),
@@ -301,6 +307,24 @@ export const driverPresence = pgTable("driver_presence", {
 export type DriverPresence = typeof driverPresence.$inferSelect;
 
 export const OFFER_STATUSES = ["pending", "accepted", "declined", "expired", "cancelled"] as const;
+// Publicidade: lojas pagam para aparecer primeiro nas pesquisas e listas ("Patrocinado")
+export const sponsorships = pgTable("sponsorships", {
+  id: serial("id").primaryKey(),
+  storeId: integer("store_id").notNull().references(() => stores.id, { onDelete: "cascade" }),
+  startsAt: timestamp("starts_at").notNull(),
+  endsAt: timestamp("ends_at").notNull(),
+  days: integer("days").notNull(),
+  price: integer("price").notNull(), // Kz cobrados ao saldo da loja (0 = oferta do admin)
+  status: text("status").$type<"active" | "cancelled">().notNull().default("active"),
+  impressions: integer("impressions").notNull().default(0),
+  clicks: integer("clicks").notNull().default(0),
+  refund: integer("refund").notNull().default(0),
+  createdBy: integer("created_by"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  cancelledAt: timestamp("cancelled_at"),
+}, (t) => [index("sponsorships_store_idx").on(t.storeId), index("sponsorships_active_idx").on(t.status, t.endsAt)]);
+export type Sponsorship = typeof sponsorships.$inferSelect;
+
 export interface RiderPayDetail {
   vehicle: VehicleType; pickupKm: number; dropKm: number; estMinutes: number;
   base: number; distance: number; timeBonus: number; busyBonus: number; floorTopUp: number; total: number;
@@ -530,12 +554,14 @@ export const quoteSchema = z.object({
   priority: z.boolean().optional().default(false),
   riderTip: z.number().int().min(0).max(20000).optional().default(0),
   addressId: z.number().int().positive().optional().nullable(), // para calcular a taxa de entrega pela distância
+  fulfilment: z.enum(FULFILMENTS).optional(),
 });
 
 export const createOrderSchema = z.object({
   storeId: z.number().int().positive(),
   items: z.array(cartLineSchema).max(100).default([]),
-  addressId: z.number().int().positive(),
+  addressId: z.number().int().positive().optional().nullable(), // obrigatória excepto em recolha na loja
+  fulfilment: z.enum(FULFILMENTS).optional(), // "pickup" = recolha; entrega: a app decide (estafeta PedeJá ou da loja)
   paymentMethod: z.enum(PAYMENT_METHODS),
   notes: z.string().trim().max(500).optional().nullable(),
   scheduledFor: z.string().datetime().optional().nullable(),
@@ -594,6 +620,8 @@ export const storeUpdateSchema = z.object({
   maxOrdersPerDay: z.number().int().min(1).max(10000).nullable(),
   payoutMethod: z.enum(PAYOUT_METHODS).nullable(),
   payoutReference: z.string().trim().max(60).nullable(),
+  offersPickup: z.boolean(),
+  ownDelivery: z.boolean(),
 }).partial();
 
 export const menuItemInputSchema = z.object({

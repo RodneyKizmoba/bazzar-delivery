@@ -32,7 +32,7 @@ interface OrderFull {
   status: string; scheduledFor: string | null; notes: string | null;
   deliveryAddress: { label: string; street: string; zone: string; city: string; reference?: string | null; latitude?: number | null; longitude?: number | null };
   subtotal: number; deliveryFee: number; discount: number; pointsRedeemed: number; total: number; promoCode: string | null;
-  priorityFee?: number; riderTip?: number; cutlery?: boolean; serviceFee?: number; smallOrderFee?: number; deliveryKm?: number | null;
+  priorityFee?: number; riderTip?: number; cutlery?: boolean; fulfilment?: "delivery" | "pickup" | "store_delivery"; serviceFee?: number; smallOrderFee?: number; deliveryKm?: number | null;
   paymentMethod: string; paymentStatus: string; cancelReason: string | null; estimatedDeliveryAt: string | null;
   createdAt: string; deliveredAt: string | null;
   canCancel: boolean; canModify: boolean; canReview: boolean; deliveryCode?: string | null; pinRequired?: boolean;
@@ -60,6 +60,19 @@ function liveHeadline(status: string, tr?: Tracking): Tr | null {
   if (status === "picked_up" && tr.driverAtCustomerAt) return { pt: "O estafeta está à sua porta! 🛵", en: "Your rider is outside! 🛵", fr: "Votre livreur est devant chez vous ! 🛵" };
   if (["accepted", "preparing", "ready"].includes(status) && tr.driverAtStoreAt) return { pt: "O estafeta já está no restaurante", en: "Your rider is at the restaurant", fr: "Votre livreur est au restaurant" };
   if (["accepted", "preparing", "ready"].includes(status) && tr.driverAssignedAt) return { pt: "O estafeta vai a caminho do restaurante", en: "Your rider is heading to the restaurant", fr: "Votre livreur se rend au restaurant" };
+  return null;
+}
+
+/** Recolha no balcão e entrega pela própria loja têm textos próprios. */
+function fulfilmentHeadline(status: string, f?: string): Tr | null {
+  if (f === "pickup") {
+    if (status === "ready") return { pt: "Pronta! Pode vir levantar 🛍️", en: "Ready! Come and collect it 🛍️", fr: "Prête ! Venez la retirer 🛍️" };
+    if (status === "delivered") return { pt: "Levantada. Bom apetite!", en: "Collected. Enjoy!", fr: "Retirée. Bon appétit !" };
+  }
+  if (f === "store_delivery") {
+    if (status === "ready") return { pt: "Pronta — o estafeta da loja vai sair", en: "Ready — the store's rider is leaving soon", fr: "Prête — le livreur du magasin va partir" };
+    if (status === "picked_up") return { pt: "O estafeta da loja vai a caminho", en: "The store's rider is on the way", fr: "Le livreur du magasin arrive" };
+  }
   return null;
 }
 
@@ -371,7 +384,7 @@ function OrderDetailInner({ id }: { id: string }) {
               );
             })}
           </div>
-          <h2 className="mt-3 text-lg font-bold leading-tight">{t(liveHeadline(order.status, tr) ?? HEADLINE[order.status] ?? ORDER_STATUS[order.status] ?? { pt: order.status, en: order.status, fr: order.status })}</h2>
+          <h2 className="mt-3 text-lg font-bold leading-tight">{t(fulfilmentHeadline(order.status, order.fulfilment) ?? liveHeadline(order.status, tr) ?? HEADLINE[order.status] ?? ORDER_STATUS[order.status] ?? { pt: order.status, en: order.status, fr: order.status })}</h2>
           {!!order.priorityFee && <p className="mt-1 text-xs font-semibold text-primary">⚡ {t({ pt: "Entrega prioritária", en: "Priority delivery", fr: "Livraison prioritaire" })}</p>}
         </div>
       ) : (
@@ -397,8 +410,10 @@ function OrderDetailInner({ id }: { id: string }) {
       {order.deliveryCode && (
         <div className="flex items-center gap-4 rounded-2xl border-2 border-primary bg-brand-50 p-4" aria-live="polite">
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold">🔒 {t({ pt: "Código de entrega", en: "Delivery code", fr: "Code de livraison" })}</p>
-            <p className="text-xs text-neutral-600">{t({ pt: "Diga este código ao estafeta só quando receber a encomenda.", en: "Give this code to the rider only when you receive your order.", fr: "Donnez ce code au livreur seulement à la réception de la commande." })}</p>
+            <p className="text-sm font-bold">🔒 {order.fulfilment === "pickup" ? t({ pt: "Código de recolha", en: "Pickup code", fr: "Code de retrait" }) : t({ pt: "Código de entrega", en: "Delivery code", fr: "Code de livraison" })}</p>
+            <p className="text-xs text-neutral-600">{order.fulfilment === "pickup"
+              ? t({ pt: "Mostre este código ao balcão quando levantar.", en: "Show this code at the counter when you collect.", fr: "Montrez ce code au comptoir au retrait." })
+              : t({ pt: "Diga este código ao estafeta só quando receber a encomenda.", en: "Give this code to the rider only when you receive your order.", fr: "Donnez ce code au livreur seulement à la réception de la commande." })}</p>
           </div>
           <p className="font-mono text-3xl font-extrabold tracking-[0.25em] text-brand-900">{order.deliveryCode}</p>
         </div>
@@ -511,7 +526,8 @@ function OrderDetailInner({ id }: { id: string }) {
         <div className="mt-4 space-y-2 border-t pt-3">
           <PriceRow label={t(T.subtotal)} value={kz(order.subtotal)} />
           {!!order.smallOrderFee && <PriceRow label={t({ pt: "Taxa de encomenda pequena", en: "Small order fee", fr: "Frais petite commande" })} value={kz(order.smallOrderFee)} />}
-          <PriceRow label={<>{t(T.deliveryFee)}{order.deliveryKm != null && <span className="ml-1 text-xs text-neutral-500">({order.deliveryKm.toFixed(1).replace(".", ",")} km)</span>}</>} value={order.deliveryFee === 0 ? <span className="font-semibold text-green-700">{t(T.free)}</span> : kz(order.deliveryFee)} />
+          {order.fulfilment === "pickup" && <PriceRow label={t({ pt: "Recolha na loja", en: "Pickup at store", fr: "Retrait au magasin" })} value={<span className="font-semibold text-green-700">{t(T.free)}</span>} />}
+          {order.fulfilment !== "pickup" && <PriceRow label={<>{t(T.deliveryFee)}{order.deliveryKm != null && <span className="ml-1 text-xs text-neutral-500">({order.deliveryKm.toFixed(1).replace(".", ",")} km)</span>}</>} value={order.deliveryFee === 0 ? <span className="font-semibold text-green-700">{t(T.free)}</span> : kz(order.deliveryFee)} />}
           {!!order.serviceFee && <PriceRow label={t({ pt: "Taxa de serviço", en: "Service fee", fr: "Frais de service" })} value={kz(order.serviceFee)} />}
           {!!order.priorityFee && <PriceRow label={t({ pt: "Entrega prioritária", en: "Priority delivery", fr: "Livraison prioritaire" })} value={kz(order.priorityFee)} />}
           {!!order.riderTip && <PriceRow label={t({ pt: "Gorjeta para o estafeta", en: "Rider tip", fr: "Pourboire livreur" })} value={kz(order.riderTip)} />}

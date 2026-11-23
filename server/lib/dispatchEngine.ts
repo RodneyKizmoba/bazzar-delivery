@@ -63,7 +63,7 @@ export function dispatchTimes(now: Date, readyAt: Date, priority: boolean) {
 
 type Candidate = { id: number; km: number | null; idleMin: number };
 
-async function candidatesFor(orderId: number, store: { latitude: number | null; longitude: number | null }): Promise<Candidate[]> {
+async function candidatesFor(orderId: number, store: { latitude: number | null; longitude: number | null }, isCash: boolean): Promise<Candidate[]> {
   const staleMin = config.presenceStaleMin;
   const rows = await db.execute(sql`
     select u.id, p.latitude, p.longitude,
@@ -77,6 +77,8 @@ async function candidatesFor(orderId: number, store: { latitude: number | null; 
       and not exists (select 1 from orders o where o.driver_id = u.id and o.status in ('accepted','preparing','ready','picked_up'))
       and not exists (select 1 from dispatch_offers d where d.driver_id = u.id and d.status = 'pending')
       and not exists (select 1 from dispatch_offers d where d.driver_id = u.id and d.order_id = ${orderId})
+      and (${!isCash} or coalesce((select -sum(l.amount) from ledger_entries l where l.party_type = 'driver' and l.party_id = u.id
+             and l.kind in ('cash_collected','cash_deposit')), 0) < ${config.riderCashLimit})
   `);
   const list: Candidate[] = (rows.rows as any[]).map((r) => {
     const km = r.latitude != null && r.longitude != null && store.latitude != null && store.longitude != null
@@ -99,7 +101,7 @@ export async function advanceOrder(orderId: number, now = new Date()): Promise<O
     if (!o) return;
     const pending = await tx.select().from(dispatchOffers)
       .where(and(eq(dispatchOffers.orderId, orderId), eq(dispatchOffers.status, "pending")));
-    const eligible = !o.driverId && (DISPATCHABLE as readonly string[]).includes(o.status) && !o.dispatchFailedAt;
+    const eligible = !o.driverId && o.fulfilment === "delivery" && (DISPATCHABLE as readonly string[]).includes(o.status) && !o.dispatchFailedAt;
     for (const p of pending) {
       if (!eligible || p.expiresAt <= now) {
         await tx.update(dispatchOffers).set({ status: eligible ? "expired" : "cancelled", respondedAt: now }).where(eq(dispatchOffers.id, p.id));
@@ -117,7 +119,7 @@ export async function advanceOrder(orderId: number, now = new Date()): Promise<O
     if (o.dispatchRound >= config.dispatchMaxRounds) return giveUp();
 
     const [store] = await tx.select({ latitude: stores.latitude, longitude: stores.longitude }).from(stores).where(eq(stores.id, o.storeId));
-    const cands = await candidatesFor(orderId, store ?? { latitude: null, longitude: null });
+    const cands = await candidatesFor(orderId, store ?? { latitude: null, longitude: null }, o.paymentMethod === "cash");
     const best = cands[0];
     if (!best) {
       const since = (o.dispatchAt ?? o.updatedAt).getTime();
@@ -155,7 +157,7 @@ export async function dispatchTick(now = new Date()) {
   try {
     const due = await db.execute(sql`
       select id from orders
-      where driver_id is null and status in ('accepted','preparing','ready') and dispatch_failed_at is null
+      where driver_id is null and status in ('accepted','preparing','ready') and dispatch_failed_at is null and fulfilment = 'delivery'
         and (dispatch_at is null or dispatch_at <= ${now})
       union
       select d.order_id from dispatch_offers d where d.status = 'pending'
@@ -235,7 +237,7 @@ export async function touchPresence(driverId: number, pos: LL) {
 /** Admin: voltar a tentar o despacho automático de uma encomenda. */
 export async function redispatch(orderId: number) {
   const [o] = await db.update(orders).set({ dispatchFailedAt: null, dispatchRound: 0, dispatchAt: new Date() })
-    .where(and(eq(orders.id, orderId), sql`${orders.driverId} is null`, inArray(orders.status, [...DISPATCHABLE]))).returning();
+    .where(and(eq(orders.id, orderId), sql`${orders.driverId} is null`, eq(orders.fulfilment, "delivery"), inArray(orders.status, [...DISPATCHABLE]))).returning();
   if (!o) throw conflict("Esta encomenda já não está à espera de estafeta.", "NOT_WAITING");
   await advanceOrder(orderId);
   return o;

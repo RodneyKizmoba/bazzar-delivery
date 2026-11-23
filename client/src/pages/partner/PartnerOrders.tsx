@@ -27,6 +27,7 @@ export function usePartnerTabs() {
     { href: "/parceiro/avaliacoes", label: t({ pt: "Avaliações", en: "Reviews", fr: "Avis" }) },
     { href: "/parceiro/estatisticas", label: t({ pt: "Estatísticas", en: "Statistics", fr: "Statistiques" }) },
     { href: "/parceiro/pagamentos", label: t({ pt: "Pagamentos", en: "Payouts", fr: "Paiements" }) },
+    { href: "/parceiro/publicidade", label: t({ pt: "Publicidade", en: "Ads", fr: "Publicité" }) },
   ];
 }
 
@@ -47,6 +48,7 @@ export interface PartnerOrder {
   paymentMethod: string; paymentStatus: string; driverId: number | null; groupOrderId: number | null;
   cancelReason: string | null; items: PartnerOrderItem[];
   prepMinutes?: number | null; readyEstimateAt?: string | null;
+  fulfilment?: "delivery" | "pickup" | "store_delivery"; deliveryAddress?: { street: string; zone: string; label: string };
 }
 
 const PREP_CHOICES = [10, 15, 20, 30, 45];
@@ -227,10 +229,14 @@ function OrderCard({ order }: { order: PartnerOrder }) {
   const [rejectOpen, setRejectOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [prep, setPrep] = useState<number | null>(null);
+  const [codeOpen, setCodeOpen] = useState(false);
+  const [code, setCode] = useState("");
+  const [codeErr, setCodeErr] = useState<string | null>(null);
+  const storeRun = order.fulfilment === "pickup" || order.fulfilment === "store_delivery";
   const mins = minutesSince(order.createdAt);
 
   const setStatus = useMutation({
-    mutationFn: (v: { status: string; note?: string; prepMinutes?: number }) => post(`/api/partner/orders/${order.id}/status`, v),
+    mutationFn: (v: { status: string; note?: string; prepMinutes?: number; pin?: string }) => post(`/api/partner/orders/${order.id}/status`, v),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [ORDERS_ACTIVE] });
       queryClient.invalidateQueries({ queryKey: [ORDERS_HISTORY] });
@@ -277,6 +283,13 @@ function OrderCard({ order }: { order: PartnerOrder }) {
       {order.status === "scheduled" && order.scheduledFor && (
         <p className="mt-2 rounded bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-800">
           {t({ pt: "Para", en: "For", fr: "Pour" })} {dateTime(order.scheduledFor, lang)}
+        </p>
+      )}
+      {storeRun && (
+        <p className={cn("mt-2 rounded px-2 py-1 text-xs font-semibold", order.fulfilment === "pickup" ? "bg-violet-50 text-violet-900" : "bg-sky-50 text-sky-900")}>
+          {order.fulfilment === "pickup"
+            ? t({ pt: "🛍️ Recolha na loja — o cliente vem levantar", en: "🛍️ Pickup — the customer collects", fr: "🛍️ Retrait — le client vient chercher" })
+            : t({ pt: `🛵 Entrega pelos seus estafetas — ${order.deliveryAddress?.street ?? ""}, ${order.deliveryAddress?.zone ?? ""}`, en: `🛵 Your own rider delivers — ${order.deliveryAddress?.street ?? ""}, ${order.deliveryAddress?.zone ?? ""}`, fr: `🛵 Votre livreur livre — ${order.deliveryAddress?.street ?? ""}, ${order.deliveryAddress?.zone ?? ""}` })}
         </p>
       )}
       {order.groupOrderId && (
@@ -326,10 +339,10 @@ function OrderCard({ order }: { order: PartnerOrder }) {
         <span className="font-semibold">{kz(order.total)}</span>
         <span className={cn("flex items-center gap-1 text-xs", isCash ? "font-semibold text-brand-700" : "text-neutral-600")}>
           {isCash && <Banknote className="h-3 w-3" />}
-          {isCash ? t({ pt: "Cobrar na entrega", en: "Collect on delivery", fr: "À encaisser à la livraison" }) : (PAYMENT[order.paymentMethod] ? t(PAYMENT[order.paymentMethod]) : order.paymentMethod)}
+          {isCash ? (order.fulfilment === "pickup" ? t({ pt: "Cobrar ao balcão", en: "Collect at the counter", fr: "À encaisser au comptoir" }) : t({ pt: "Cobrar na entrega", en: "Collect on delivery", fr: "À encaisser à la livraison" })) : (PAYMENT[order.paymentMethod] ? t(PAYMENT[order.paymentMethod]) : order.paymentMethod)}
         </span>
       </div>
-      {["accepted", "preparing", "ready", "picked_up"].includes(order.status) && (
+      {!storeRun && ["accepted", "preparing", "ready", "picked_up"].includes(order.status) && (
         <p className="mt-1 flex items-center gap-1 text-xs text-neutral-600">
           <Bike className="h-3 w-3" />
           {order.driverId
@@ -396,7 +409,41 @@ function OrderCard({ order }: { order: PartnerOrder }) {
             {t({ pt: "Pronta", en: "Ready", fr: "Prête" })}
           </Button>
         )}
+        {order.fulfilment === "store_delivery" && order.status === "ready" && (
+          <Button className="flex-1" disabled={setStatus.isPending} onClick={() => setStatus.mutate({ status: "picked_up" })}>
+            🛵 {t({ pt: "Saiu para entrega", en: "Out for delivery", fr: "Partie en livraison" })}
+          </Button>
+        )}
+        {((order.fulfilment === "pickup" && order.status === "ready") || (order.fulfilment === "store_delivery" && order.status === "picked_up")) && (
+          <Button className="flex-1 bg-green-700 hover:bg-green-800" onClick={() => { setCode(""); setCodeErr(null); setCodeOpen(true); }}>
+            ✓ {order.fulfilment === "pickup" ? t({ pt: "Cliente levantou", en: "Customer collected", fr: "Client a retiré" }) : t({ pt: "Entregue", en: "Delivered", fr: "Livrée" })}
+          </Button>
+        )}
       </div>
+
+      <Dialog open={codeOpen} onOpenChange={setCodeOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{order.fulfilment === "pickup" ? t({ pt: "Código de recolha", en: "Pickup code", fr: "Code de retrait" }) : t({ pt: "Código de entrega", en: "Delivery code", fr: "Code de livraison" })}</DialogTitle>
+            <DialogDescription>{t({ pt: "Peça ao cliente o código de 4 dígitos que aparece na app dele.", en: "Ask the customer for the 4-digit code shown in their app.", fr: "Demandez au client le code à 4 chiffres affiché dans son app." })}</DialogDescription>
+          </DialogHeader>
+          <Label htmlFor={`code-${order.id}`} className="sr-only">{t({ pt: "Código", en: "Code", fr: "Code" })}</Label>
+          <input id={`code-${order.id}`} inputMode="numeric" maxLength={4} value={code} placeholder="••••"
+            onChange={(e) => { setCode(e.target.value.replace(/\D/g, "").slice(0, 4)); setCodeErr(null); }}
+            className="h-14 w-full rounded-lg border-2 border-primary text-center font-mono text-3xl tracking-[0.6em] outline-none focus:ring-2 focus:ring-primary"
+            aria-invalid={!!codeErr} aria-describedby={codeErr ? `code-err-${order.id}` : undefined} />
+          {codeErr && <p id={`code-err-${order.id}`} role="alert" className="rounded bg-red-50 p-2 text-sm text-red-700">{codeErr}</p>}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCodeOpen(false)}>{t(T.cancel)}</Button>
+            <Button disabled={code.length !== 4 || setStatus.isPending}
+              onClick={() => post(`/api/partner/orders/${order.id}/status`, { status: "delivered", pin: code })
+                .then(() => { setCodeOpen(false); queryClient.invalidateQueries({ queryKey: [ORDERS_ACTIVE] }); toast({ title: t({ pt: "Encomenda concluída", en: "Order completed", fr: "Commande terminée" }) }); })
+                .catch((e: Error) => { setCodeErr(e.message); setCode(""); })}>
+              {t({ pt: "Confirmar", en: "Confirm", fr: "Confirmer" })}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
         <DialogContent>

@@ -52,7 +52,7 @@ function summary(o: typeof orders.$inferSelect, s: typeof stores.$inferSelect) {
 // Entregas disponíveis: aceites pela loja, sem estafeta e sem oferta em aberto (essas vão para um estafeta de cada vez)
 driverRouter.get("/available", ah(async (req, res) => {
   const rows = await db.select({ o: orders, s: stores }).from(orders).innerJoin(stores, eq(stores.id, orders.storeId))
-    .where(and(isNull(orders.driverId), inArray(orders.status, ["accepted", "preparing", "ready"]),
+    .where(and(isNull(orders.driverId), eq(orders.fulfilment, "delivery"), inArray(orders.status, ["accepted", "preparing", "ready"]),
       sql`not exists (select 1 from dispatch_offers d where d.order_id = ${orders.id} and d.status = 'pending' and d.expires_at > now())`))
     .orderBy(desc(orders.priorityFee), asc(orders.createdAt)).limit(50);
   // quanto cada entrega me pagaria (a partir da minha posição e do meu veículo), antes de aceitar
@@ -194,6 +194,7 @@ driverRouter.get("/wallet", ah(async (req, res) => {
     instant: { min: config.instantCashoutMin, feePct: config.instantCashoutFeePct, feeMin: config.instantCashoutFeeMin, feeNow: avail.now ? instantCashoutFee(avail.now) : 0 },
     payouts: await payoutsOf("driver", me.id),
     payoutMethod: me.payoutMethod, payoutReference: me.payoutReference, vehicleType: me.vehicleType ?? "moto",
+    cashLimit: config.riderCashLimit,
   });
 }));
 

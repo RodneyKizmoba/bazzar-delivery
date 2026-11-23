@@ -7,7 +7,7 @@ import { conflict } from "./http";
 
 /**
  * Pagamentos.
- * - Numerário: DESLIGADO (os clientes pagam tudo por banco). Só com ALLOW_CASH=1, em emergência.
+ * - Numerário na entrega: ligado por defeito (ALLOW_CASH=0 desliga); fica "pago" quando o estafeta marca a entrega.
  * - Métodos online (Multicaixa Express, Unitel Money, cartão, transferência):
  *     PAYMENTS_MODE=sandbox  → simulação para testes (marcado claramente como SANDBOX);
  *     PAYMENTS_MODE=live     → requer um gateway real configurado (ver docs/PAGAMENTOS.md);

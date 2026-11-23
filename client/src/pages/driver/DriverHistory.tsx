@@ -29,7 +29,7 @@ interface PayoutRow { id: number; kind: "weekly" | "instant"; status: "pending" 
 interface WalletData extends Account {
   available: { now: number; weekly: number }; nextPayday: string;
   instant: { min: number; feePct: number; feeMin: number; feeNow: number };
-  payouts: PayoutRow[]; payoutMethod: string | null; payoutReference: string | null; vehicleType: string;
+  payouts: PayoutRow[]; payoutMethod: string | null; payoutReference: string | null; vehicleType: string; cashLimit: number;
 }
 const METHOD: Record<string, string> = { multicaixa_express: "Multicaixa Express", unitel_money: "Unitel Money", bank_transfer: "IBAN" };
 
@@ -53,6 +53,12 @@ function Wallet() {
     <section className="space-y-3 rounded-xl border bg-white p-4">
       <h2 className="text-lg font-bold">{t({ pt: "Carteira", en: "Wallet", fr: "Portefeuille" })}</h2>
       <BalanceLine balance={data.balance} />
+      {data.cashHeld > 0 && (
+        <div className={cn("rounded-lg p-3 text-sm", data.cashHeld >= data.cashLimit * 0.8 ? "bg-red-50 text-red-800" : "bg-amber-50 text-amber-900")} role={data.cashHeld >= data.cashLimit * 0.8 ? "alert" : undefined}>
+          <p className="font-semibold">💵 {t({ pt: `Numerário em mão: ${kz(data.cashHeld)}`, en: `Cash in hand: ${kz(data.cashHeld)}`, fr: `Espèces en main : ${kz(data.cashHeld)}` })}</p>
+          <p className="text-xs">{t({ pt: `Dinheiro dos clientes que tem de entregar à PedeJá (é descontado do seu pagamento). Acima de ${kz(data.cashLimit)} deixa de receber encomendas em numerário.`, en: `Customers' cash you must hand to PedeJá (it's taken off your payout). Above ${kz(data.cashLimit)} you stop getting cash orders.`, fr: `Espèces des clients à remettre à PedeJá (déduites de votre paiement). Au-delà de ${kz(data.cashLimit)}, plus de commandes en espèces.` })}</p>
+        </div>
+      )}
       <p className="text-sm text-neutral-700">
         📅 {t({ pt: `Próximo pagamento: ${payday}`, en: `Next payout: ${payday}`, fr: `Prochain paiement : ${payday}` })}
         {data.available.weekly > 0 && <b> · {kz(data.available.weekly)}</b>}

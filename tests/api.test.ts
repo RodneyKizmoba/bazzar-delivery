@@ -1217,12 +1217,9 @@ async function main() {
   // =========================================================================
   await section("Bank-only payments, delivery code, Deliveroo-style fees, rider pay, settlement, payouts", async () => {
     const STORE1 = { latitude: -8.9172, longitude: 13.1846 };
-    // --- no cash
-    let r = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash" });
-    check("cash refused (409 PAYMENT_METHOD_UNAVAILABLE)", r.status === 409 && r.body.code === "PAYMENT_METHOD_UNAVAILABLE" && /banco|Multicaixa/.test(r.body.message), r.body);
-    r = await anon.get("/api/meta");
-    const cashMeta = r.body.paymentMethods?.find((m: any) => m.id === "cash");
-    check("meta: cash not available, bank methods are", cashMeta && cashMeta.available === false && r.body.paymentMethods.some((m: any) => m.id === "multicaixa_express" && m.available), r.body.paymentMethods);
+    // --- cash is back (until the bank gateway is live), next to bank methods
+    let r = await anon.get("/api/meta");
+    check("meta: cash available again, bank methods too", r.body.paymentMethods?.some((m: any) => m.id === "cash" && m.available) && r.body.paymentMethods.some((m: any) => m.id === "multicaixa_express" && m.available), r.body.paymentMethods);
 
     // --- customer fees
     r = await cli.post("/api/cart/quote", { storeId: 1, items: [FRANGO], addressId: addrTalatona });
@@ -1362,6 +1359,36 @@ async function main() {
     r = await loja.post("/api/admin/ledger", { partyType: "store", partyId: 1, kind: "adjustment", amount: 999999 });
     check("store can't write to the ledger (403)", r.status === 403, r.status);
 
+    // --- cash orders: rider collects, owes it, limit 50 000 Kz in hand
+    const cr = new Client("rcash");
+    const crr = await cr.post("/api/auth/register", { username: `rcash_${uniq}`, password: "Teste#2026xx", fullName: "Rider Cash", phone: "+244923222031", userType: "driver" });
+    await admin.patch(`/api/admin/users/${crr.body.user.id}`, { isApproved: true });
+    const rc = new Client("rcash2"); await rc.login(`rcash_${uniq}`, "Teste#2026xx");
+    const C1 = await mk({ paymentMethod: "cash", items: [{ ...FRANGO, quantity: 12 }] });
+    r = await rc.post(`/api/driver/orders/${C1.id}/claim`);
+    check("rider takes a cash order", r.status === 200, r.body);
+    r = await rc.get("/api/driver/current");
+    check("rider sees how much cash to collect", r.body.order.collectCash === C1.order.total, r.body.order?.collectCash);
+    await rc.post(`/api/driver/orders/${C1.id}/status`, { status: "picked_up" });
+    r = await rc.post(`/api/driver/orders/${C1.id}/status`, { status: "delivered", pin: await pinFor(C1.id) });
+    check("cash order delivered -> marked paid", r.status === 200 && r.body.order.paymentStatus === "paid", r.body.order?.paymentStatus);
+    w = (await rc.get("/api/driver/wallet")).body;
+    check("rider holds the cash (owes it, minus own earning)", w.cashHeld === C1.order.total && w.balance === r.body.order.riderEarning - C1.order.total && w.cashLimit === 50000, { held: w.cashHeld, bal: w.balance });
+    const C2 = await mk({ paymentMethod: "cash" });
+    r = await rc.post(`/api/driver/orders/${C2.id}/claim`);
+    check("over 50 000 Kz in hand -> no more cash orders (409 CASH_LIMIT)", r.status === 409 && r.body.code === "CASH_LIMIT", r.body);
+    const B2 = await mk();
+    r = await rc.post(`/api/driver/orders/${B2.id}/claim`);
+    check("...but bank-paid orders are fine", r.status === 200, r.body);
+    await rc.post(`/api/driver/orders/${B2.id}/status`, { status: "picked_up" });
+    await rc.post(`/api/driver/orders/${B2.id}/status`, { status: "delivered", pin: await pinFor(B2.id) });
+    r = await admin.post("/api/admin/ledger", { partyType: "driver", partyId: crr.body.user.id, kind: "cash_deposit", amount: C1.order.total, reference: "REC-9" });
+    check("admin records the cash handed in -> nothing in hand", r.status === 201 && r.body.cashHeld === 0, r.body);
+    r = await rc.post(`/api/driver/orders/${C2.id}/claim`);
+    check("after handing in, cash orders allowed again", r.status === 200, r.body);
+    await rc.post(`/api/driver/orders/${C2.id}/status`, { status: "picked_up" });
+    await rc.post(`/api/driver/orders/${C2.id}/status`, { status: "delivered", pin: await pinFor(C2.id) });
+
     // --- 5 wrong codes lock it; admin finishes
     const L = await mk();
     const lcode = await pinFor(L.id);
@@ -1375,6 +1402,114 @@ async function main() {
     check("support (admin) can complete a locked delivery", r.status === 200 && r.body.order.status === "delivered" && r.body.order.settledAt, r.body);
     r = await admin.get("/api/admin/orders");
     check("admin order list never carries the raw PIN field", !JSON.stringify(r.body).includes('"deliveryPin"'), "found deliveryPin");
+  });
+
+  // =========================================================================
+  await section("Pickup and store's own delivery (commission per model)", async () => {
+    let r = await loja.get("/api/partner/commissions");
+    check("store sees commission per model (20% / 9% pickup / 10% own riders)", r.status === 200 && r.body.delivery === 20 && r.body.pickup === 9 && r.body.storeDelivery === 10, r.body);
+    r = await cli.post("/api/cart/quote", { storeId: 1, items: [FRANGO], fulfilment: "pickup" });
+    check("pickup refused while the store doesn't offer it (PICKUP_NOT_OFFERED)", r.status === 400 && r.body.code === "PICKUP_NOT_OFFERED", r.body);
+    r = await loja.patch("/api/partner/store", { offersPickup: true });
+    check("store switches on pickup", r.status === 200 && r.body.store.offersPickup === true, r.body.store?.offersPickup);
+    r = await anon.get("/api/stores/1");
+    check("store page shows pickup available", r.body.store.offersPickup === true, r.body.store?.offersPickup);
+    r = await cli.post("/api/cart/quote", { storeId: 1, items: [FRANGO], fulfilment: "pickup", riderTip: 500, priority: true });
+    check("pickup quote: no delivery fee, no tip, no priority, service fee stays", r.status === 200 && r.body.quote.fulfilment === "pickup" && r.body.quote.deliveryFee === 0 && r.body.quote.riderTip === 0 && r.body.quote.priorityFee === 0 && r.body.quote.total === 4500 + 230, r.body.quote);
+    r = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], paymentMethod: "multicaixa_express" });
+    check("delivery without address -> 400 INVALID_ADDRESS", r.status === 400 && r.body.code === "INVALID_ADDRESS", r.body);
+    r = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], paymentMethod: "multicaixa_express", fulfilment: "pickup" });
+    const PU = r.body.order;
+    check("pickup order needs no address; address = the store", r.status === 201 && PU.fulfilment === "pickup" && PU.deliveryAddress.label === "Recolha na loja" && PU.deliveryFee === 0, PU);
+    r = await cli.patch(`/api/orders/${PU.id}`, { addressId: addrTalatona });
+    check("pickup order can't get a delivery address (400)", r.status === 400, r.body);
+    for (const st of ["accepted", "preparing", "ready"]) await loja.post(`/api/partner/orders/${PU.id}/status`, { status: st });
+    r = await est.get("/api/driver/available");
+    check("pickup never goes to PedeJá riders", !r.body.orders.some((x: any) => x.id === PU.id), r.body.orders?.map((x: any) => x.id));
+    r = await est.post(`/api/driver/orders/${PU.id}/claim`);
+    check("rider can't claim a pickup order", r.status === 409 || r.status === 404, r.status);
+    r = await loja.post(`/api/partner/orders/${PU.id}/status`, { status: "picked_up" });
+    check("pickup has no 'out for delivery' step (409)", r.status === 409, r.body);
+    r = await loja.post(`/api/partner/orders/${PU.id}/status`, { status: "delivered" });
+    check("store must enter the customer's code (PIN_REQUIRED)", r.status === 400 && r.body.code === "PIN_REQUIRED", r.body);
+    const puCode = await pinFor(PU.id);
+    r = await loja.post(`/api/partner/orders/${PU.id}/status`, { status: "delivered", pin: puCode === "0000" ? "1111" : "0000" });
+    check("wrong code at the counter -> BAD_PIN", r.status === 400 && r.body.code === "BAD_PIN", r.body);
+    r = await loja2.post(`/api/partner/orders/${PU.id}/status`, { status: "delivered", pin: puCode });
+    check("another store can't close it (403)", r.status === 403, r.status);
+    r = await loja.post(`/api/partner/orders/${PU.id}/status`, { status: "delivered", pin: puCode });
+    const pu = r.body.order;
+    check("customer collected -> delivered; 9% commission; store keeps the rest", r.status === 200 && pu.status === "delivered" && pu.commissionPct === 9 && pu.commissionAmount === Math.round(4500 * 0.09) && pu.storeEarning === 4500 - pu.commissionAmount && pu.riderEarning === 0, pu);
+
+    // --- store's own riders
+    r = await loja.patch("/api/partner/store", { ownDelivery: true });
+    check("store switches on own delivery", r.status === 200 && r.body.store.ownDelivery === true, r.body.store?.ownDelivery);
+    r = await cli.post("/api/cart/quote", { storeId: 1, items: [FRANGO], addressId: addrTalatona, priority: true });
+    check("own-delivery quote: store's own delivery fee, no PedeJá priority", r.body.quote.fulfilment === "store_delivery" && r.body.quote.deliveryFee === 1000 && r.body.quote.priorityFee === 0, r.body.quote);
+    r = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "multicaixa_express", riderTip: 200 });
+    const SD = r.body.order;
+    check("order goes to the store's riders", r.status === 201 && SD.fulfilment === "store_delivery" && SD.deliveryFee === 1000, SD);
+    for (const st of ["accepted", "preparing", "ready"]) await loja.post(`/api/partner/orders/${SD.id}/status`, { status: st });
+    r = await est.get("/api/driver/available");
+    check("not offered to PedeJá riders", !r.body.orders.some((x: any) => x.id === SD.id), "listed");
+    const estId = (await est.get("/api/auth/me")).body.user.id;
+    r = await admin.post(`/api/admin/orders/${SD.id}/assign-driver`, { driverId: estId });
+    check("admin can't put a PedeJá rider on it (409)", r.status === 409, r.body);
+    r = await loja.post(`/api/partner/orders/${SD.id}/status`, { status: "picked_up" });
+    check("store: 'out for delivery'", r.status === 200 && r.body.order.status === "picked_up", r.body);
+    r = await loja.post(`/api/partner/orders/${SD.id}/status`, { status: "delivered", pin: await pinFor(SD.id) });
+    const sd = r.body.order;
+    check("delivered with code: 10% commission, store keeps fee + tip", r.status === 200 && sd.commissionPct === 10 && sd.storeEarning === 4500 - Math.round(450) + 1000 + 200 && sd.riderEarning === 0, sd);
+    await loja.patch("/api/partner/store", { ownDelivery: false, offersPickup: false });
+    r = await cli.post("/api/cart/quote", { storeId: 1, items: [FRANGO], addressId: addrTalatona });
+    check("switched off again -> PedeJá delivery", r.body.quote.fulfilment === "delivery", r.body.quote.fulfilment);
+  });
+
+  // =========================================================================
+  await section("Sponsored stores (paid top of search)", async () => {
+    let r = await loja.get("/api/partner/ads");
+    check("store sees ad price and durations", r.status === 200 && r.body.pricePerDay === 2000 && JSON.stringify(r.body.days) === "[7,14,30]", r.body);
+    r = await loja.post("/api/partner/ads", { days: 5 });
+    check("only 7/14/30 days (400)", r.status === 400 && r.body.code === "BAD_AD_DAYS", r.body);
+    const before = (await loja.get("/api/partner/finance")).body.balance;
+    r = await loja.post("/api/partner/ads", { days: 7 });
+    const ad1 = r.body.ad;
+    check("store buys 7 days for 14 000 Kz", r.status === 201 && ad1.price === 14000 && ad1.days === 7, r.body);
+    const fin = (await loja.get("/api/partner/finance")).body;
+    check("charged to the store's balance", fin.balance === before - 14000 && fin.entries.some((e: any) => e.kind === "ads" && e.amount === -14000), { before, after: fin.balance });
+    r = await anon.get("/api/stores?limit=100");
+    check("sponsored store comes first, labelled", r.body.stores[0]?.id === 1 && r.body.stores[0].sponsored === true && r.body.stores.filter((x: any) => x.sponsored).length === 1, r.body.stores.slice(0, 3).map((x: any) => [x.id, x.sponsored]));
+    r = await anon.get("/api/stores?type=pharmacy&limit=100");
+    check("ads respect filters (a grill never jumps into pharmacy results)", !r.body.stores.some((x: any) => x.id === 1), r.body.stores.map((x: any) => x.id));
+    r = await anon.post("/api/ads/click", { storeId: 1 });
+    check("click recorded", r.status === 200, r.status);
+    r = await loja.get("/api/partner/ads");
+    const a1 = r.body.ads.find((a: any) => a.id === ad1.id);
+    check("store sees views and clicks", a1 && a1.impressions >= 1 && a1.clicks === 1 && a1.state === "running", a1);
+    r = await loja.post("/api/partner/ads", { days: 7 });
+    const ad2 = r.body.ad;
+    check("second purchase starts when the first ends", r.status === 201 && new Date(ad2.startsAt).getTime() === new Date(ad1.endsAt).getTime(), { s: ad2?.startsAt, e: ad1.endsAt });
+    r = await loja.post(`/api/partner/ads/${ad2.id}/cancel`);
+    check("cancelling the scheduled one refunds all 7 days", r.status === 200 && r.body.ad.refund === 14000, r.body);
+    r = await loja.post(`/api/partner/ads/${ad1.id}/cancel`);
+    check("cancelling the running one refunds unused full days (6)", r.status === 200 && r.body.ad.refund === 12000, r.body);
+    r = await loja.post(`/api/partner/ads/${ad1.id}/cancel`);
+    check("can't cancel twice (409)", r.status === 409, r.status);
+    r = await loja2.post(`/api/partner/ads/${ad1.id}/cancel`);
+    check("another store can't touch it (404)", r.status === 404, r.status);
+    r = await anon.get("/api/stores?limit=100");
+    check("after cancelling: no sponsored stores", !r.body.stores.some((x: any) => x.sponsored), "still sponsored");
+    r = await admin.post("/api/admin/ads", { storeId: 2, days: 14 });
+    check("admin grants a free boost", r.status === 201 && r.body.ad.price === 0, r.body);
+    const gift = r.body.ad;
+    r = await anon.get("/api/stores?limit=100");
+    check("gifted store now first", r.body.stores[0]?.id === 2 && r.body.stores[0].sponsored, r.body.stores.slice(0, 2).map((x: any) => x.id));
+    r = await admin.get("/api/admin/ads");
+    check("admin sees all campaigns", r.body.ads.length >= 3, r.body.ads?.length);
+    r = await loja.get("/api/admin/ads");
+    check("stores can't see the admin ads list (403)", r.status === 403, r.status);
+    r = await admin.post(`/api/admin/ads/${gift.id}/cancel`);
+    check("admin cancels (free: nothing to refund)", r.status === 200 && r.body.ad.refund === 0, r.body);
   });
 
   // =========================================================================

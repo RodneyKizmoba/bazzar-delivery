@@ -9,8 +9,9 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { del, post, put, queryClient } from "@/lib/api";
-import { useT, T, type Tr } from "@/lib/i18n";
-import { FOOD_COLORS } from "@/lib/format";
+import { useLang, useT, T, type Tr } from "@/lib/i18n";
+import { FOOD_COLORS, dateTime, kz } from "@/lib/format";
+import { AD_STATE, type AdRow } from "@/pages/partner/PartnerAds";
 import { AdminPage } from "./AdminDashboard";
 
 type AdminBanner = Banner & { sortOrder: number; isActive: boolean };
@@ -26,7 +27,7 @@ const STICKERS: { id: Banner["sticker"]; label: Tr }[] = [
 const EMPTY = { title: "", subtitle: "", imageUrl: "", imageCredit: "", sticker: "burger" as Banner["sticker"], ctaLabel: "", linkUrl: "", bgColor: "#00CCBC", sortOrder: 0, isActive: true };
 
 export default function AdminBanners() {
-  return <AdminPage><BannersContent /></AdminPage>;
+  return <AdminPage><BannersContent /><SponsoredStores /></AdminPage>;
 }
 
 function BannersContent() {
@@ -145,4 +146,71 @@ function BannersContent() {
 function F({ id, label, children }: { id: string; label: Tr; children: React.ReactNode }) {
   const t = useT();
   return <div className="space-y-1"><Label htmlFor={id}>{t(label)}</Label>{children}</div>;
+}
+
+/** Lojas patrocinadas: todas as campanhas, oferecer dias e cancelar. */
+function SponsoredStores() {
+  const t = useT();
+  const { lang } = useLang();
+  const { toast } = useToast();
+  const KEY = "/api/admin/ads";
+  const q = useQuery<{ ads: AdRow[]; pricePerDay: number; maxSlots: number }>({ queryKey: [KEY] });
+  const storesQ = useQuery<{ stores: { id: number; name: string; isApproved: boolean }[] }>({ queryKey: ["/api/admin/stores"] });
+  const [storeId, setStoreId] = useState<number | "">("");
+  const [days, setDays] = useState(7);
+  const gift = useMutation({
+    mutationFn: () => post(KEY, { storeId, days, free: true }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: [KEY] }); toast({ title: t({ pt: "Destaque oferecido", en: "Boost granted", fr: "Mise en avant offerte" }) }); },
+    onError: (e: Error) => toast({ variant: "destructive", title: t(T.error), description: e.message }),
+  });
+  const cancel = useMutation({
+    mutationFn: (id: number) => post(`${KEY}/${id}/cancel`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: [KEY] }),
+    onError: (e: Error) => toast({ variant: "destructive", title: t(T.error), description: e.message }),
+  });
+  const ads = q.data?.ads ?? [];
+  const revenue = ads.reduce((s, a) => s + a.price - a.refund, 0);
+  return (
+    <section className="mt-8 space-y-3">
+      <h2 className="text-lg font-bold">{t({ pt: "Lojas patrocinadas (topo das pesquisas)", en: "Sponsored stores (top of search)", fr: "Magasins sponsorisés (haut des recherches)" })}</h2>
+      <p className="text-sm text-neutral-600">{q.data && t({ pt: `As lojas compram no portal (${kz(q.data.pricePerDay)}/dia). Até ${q.data.maxSlots} por lista. Receita de publicidade: ${kz(revenue)}.`, en: `Stores buy in their portal (${kz(q.data.pricePerDay)}/day). Up to ${q.data.maxSlots} per list. Ad revenue: ${kz(revenue)}.`, fr: `Les magasins achètent dans leur portail (${kz(q.data.pricePerDay)}/jour). Jusqu'à ${q.data.maxSlots} par liste. Revenus pub : ${kz(revenue)}.` })}</p>
+      <div className="flex flex-wrap items-end gap-2 rounded-lg border bg-white p-3">
+        <div>
+          <Label htmlFor="ad-store" className="text-xs">{t({ pt: "Loja", en: "Store", fr: "Magasin" })}</Label>
+          <select id="ad-store" value={storeId} onChange={(e) => setStoreId(e.target.value ? Number(e.target.value) : "")} className="h-9 rounded-md border bg-white px-2 text-sm">
+            <option value="">—</option>
+            {(storesQ.data?.stores ?? []).filter((s) => s.isApproved).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <Label htmlFor="ad-days" className="text-xs">{t({ pt: "Dias", en: "Days", fr: "Jours" })}</Label>
+          <select id="ad-days" value={days} onChange={(e) => setDays(Number(e.target.value))} className="h-9 rounded-md border bg-white px-2 text-sm">
+            {[7, 14, 30].map((d) => <option key={d} value={d}>{d}</option>)}
+          </select>
+        </div>
+        <Button size="sm" disabled={!storeId || gift.isPending} onClick={() => gift.mutate()}>{t({ pt: "Oferecer destaque (grátis)", en: "Grant boost (free)", fr: "Offrir (gratuit)" })}</Button>
+      </div>
+      {!ads.length ? <p className="text-sm text-neutral-500">{t({ pt: "Sem campanhas.", en: "No campaigns.", fr: "Aucune campagne." })}</p> : (
+        <div className="overflow-x-auto rounded-lg border bg-white">
+          <table className="w-full text-sm">
+            <thead className="bg-neutral-50 text-left text-xs text-neutral-500">
+              <tr><th className="p-2">{t({ pt: "Loja", en: "Store", fr: "Magasin" })}</th><th className="p-2">{t({ pt: "Estado", en: "State", fr: "État" })}</th><th className="p-2">{t({ pt: "Período", en: "Period", fr: "Période" })}</th><th className="p-2 text-right">{t({ pt: "Mostrada / cliques", en: "Views / clicks", fr: "Vues / clics" })}</th><th className="p-2 text-right">{t({ pt: "Preço", en: "Price", fr: "Prix" })}</th><th className="p-2" /></tr>
+            </thead>
+            <tbody>
+              {ads.map((a) => (
+                <tr key={a.id} className="border-t">
+                  <td className="p-2 font-medium">{a.storeName}</td>
+                  <td className="p-2">{t(AD_STATE[a.state])}</td>
+                  <td className="p-2 text-xs">{dateTime(a.startsAt, lang)} → {dateTime(a.endsAt, lang)}</td>
+                  <td className="p-2 text-right tabular-nums">{a.impressions} / {a.clicks} ({a.ctr}%)</td>
+                  <td className="p-2 text-right tabular-nums">{a.price ? kz(a.price) : t({ pt: "oferta", en: "free", fr: "offert" })}</td>
+                  <td className="p-2 text-right">{(a.state === "running" || a.state === "scheduled") && <Button size="sm" variant="ghost" onClick={() => cancel.mutate(a.id)}>{t(T.cancel)}</Button>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
 }

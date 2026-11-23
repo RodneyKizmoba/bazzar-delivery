@@ -57,6 +57,13 @@
       "when": 1795432894939,
       "tag": "0007_fees_rider_pay_payouts",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1795437100416,
+      "tag": "0008_fulfilment_and_ads",
+      "breakpoints": true
     }
   ]
 }

@@ -42,6 +42,7 @@ const DriverHistory = lazy(() => import("@/pages/driver/DriverHistory"));
 // Admin
 const AdminDashboard = lazy(() => import("@/pages/admin/AdminDashboard"));
 const AdminOrders = lazy(() => import("@/pages/admin/AdminOrders"));
+const PartnerAds = lazy(() => import("@/pages/partner/PartnerAds"));
 const PartnerPayouts = lazy(() => import("@/pages/partner/PartnerPayouts"));
 const AdminFinance = lazy(() => import("@/pages/admin/AdminFinance"));
 const AdminDispatch = lazy(() => import("@/pages/admin/AdminDispatch"));
@@ -79,6 +80,7 @@ function Routes() {
         <Route path="/parceiro/avaliacoes" component={PartnerReviews} />
         <Route path="/parceiro/estatisticas" component={PartnerStats} />
         <Route path="/parceiro/pagamentos" component={PartnerPayouts} />
+        <Route path="/parceiro/publicidade" component={PartnerAds} />
 
         <Route path="/estafeta" component={DriverHome} />
         <Route path="/estafeta/historico" component={DriverHistory} />

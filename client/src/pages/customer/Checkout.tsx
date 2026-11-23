@@ -42,14 +42,17 @@ function CheckoutInner() {
   const [priorityPick, setPriority] = useState(false);
   const [riderTip, setRiderTip] = useState(0);
   const [cutlery, setCutlery] = useState(false);
+  // entrega ou recolha no balcão (se a loja aceitar)
+  const [pickupPick, setPickup] = useState(false);
   const [orderError, setOrderError] = useState<unknown>(null);
   const errorRef = useRef<HTMLDivElement>(null);
 
   const balance = user?.loyaltyPoints ?? 0;
   const usePoints = prefs.usePoints && balance > 0 ? balance : 0;
-  const priority = priorityPick && mode === "now";
+  const pickup = pickupPick && !!store?.offersPickup;
+  const priority = priorityPick && mode === "now" && !pickup && !store?.ownDelivery;
   const body = cart.storeId && cart.lines.length
-    ? { storeId: cart.storeId, items: toApiItems(cart.lines), promoCode: prefs.promoCode, usePoints, priority, riderTip, addressId }
+    ? { storeId: cart.storeId, items: toApiItems(cart.lines), promoCode: prefs.promoCode, usePoints, priority, riderTip: pickup ? 0 : riderTip, addressId: pickup ? null : addressId, ...(pickup ? { fulfilment: "pickup" as const } : {}) }
     : null;
   const quote = useQuote(body, 0);
 
@@ -66,14 +69,15 @@ function CheckoutInner() {
     mutationFn: () => post<{ order: { id: number } }>("/api/orders", {
       storeId: cart.storeId,
       items: toApiItems(cart.lines),
-      addressId,
+      addressId: pickup ? null : addressId,
+      ...(pickup ? { fulfilment: "pickup" } : {}),
       paymentMethod,
       notes: notes.trim() || null,
       scheduledFor: mode === "schedule" ? scheduledFor : null,
       promoCode: prefs.promoCode,
       usePoints,
       priority,
-      riderTip,
+      riderTip: pickup ? 0 : riderTip,
       cutlery,
     }),
     onSuccess: ({ order }) => {
@@ -100,7 +104,7 @@ function CheckoutInner() {
 
   const q = quote.error ? undefined : quote.data;
   const hasAddresses = (addresses.data?.addresses.length ?? 0) > 0;
-  const missing = !addressId ? t({ pt: "Escolha uma morada de entrega", en: "Choose a delivery address", fr: "Choisissez une adresse" })
+  const missing = !addressId && !pickup ? t({ pt: "Escolha uma morada de entrega", en: "Choose a delivery address", fr: "Choisissez une adresse" })
     : mode === "schedule" && !scheduledFor ? t({ pt: "Escolha a hora de entrega", en: "Choose a delivery time", fr: "Choisissez l'heure" })
       : null;
   const canPlace = !!q && !missing && !place.isPending && !quote.isUpdating;
@@ -124,9 +128,33 @@ function CheckoutInner() {
           onPickCash={() => { setPaymentMethod(firstAvailableMethod(meta.data?.paymentMethods)); setOrderError(null); }} />
       </div>
 
-      <Section title={t({ pt: "Morada de entrega", en: "Delivery address", fr: "Adresse de livraison" })} icon={<MapPin className="h-4 w-4 text-primary" />}>
-        <AddressPicker value={addressId} onChange={(id) => { setAddressId(id); setOrderError(null); }} zonesServed={store?.zonesServed} />
-      </Section>
+      {store?.offersPickup && (
+        <div role="radiogroup" aria-label={t({ pt: "Entrega ou recolha", en: "Delivery or pickup", fr: "Livraison ou retrait" })} className="grid grid-cols-2 gap-1 rounded-full bg-neutral-100 p-1">
+          {[{ v: false, label: t({ pt: "🛵 Entrega", en: "🛵 Delivery", fr: "🛵 Livraison" }) }, { v: true, label: t({ pt: "🛍️ Recolha na loja", en: "🛍️ Pickup", fr: "🛍️ Retrait" }) }].map((o) => (
+            <button key={String(o.v)} type="button" role="radio" aria-checked={pickupPick === o.v} onClick={() => { setPickup(o.v); setOrderError(null); }}
+              className={cn("min-h-10 rounded-full text-sm font-semibold transition", pickupPick === o.v ? "bg-white text-neutral-900 shadow" : "text-neutral-600")}>
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {pickup && store ? (
+        <Section title={t({ pt: "Recolha na loja", en: "Pickup at the store", fr: "Retrait au magasin" })} icon={<MapPin className="h-4 w-4 text-primary" />}>
+          <p className="text-sm font-semibold">{store.name}</p>
+          <p className="text-sm text-neutral-600">{store.street}, {store.zone}</p>
+          {store.latitude != null && store.longitude != null && (
+            <a className="mt-1 inline-block text-sm font-semibold text-brand-800 underline" target="_blank" rel="noreferrer"
+              href={`https://www.google.com/maps/dir/?api=1&destination=${store.latitude},${store.longitude}`}>{t({ pt: "Como chegar", en: "Directions", fr: "Itinéraire" })}</a>
+          )}
+          <p className="mt-2 text-xs text-neutral-500">{t({ pt: "Sem taxa de entrega. Avisamos quando estiver pronta; mostre o código de recolha ao balcão.", en: "No delivery fee. We'll tell you when it's ready; show your pickup code at the counter.", fr: "Sans frais de livraison. Nous vous prévenons quand c'est prêt ; montrez votre code au comptoir." })}</p>
+        </Section>
+      ) : (
+        <Section title={t({ pt: "Morada de entrega", en: "Delivery address", fr: "Adresse de livraison" })} icon={<MapPin className="h-4 w-4 text-primary" />}>
+          <AddressPicker value={addressId} onChange={(id) => { setAddressId(id); setOrderError(null); }} zonesServed={store?.zonesServed} />
+          {store?.ownDelivery && <p className="mt-2 text-xs text-neutral-500">🛵 {t({ pt: "Entregue pelos estafetas da própria loja.", en: "Delivered by the store's own riders.", fr: "Livré par les livreurs du magasin." })}</p>}
+        </Section>
+      )}
 
       <Section title={t({ pt: "Quando", en: "When", fr: "Quand" })} icon={<Clock className="h-4 w-4 text-primary" />}>
         <WhenPicker mode={mode} onModeChange={setMode} value={scheduledFor} onChange={setScheduledFor}
@@ -135,7 +163,7 @@ function CheckoutInner() {
           minNoticeMin={store?.minNoticeMin ?? 0} maxAheadHours={store?.maxAheadHours}
           nowNote={store?.minNoticeMin
             ? t({ pt: `Só por encomenda (${noticeLabel(store.minNoticeMin, t)} antes)`, en: `Pre-order only (${noticeLabel(store.minNoticeMin, t)} ahead)`, fr: `Sur commande (${noticeLabel(store.minNoticeMin, t)} avant)` })
-            : storeClosedNow ? t({ pt: "Loja fechada agora", en: "Store closed now", fr: "Magasin fermé" }) : store ? `~${store.deliveryTimeMin} ${t(T.minutes)}` : undefined} />
+            : storeClosedNow ? t({ pt: "Loja fechada agora", en: "Store closed now", fr: "Magasin fermé" }) : store ? `~${pickup ? store.prepTimeMin ?? 20 : store.deliveryTimeMin} ${t(T.minutes)}` : undefined} />
         {mode === "schedule" && scheduledFor && (
           <p className="mt-2 text-xs text-neutral-500">
             {t({ pt: "Entrega prevista:", en: "Expected delivery:", fr: "Livraison prévue :" })} <span className="font-medium text-neutral-800">{dateTime(scheduledFor, lang)}</span>
@@ -143,7 +171,7 @@ function CheckoutInner() {
         )}
       </Section>
 
-      {mode === "now" && store && (
+      {mode === "now" && store && !pickup && !store.ownDelivery && (
         <Section title={t({ pt: "Opções de entrega", en: "Delivery options", fr: "Options de livraison" })} icon={<Bike className="h-4 w-4 text-primary" />}>
           <div role="radiogroup" aria-label={t({ pt: "Opções de entrega", en: "Delivery options", fr: "Options de livraison" })} className="space-y-2">
             {[
@@ -167,7 +195,7 @@ function CheckoutInner() {
         </Section>
       )}
 
-      <Section title={t({ pt: "Gorjeta para o estafeta", en: "Tip your rider", fr: "Pourboire pour le livreur" })} icon={<HandCoins className="h-4 w-4 text-primary" />}>
+      {!pickup && <Section title={t({ pt: "Gorjeta para o estafeta", en: "Tip your rider", fr: "Pourboire pour le livreur" })} icon={<HandCoins className="h-4 w-4 text-primary" />}>
         <p className="mb-2 text-xs text-neutral-500">{t({ pt: "100% da gorjeta vai para o estafeta.", en: "100% of the tip goes to your rider.", fr: "100 % du pourboire va au livreur." })}</p>
         <div role="radiogroup" aria-label={t({ pt: "Gorjeta", en: "Tip", fr: "Pourboire" })} className="grid grid-cols-4 gap-2">
           {[0, 200, 500, 1000].map((v) => (
@@ -178,11 +206,15 @@ function CheckoutInner() {
             </button>
           ))}
         </div>
-      </Section>
+      </Section>}
 
       <Section title={t({ pt: "Pagamento", en: "Payment", fr: "Paiement" })} icon={<CreditCard className="h-4 w-4 text-primary" />}>
         <PaymentPicker value={paymentMethod} onChange={setPaymentMethod} />
-        <p className="mt-2 text-xs text-neutral-500">{t({ pt: "Paga já, por banco. O estafeta não recebe dinheiro: na entrega só lhe diz o código de entrega.", en: "You pay now, by bank. The rider takes no money: at the door you just give the delivery code.", fr: "Vous payez maintenant, par banque. Le livreur ne prend pas d'argent : donnez-lui seulement le code de livraison." })}</p>
+        <p className="mt-2 text-xs text-neutral-500">{paymentMethod === "cash"
+          ? pickup
+            ? t({ pt: "Pague ao balcão quando levantar e mostre o código de recolha.", en: "Pay at the counter when you collect and show your pickup code.", fr: "Payez au comptoir au retrait et montrez votre code." })
+            : t({ pt: "Pague ao estafeta quando receber (tenha o valor certo, se possível) e diga-lhe o código de entrega.", en: "Pay the rider on delivery (exact change helps) and give them the delivery code.", fr: "Payez le livreur à la réception (prévoyez l'appoint) et donnez-lui le code de livraison." })
+          : t({ pt: "Paga já, por banco. Na entrega só diz ao estafeta o código de entrega.", en: "You pay now, by bank. At the door you just give the rider the delivery code.", fr: "Vous payez maintenant, par banque. Donnez seulement le code de livraison au livreur." })}</p>
       </Section>
 
       <Section title={t({ pt: "Notas para o estafeta / loja", en: "Notes for the rider / store", fr: "Notes pour le livreur / magasin" })} icon={<MessageSquare className="h-4 w-4 text-primary" />}>

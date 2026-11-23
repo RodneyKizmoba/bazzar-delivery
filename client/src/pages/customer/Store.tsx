@@ -277,6 +277,8 @@ export default function StorePage() {
 
         <div className="mt-3 space-y-1 text-xs text-neutral-600">
           {store.minOrder > 0 && <p className="flex items-center gap-1.5"><ShoppingBag className="h-3.5 w-3.5" aria-hidden />{t({ pt: "Pedido mínimo", en: "Minimum order", fr: "Commande minimum" })}: <b>{kz(store.minOrder)}</b></p>}
+          {store.offersPickup && <p className="flex items-center gap-1.5">🛍️ {t({ pt: "Pode levantar na loja (sem taxa de entrega)", en: "Pickup available (no delivery fee)", fr: "Retrait possible (sans frais de livraison)" })}</p>}
+          {store.ownDelivery && <p className="flex items-center gap-1.5">🛵 {t({ pt: "Entregue pelos estafetas da loja", en: "Delivered by the store's own riders", fr: "Livré par les livreurs du magasin" })}</p>}
           {store.openingTime && store.closingTime && (
             <p className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" aria-hidden />{t({ pt: "Horário", en: "Opening hours", fr: "Horaires" })}: <b>{store.openingTime.slice(0, 5) === store.closingTime.slice(0, 5) ? t({ pt: "24 horas", en: "24 hours", fr: "24 h/24" }) : `${store.openingTime.slice(0, 5)} – ${store.closingTime.slice(0, 5)}`}</b></p>
           )}

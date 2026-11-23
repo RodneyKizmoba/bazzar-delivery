@@ -10,6 +10,7 @@ import { config } from "../config";
 import { ah, idParam, notFound, parse } from "../lib/http";
 import { isWithinOpeningHours, maxAheadHoursFor } from "../lib/pricing";
 import { paymentMethods } from "../lib/payments";
+import { recordAdClick, withSponsoredFirst } from "../lib/ads";
 
 export const catalogRouter = Router();
 
@@ -38,6 +39,7 @@ export function storeCard(s: Store, now = new Date()) {
     deliveryFee: s.deliveryFee,
     minOrder: s.minOrder,
     deliveryTimeMin: s.deliveryTimeMin,
+    prepTimeMin: s.prepTimeMin,
     ratingAvg: Math.round(s.ratingAvg * 10) / 10,
     ratingCount: s.ratingCount,
     openingTime: s.openingTime,
@@ -45,6 +47,8 @@ export function storeCard(s: Store, now = new Date()) {
     isOpenNow: s.isOpen && isWithinOpeningHours(s, now),
     latitude: s.latitude,
     longitude: s.longitude,
+    offersPickup: s.offersPickup,
+    ownDelivery: s.ownDelivery,
   };
 }
 
@@ -138,7 +142,16 @@ catalogRouter.get("/stores", ah(async (req, res) => {
     for (const it of items) (matchingItems[it.storeId] ||= []).push({ id: it.id, name: it.name, price: it.price });
   }
 
-  res.json({ stores: list.map((s) => ({ ...s, matchingItems: matchingItems[s.id]?.slice(0, 3) ?? [] })) });
+  // publicidade: até AD_MAX_SLOTS lojas patrocinadas (que cumprem os filtros) vão para o topo, com etiqueta
+  const ranked = await withSponsoredFirst(list);
+  res.json({ stores: ranked.map((s) => ({ ...s, matchingItems: matchingItems[s.id]?.slice(0, 3) ?? [] })) });
+}));
+
+/** Clique numa loja patrocinada (para a loja ver o resultado da campanha). */
+catalogRouter.post("/ads/click", ah(async (req, res) => {
+  const { storeId } = parse(z.object({ storeId: z.number().int().positive() }), req.body);
+  await recordAdClick(storeId);
+  res.json({ ok: true });
 }));
 
 catalogRouter.get("/stores/:id", ah(async (req, res) => {

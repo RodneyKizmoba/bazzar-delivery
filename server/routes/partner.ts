@@ -10,6 +10,7 @@ import { ah, forbidden, idParam, notFound, parse } from "../lib/http";
 import { requireRole } from "../lib/auth";
 import { changeStatus, confirmScheduled, delayPrep } from "../lib/orderFlow";
 import { account } from "../lib/settlement";
+import { AD_DAYS, adsOf, buyAd, cancelAd } from "../lib/ads";
 import { available, payoutsOf } from "../lib/payouts";
 import { nextPayday } from "../lib/fees";
 import { config } from "../config";
@@ -65,12 +66,14 @@ partnerRouter.post("/orders/:id/confirm", ah(async (req, res) => {
 }));
 
 partnerRouter.post("/orders/:id/status", ah(async (req, res) => {
-  const { status, note, prepMinutes } = parse(z.object({
-    status: z.enum(["accepted", "rejected", "preparing", "ready"]),
+  const { status, note, prepMinutes, pin } = parse(z.object({
+    // picked_up / delivered só para recolha ou estafetas da própria loja (as regras estão em canTransition)
+    status: z.enum(["accepted", "rejected", "preparing", "ready", "picked_up", "delivered"]),
+    pin: z.string().trim().regex(/^\d{4}$/, "O código tem 4 dígitos.").optional().nullable(),
     note: z.string().trim().max(300).optional().nullable(),
     prepMinutes: z.number().int().min(5).max(120).optional(), // tempo de preparação desta encomenda (ao aceitar)
   }), req.body);
-  const order = await changeStatus(idParam(req), status, { kind: "store", userId: req.user!.id }, note, { prepMinutes });
+  const order = await changeStatus(idParam(req), status, { kind: "store", userId: req.user!.id }, note, { prepMinutes, pin });
   res.json({ order });
 }));
 
@@ -81,6 +84,27 @@ partnerRouter.get("/finance", ah(async (req, res) => {
     ...(await account("store", s.id)), commissionPct: s.commissionPct ?? config.commissionPct, payoutMethod: s.payoutMethod, payoutReference: s.payoutReference,
     available: await available("store", s.id), nextPayday: nextPayday(new Date()), payouts: await payoutsOf("store", s.id),
   });
+}));
+
+/** Comissões por forma de entrega (para a loja decidir). */
+partnerRouter.get("/commissions", ah(async (req, res) => {
+  const s = await myStore(req);
+  res.json({ delivery: s.commissionPct ?? config.commissionPct, pickup: config.commissionPickupPct, storeDelivery: config.commissionSelfDeliveryPct });
+}));
+
+/** Publicidade: as minhas campanhas, preço e comprar/cancelar. */
+partnerRouter.get("/ads", ah(async (req, res) => {
+  const s = await myStore(req);
+  res.json({ ads: await adsOf(s.id), pricePerDay: config.adPricePerDay, days: AD_DAYS, maxSlots: config.adMaxSlots });
+}));
+partnerRouter.post("/ads", ah(async (req, res) => {
+  const s = await myStore(req);
+  const { days } = parse(z.object({ days: z.number().int() }), req.body);
+  res.status(201).json({ ad: await buyAd(s.id, days, req.user!.id) });
+}));
+partnerRouter.post("/ads/:id/cancel", ah(async (req, res) => {
+  const s = await myStore(req);
+  res.json({ ad: await cancelAd(idParam(req), req.user!.id, s.id) });
 }));
 
 /** "Preciso de mais tempo": +5, +10 ou +15 minutos. */

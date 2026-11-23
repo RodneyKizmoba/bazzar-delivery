@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 interface StoreRow { id: number; name: string; payoutMethod: string | null; payoutReference: string | null; commissionPct: number; customCommission: boolean; balance: number }
 interface RiderRow { id: number; name: string; phone: string; balance: number; cashHeld: number }
 interface Finance {
-  days: number; defaultCommissionPct: number;
+  days: number; defaultCommissionPct: number; riderCashLimit: number;
   totals: { orders: number; gmv: number; food: number; commission: number; priorityFees: number; discounts: number; riderPay: number; storePay: number; platformNet: number; deliveryFees: number; serviceFees: number; smallOrderFees: number; tips: number };
   stores: StoreRow[]; riders: RiderRow[];
 }
@@ -105,7 +105,7 @@ function Board() {
               {f.riders.map((r) => (
                 <tr key={r.id} className="border-t">
                   <td className="p-2"><button type="button" className="font-medium underline-offset-2 hover:underline" onClick={() => setView({ type: "driver", id: r.id, name: r.name })}>{r.name}</button> <a href={`tel:${r.phone}`} className="text-xs text-neutral-500">{r.phone}</a></td>
-                  <td className="p-2 text-right font-semibold tabular-nums">{kz(r.cashHeld)}</td>
+                  <td className={cn("p-2 text-right font-semibold tabular-nums", r.cashHeld >= f.riderCashLimit && "text-red-700")}>{kz(r.cashHeld)}{r.cashHeld >= f.riderCashLimit && " ⚠"}</td>
                   <td className={cn("p-2 text-right font-semibold tabular-nums", r.balance > 0 ? "text-green-700" : r.balance < 0 ? "text-red-700" : "")}>{kz(r.balance)}</td>
                   <td className="space-x-1 whitespace-nowrap p-2 text-right">
                     <Button size="sm" variant="outline" disabled={r.cashHeld <= 0} onClick={() => setAct({ type: "driver", id: r.id, name: r.name, kind: "cash_deposit" })}>{t({ pt: "Recebi numerário", en: "Cash received", fr: "Espèces reçues" })}</Button>
@@ -116,7 +116,7 @@ function Board() {
             </tbody>
           </table>
         </div>
-        <p className="mt-1 text-xs text-neutral-500">{t({ pt: "Saldo positivo: a PedeJá deve ao estafeta. Os clientes pagam tudo por banco, por isso normalmente ninguém tem numerário em mão.", en: "Positive balance: PedeJá owes the rider. Customers pay everything by bank, so normally nobody holds cash.", fr: "Solde positif : PedeJá doit au livreur. Les clients paient tout par banque, donc personne n'a normalement d'espèces." })}</p>
+        <p className="mt-1 text-xs text-neutral-500">{t({ pt: `Saldo positivo: a PedeJá deve ao estafeta; negativo: deve numerário dos clientes (descontado no pagamento de terça). Acima de ${kz(f.riderCashLimit)} em mão deixa de receber encomendas em numerário.`, en: `Positive: PedeJá owes the rider; negative: they owe customers' cash (taken off Tuesday's payout). Above ${kz(f.riderCashLimit)} in hand they stop getting cash orders.`, fr: `Positif : PedeJá doit au livreur ; négatif : il doit des espèces (déduites du paiement du mardi). Au-delà de ${kz(f.riderCashLimit)}, plus de commandes en espèces.` })}</p>
       </section>
 
       {act && <MoneyDialog party={act} onClose={() => setAct(null)} onDone={() => { setAct(null); queryClient.invalidateQueries({ queryKey: [key] }); }} />}

@@ -199,7 +199,7 @@ try {
   check("cart survives login", /Frango grelhado/.test(await textOf(cp)), "");
   await cp.waitForNetworkIdle({ idleTime: 500 }).catch(() => {});
   a = await audit(cp, "08-checkout");
-  check("checkout: address, bank payment only, distance-based fee (4.800 + 500 + 240 = 5.540)", /Morada de entrega/.test(a.text) && /Pagamento/.test(a.text) && /5[\s. ]?540/.test(a.text) && /km da loja/.test(a.text) && !/Numerário/.test(a.text), a.text.slice(0, 600));
+  check("checkout: address, cash + bank payment, distance-based fee (4.800 + 500 + 240 = 5.540)", /Morada de entrega/.test(a.text) && /Pagamento/.test(a.text) && /5[\s. ]?540/.test(a.text) && /km da loja/.test(a.text) && /Numerário/.test(a.text) && /Multicaixa/.test(a.text), a.text.slice(0, 600));
   const placed = await clickText(cp, /^Fazer encomenda/, { selector: "button" });
   await sleep(3000);
   const m = cp.url().match(/\/encomendas\/(\d+)/);

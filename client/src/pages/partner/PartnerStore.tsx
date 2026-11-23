@@ -36,6 +36,7 @@ interface Form {
   isOpen: boolean; deliveryFee: string; minOrder: string; prepTimeMin: string; deliveryTimeMin: string;
   minNoticeHours: string; maxOrdersPerDay: string; payoutMethod: string; payoutReference: string; theme: string;
   pin: { latitude: number; longitude: number } | null;
+  offersPickup: boolean; ownDelivery: boolean;
 }
 
 function StoreForm() {
@@ -46,6 +47,7 @@ function StoreForm() {
   const [f, setF] = useState<Form | null>(null);
   const [cuisineInput, setCuisineInput] = useState("");
   const [locating, setLocating] = useState(false);
+  const rates = useQuery<{ delivery: number; pickup: number; storeDelivery: number }>({ queryKey: ["/api/partner/commissions"] }).data;
   const useHere = () => {
     if (!("geolocation" in navigator)) return;
     setLocating(true);
@@ -68,6 +70,7 @@ function StoreForm() {
         minNoticeHours: String(Math.round((s.minNoticeMin ?? 0) / 60)), maxOrdersPerDay: s.maxOrdersPerDay ? String(s.maxOrdersPerDay) : "",
         payoutMethod: s.payoutMethod ?? "", payoutReference: s.payoutReference ?? "", theme: s.theme ?? "",
         pin: s.latitude != null && s.longitude != null ? { latitude: s.latitude, longitude: s.longitude } : null,
+        offersPickup: !!s.offersPickup, ownDelivery: !!s.ownDelivery,
       });
     }
   }, [storeQ.data]);
@@ -129,6 +132,7 @@ function StoreForm() {
       payoutMethod: form.payoutMethod || null, payoutReference: form.payoutReference.trim() || null,
       theme: form.theme || null,
       latitude: form.pin?.latitude ?? null, longitude: form.pin?.longitude ?? null,
+      offersPickup: form.offersPickup, ownDelivery: form.ownDelivery,
     });
   };
 
@@ -195,6 +199,30 @@ function StoreForm() {
             📍 {locating ? t({ pt: "A localizar…", en: "Locating…", fr: "Localisation…" }) : t({ pt: "Estou na loja: usar a minha localização", en: "I'm at the store: use my location", fr: "Je suis au magasin : utiliser ma position" })}
           </Button>
           {!form.pin && <span className="text-xs font-semibold text-red-700">{t({ pt: "Sem localização: os estafetas não a encontram no mapa.", en: "No location: riders can't find it on the map.", fr: "Pas de position : les livreurs ne la trouvent pas." })}</span>}
+        </div>
+      </Card>
+
+      <Card title={{ pt: "Formas de entrega", en: "How orders reach customers", fr: "Modes de livraison" }}>
+        <div className="space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <Label htmlFor="own-delivery" className="cursor-pointer">
+              <span className="block font-semibold">🛵 {t({ pt: "Entrego com os meus estafetas", en: "I deliver with my own riders", fr: "Je livre avec mes livreurs" })}</span>
+              <span className="block text-xs font-normal text-neutral-600">{rates
+                ? t({ pt: `Comissão ${rates.storeDelivery}% (em vez de ${rates.delivery}%). A taxa de entrega e as gorjetas ficam para si; marca "Saiu" e "Entregue" com o código do cliente.`, en: `Commission ${rates.storeDelivery}% (instead of ${rates.delivery}%). You keep the delivery fee and tips; you mark "Out" and "Delivered" with the customer's code.`, fr: `Commission ${rates.storeDelivery} % (au lieu de ${rates.delivery} %). Frais de livraison et pourboires pour vous ; marquez « Partie » et « Livrée » avec le code du client.` })
+                : ""}</span>
+            </Label>
+            <Switch id="own-delivery" checked={form.ownDelivery} onCheckedChange={(v) => set("ownDelivery", v)} />
+          </div>
+          <div className="flex items-start justify-between gap-3">
+            <Label htmlFor="offers-pickup" className="cursor-pointer">
+              <span className="block font-semibold">🛍️ {t({ pt: "Os clientes podem levantar na loja", en: "Customers can pick up at the store", fr: "Retrait en magasin possible" })}</span>
+              <span className="block text-xs font-normal text-neutral-600">{rates
+                ? t({ pt: `Comissão ${rates.pickup}% nessas encomendas. Sem estafeta: o cliente mostra o código ao balcão.`, en: `Commission ${rates.pickup}% on those orders. No rider: the customer shows a code at the counter.`, fr: `Commission ${rates.pickup} % sur ces commandes. Sans livreur : le client montre un code au comptoir.` })
+                : ""}</span>
+            </Label>
+            <Switch id="offers-pickup" checked={form.offersPickup} onCheckedChange={(v) => set("offersPickup", v)} />
+          </div>
+          {!form.ownDelivery && rates && <p className="text-xs text-neutral-500">{t({ pt: `Por defeito as entregas são feitas por estafetas PedeJá (comissão ${rates.delivery}%).`, en: `By default PedeJá riders deliver (commission ${rates.delivery}%).`, fr: `Par défaut, les livreurs PedeJá livrent (commission ${rates.delivery} %).` })}</p>}
         </div>
       </Card>
 

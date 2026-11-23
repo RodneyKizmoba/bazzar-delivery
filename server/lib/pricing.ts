@@ -2,7 +2,7 @@ import { and, eq, gt, inArray, ne, sql } from "drizzle-orm";
 import type { DbOrTx } from "../db";
 import {
   menuItems, optionGroups, options, orders, promoCodes, stores, subscriptions,
-  type CartLine, type MenuItem, type PromoCode, type SelectedOption, type Store, type User,
+  type CartLine, type Fulfilment, type MenuItem, type PromoCode, type SelectedOption, type Store, type User,
 } from "@shared/schema";
 import { config } from "../config";
 import { badRequest, conflict, notFound } from "./http";
@@ -37,6 +37,7 @@ export interface Quote {
   smallOrderMin: number;
   deliveryKm: number | null;
   busyLevel: 0 | 1 | 2;
+  fulfilment: Fulfilment;
 }
 
 // ---------------------------------------------------------------------------
@@ -198,6 +199,7 @@ export async function buildQuote(
     storeId: number; lines: CartLine[]; user: User | null; promoCode?: string | null; usePoints?: number; priority?: boolean; riderTip?: number;
     destination?: { latitude?: number | null; longitude?: number | null } | null;
     busyLevel?: 0 | 1 | 2; // ao alterar uma encomenda: manter o nível original
+    fulfilment?: Fulfilment; // "pickup" pedido pelo cliente; entrega: estafeta PedeJá ou da loja
   },
 ): Promise<Quote> {
   const [store] = await db.select().from(stores).where(eq(stores.id, opts.storeId));
@@ -210,12 +212,16 @@ export async function buildQuote(
   const serviceFee = serviceFeeFor(subtotal);
 
   const isPlus = opts.user ? await hasActivePlus(db, opts.user.id) : false;
-  const deliveryKm = hasLL(store) && hasLL(opts.destination) ? Math.round(roadKm(store, opts.destination) * 10) / 10 : null;
-  const busyLevel = opts.busyLevel ?? await currentBusyLevel(db);
-  const baseDeliveryFee = customerDeliveryFee(deliveryKm, busyLevel, store.deliveryFee);
+  // como chega ao cliente: recolha (se a loja aceitar), estafetas da própria loja, ou estafeta PedeJá
+  if (opts.fulfilment === "pickup" && !store.offersPickup) throw badRequest(`${store.name} não tem recolha na loja.`, "PICKUP_NOT_OFFERED");
+  const fulfilment: Fulfilment = opts.fulfilment === "pickup" ? "pickup" : store.ownDelivery ? "store_delivery" : "delivery";
+  const deliveryKm = fulfilment !== "pickup" && hasLL(store) && hasLL(opts.destination) ? Math.round(roadKm(store, opts.destination) * 10) / 10 : null;
+  const busyLevel = fulfilment === "delivery" ? opts.busyLevel ?? await currentBusyLevel(db) : 0;
+  // recolha: sem entrega; loja com estafetas próprios: cobra a sua própria taxa de entrega
+  const baseDeliveryFee = fulfilment === "pickup" ? 0 : fulfilment === "store_delivery" ? store.deliveryFee : customerDeliveryFee(deliveryKm, busyLevel, store.deliveryFee);
   let deliveryFee = baseDeliveryFee;
   let plusSavings = 0;
-  if (isPlus && subtotal >= config.plusFreeDeliveryMinOrder) {
+  if (isPlus && fulfilment === "delivery" && subtotal >= config.plusFreeDeliveryMinOrder) {
     plusSavings = deliveryFee;
     deliveryFee = 0;
   }
@@ -247,12 +253,12 @@ export async function buildQuote(
   }
 
   // extras fora dos descontos: entrega prioritária e gorjeta (100% para o estafeta)
-  const priorityFee = opts.priority ? config.priorityFee : 0;
-  const riderTip = Math.max(0, Math.floor(opts.riderTip || 0));
+  const priorityFee = opts.priority && fulfilment === "delivery" ? config.priorityFee : 0;
+  const riderTip = fulfilment === "pickup" ? 0 : Math.max(0, Math.floor(opts.riderTip || 0));
   const total = Math.max(0, subtotal + deliveryFee - discount - pointsDiscount) + serviceFee + smallOrderFee + priorityFee + riderTip;
   return {
     store, lines, subtotal, deliveryFee, baseDeliveryFee, discount, pointsRedeemed, pointsDiscount, total, promo, isPlus, plusSavings, priorityFee, riderTip,
-    serviceFee, smallOrderFee, smallOrderMin: store.minOrder > 0 ? store.minOrder : config.smallOrderMin, deliveryKm, busyLevel,
+    serviceFee, smallOrderFee, smallOrderMin: store.minOrder > 0 ? store.minOrder : config.smallOrderMin, deliveryKm, busyLevel, fulfilment,
   };
 }
 
@@ -282,6 +288,8 @@ export function quoteToJson(q: Quote) {
     smallOrderMin: q.smallOrderMin,
     deliveryKm: q.deliveryKm,
     busyLevel: q.busyLevel,
+    fulfilment: q.fulfilment,
+    offersPickup: q.store.offersPickup,
     feeRules: { serviceFeePct: config.serviceFeePct, serviceFeeMin: config.serviceFeeMin, serviceFeeMax: config.serviceFeeMax },
     total: q.total,
     promoCode: q.promo?.code ?? null,

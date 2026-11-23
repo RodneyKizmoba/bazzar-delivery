@@ -11,6 +11,7 @@ import { withoutSecrets } from "../lib/pos";
 import { closeOffersOnClaim, redispatch, riderPayQuote } from "../lib/dispatchEngine";
 import { account } from "../lib/settlement";
 import { markPayout, runWeeklyPayouts } from "../lib/payouts";
+import { adsOf, buyAd, cancelAd } from "../lib/ads";
 import { nextPayday } from "../lib/fees";
 import { config } from "../config";
 import { ledgerEntries } from "@shared/schema";
@@ -92,7 +93,7 @@ adminRouter.get("/finance", ah(async (req, res) => {
   res.json({
     // receita PedeJá = comissão + taxas do cliente (entrega, serviço, pequena, prioridade) − descontos − pagamento aos estafetas (sem gorjetas)
     days, totals: { ...t, platformNet: t.commission + t.deliveryFees + t.serviceFees + t.smallOrderFees + t.priorityFees - t.discounts - (t.riderPay - t.tips) },
-    defaultCommissionPct: config.commissionPct,
+    defaultCommissionPct: config.commissionPct, riderCashLimit: config.riderCashLimit,
     stores: storeRows.rows, riders: riderRows.rows,
   });
 }));
@@ -177,6 +178,18 @@ adminRouter.post("/payouts/:id/:action", ah(async (req, res) => {
   res.json({ payout: await markPayout(idParam(req), action, bankReference || null) });
 }));
 
+// Publicidade: todas as campanhas, oferecer dias e cancelar
+adminRouter.get("/ads", ah(async (_req, res) => {
+  res.json({ ads: await adsOf(), pricePerDay: config.adPricePerDay, maxSlots: config.adMaxSlots });
+}));
+adminRouter.post("/ads", ah(async (req, res) => {
+  const b = parse(z.object({ storeId: z.number().int().positive(), days: z.number().int(), free: z.boolean().default(true) }), req.body);
+  res.status(201).json({ ad: await buyAd(b.storeId, b.days, req.user!.id, b.free) });
+}));
+adminRouter.post("/ads/:id/cancel", ah(async (req, res) => {
+  res.json({ ad: await cancelAd(idParam(req), req.user!.id) });
+}));
+
 /** Centro de despacho: estafetas online, entregas à espera e últimas ofertas. */
 adminRouter.get("/dispatch", ah(async (_req, res) => {
   const riders = await db.execute(sql`
@@ -190,7 +203,7 @@ adminRouter.get("/dispatch", ah(async (_req, res) => {
       o.dispatch_at as "dispatchAt", o.dispatch_round as "dispatchRound", o.dispatch_failed_at as "dispatchFailedAt", o.priority_fee > 0 as priority,
       (select d.driver_id from dispatch_offers d where d.order_id = o.id and d.status = 'pending' limit 1) as "offeredTo"
     from orders o join stores s on s.id = o.store_id
-    where o.driver_id is null and o.status in ('accepted','preparing','ready')
+    where o.driver_id is null and o.fulfilment = 'delivery' and o.status in ('accepted','preparing','ready')
     order by o.dispatch_failed_at nulls last, o.created_at`);
   const offers = await db.execute(sql`
     select d.id, d.order_id as "orderId", d.driver_id as "driverId", u.full_name as "driverName", d.status, d.round,
@@ -227,8 +240,8 @@ adminRouter.post("/orders/:id/assign-driver", ah(async (req, res) => {
       ? { driverId, driverAssignedAt: now, driverAtStoreAt: null, updatedAt: now }
       // sem estafeta: o despacho automático volta a procurar
       : { driverId: null, driverAssignedAt: null, driverAtStoreAt: null, dispatchRound: 0, dispatchFailedAt: null, dispatchAt: now, updatedAt: now })
-      .where(and(eq(orders.id, id), inArray(orders.status, ["accepted", "preparing", "ready", "picked_up"]))).returning();
-    if (!row) throw conflict("Só é possível atribuir estafeta a encomendas aceites e não terminadas.");
+      .where(and(eq(orders.id, id), eq(orders.fulfilment, "delivery"), inArray(orders.status, ["accepted", "preparing", "ready", "picked_up"]))).returning();
+    if (!row) throw conflict("Só é possível atribuir estafeta a entregas PedeJá aceites e não terminadas.");
     if (driverId) {
       const pay = await riderPayQuote(tx, row, driverId);
       Object.assign(row, (await tx.update(orders).set({ riderPay: pay.total, riderPayDetail: pay }).where(eq(orders.id, id)).returning())[0]);

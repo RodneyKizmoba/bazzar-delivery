@@ -51,8 +51,15 @@ export const config = {
   presenceStaleMin: num("PRESENCE_STALE_MIN", 10), // sem GPS há mais de 10 min: deixa de receber ofertas
 
   // Dinheiro
-  commissionPct: num("COMMISSION_PCT", 20), // comissão PedeJá sobre o valor da comida (cada loja pode ter a sua)
-  allowCash: process.env.ALLOW_CASH === "1", // por defeito NÃO: os clientes pagam tudo por banco
+  commissionPct: num("COMMISSION_PCT", 20), // entrega com estafeta PedeJá (cada loja pode ter a sua)
+  commissionPickupPct: num("COMMISSION_PICKUP_PCT", 9), // cliente levanta no balcão (8–10%)
+  commissionSelfDeliveryPct: num("COMMISSION_SELF_DELIVERY_PCT", 10), // loja entrega com os seus estafetas (8–12%)
+  // Publicidade ("Patrocinado" no topo das pesquisas)
+  adPricePerDay: num("AD_PRICE_PER_DAY", 2000),
+  adMaxSlots: num("AD_MAX_SLOTS", 3),
+  // numerário ligado por defeito até haver gateway (Multicaixa Express / Unitel Money); ALLOW_CASH=0 para só banco
+  allowCash: process.env.ALLOW_CASH !== "0",
+  riderCashLimit: num("RIDER_CASH_LIMIT", 50000), // acima disto o estafeta entrega o numerário antes de levar mais encomendas em dinheiro
   pinMaxAttempts: num("PIN_MAX_ATTEMPTS", 5),
 
   // Taxas ao cliente (modelo Deliveroo, em Kz)

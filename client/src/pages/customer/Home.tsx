@@ -42,6 +42,22 @@ export interface StoreCardData {
   isOpenNow: boolean;
   theme?: string | null;
   matchingItems?: { id: number; name: string; price: number }[];
+  sponsored?: boolean;
+  offersPickup?: boolean;
+  ownDelivery?: boolean;
+}
+
+/** Conta o clique numa loja patrocinada (sem atrasar a navegação). */
+function adClick(store: StoreCardData) {
+  if (!store.sponsored) return;
+  try {
+    fetch("/api/ads/click", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ storeId: store.id }), keepalive: true, credentials: "include" }).catch(() => {});
+  } catch { /* ignorar */ }
+}
+
+function SponsoredTag() {
+  const t = useT();
+  return <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-600">{t({ pt: "Patrocinado", en: "Sponsored", fr: "Sponsorisé" })}</span>;
 }
 
 export interface Meta {
@@ -93,7 +109,7 @@ export function StoreCard({ store, compact, footer }: { store: StoreCardData; co
   const t = useT();
   return (
     <div className={cn("group", compact ? "w-72 shrink-0 snap-start" : "w-full")}>
-      <Link href={`/loja/${store.id}`} className="block rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+      <Link href={`/loja/${store.id}`} onClick={() => adClick(store)} className="block rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
         <div className="relative overflow-hidden rounded-xl">
           <StorePhoto store={store} className={cn("w-full transition-transform duration-300 group-hover:scale-[1.02]", compact ? "h-36" : "h-44")} />
           <div className="absolute left-2 top-2 flex flex-wrap gap-1">
@@ -117,7 +133,7 @@ export function StoreCard({ store, compact, footer }: { store: StoreCardData; co
           </span>
         </div>
         <div className="mt-2 px-0.5">
-          <h3 className="truncate text-base font-bold text-neutral-900">{store.name}</h3>
+          <h3 className="flex items-center gap-1.5 truncate text-base font-bold text-neutral-900"><span className="truncate">{store.name}</span>{store.sponsored && <SponsoredTag />}</h3>
           <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[13px] text-neutral-500">
             <RatingText avg={store.ratingAvg} count={store.ratingCount} />
             <span aria-hidden>·</span>
@@ -128,6 +144,7 @@ export function StoreCard({ store, compact, footer }: { store: StoreCardData; co
               ? <span className="font-semibold text-primary">{t({ pt: "Entrega grátis", en: "Free delivery", fr: "Livraison gratuite" })}</span>
               : <>{kz(store.deliveryFee)} {t({ pt: "entrega", en: "delivery", fr: "livraison" })}</>}
             {store.minOrder > 0 && <> · {t({ pt: "mín.", en: "min.", fr: "min." })} {kz(store.minOrder)}</>}
+            {store.offersPickup && <> · {t({ pt: "recolha", en: "pickup", fr: "retrait" })}</>}
           </p>
         </div>
       </Link>
@@ -140,10 +157,10 @@ export function StoreCard({ store, compact, footer }: { store: StoreCardData; co
 export function StoreListRow({ store }: { store: StoreCardData }) {
   const t = useT();
   return (
-    <Link href={`/loja/${store.id}`} className="flex items-center gap-3 rounded-xl py-2.5 hover:bg-neutral-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+    <Link href={`/loja/${store.id}`} onClick={() => adClick(store)} className="flex items-center gap-3 rounded-xl py-2.5 hover:bg-neutral-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
       <StorePhoto store={store} className="h-[72px] w-[72px] shrink-0" />
       <div className="min-w-0 flex-1">
-        <p className="truncate font-bold text-neutral-900">{store.name}</p>
+        <p className="flex items-center gap-1.5 font-bold text-neutral-900"><span className="truncate">{store.name}</span>{store.sponsored && <SponsoredTag />}</p>
         <p className="truncate text-[13px] text-neutral-500">{store.cuisines.slice(0, 2).join(" · ") || (STORE_TYPE[store.storeType] ? t(STORE_TYPE[store.storeType]) : "")}</p>
         <p className="text-[13px] text-neutral-500">
           {timeRange(store.deliveryTimeMin)} · {store.deliveryFee === 0 ? <span className="font-semibold text-primary">{t({ pt: "grátis", en: "free", fr: "gratuit" })}</span> : kz(store.deliveryFee)}

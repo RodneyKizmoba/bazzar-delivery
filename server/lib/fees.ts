@@ -43,7 +43,7 @@ export async function currentBusyLevel(db: DbOrTx): Promise<0 | 1 | 2> {
   if (!config.busyPricing) return 0;
   const r = await db.execute(sql`
     select
-      (select count(*) from orders where driver_id is null and status in ('accepted','preparing','ready')
+      (select count(*) from orders where driver_id is null and fulfilment = 'delivery' and status in ('accepted','preparing','ready')
          and updated_at > now() - interval '2 hours')::int as waiting,
       (select count(*) from driver_presence p join users u on u.id = p.user_id
          where p.is_online and u.is_active and u.is_approved

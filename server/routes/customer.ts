@@ -104,7 +104,7 @@ customerRouter.post("/cart/quote", ah(async (req, res) => {
   }
   const quote = await buildQuote(db, {
     storeId: input.storeId, lines: input.items, user: req.user ?? null, promoCode: input.promoCode, usePoints: input.usePoints,
-    priority: input.priority, riderTip: input.riderTip, destination,
+    priority: input.priority, riderTip: input.riderTip, destination: input.fulfilment === "pickup" ? null : destination, fulfilment: input.fulfilment,
   });
   res.json({ quote: quoteToJson(quote) });
 }));
@@ -123,6 +123,7 @@ customerRouter.post("/orders", requireAuth, ah(async (req, res) => {
     storeId: input.storeId,
     lines: input.items,
     addressId: input.addressId,
+    fulfilment: input.fulfilment,
     paymentMethod: input.paymentMethod,
     notes: input.notes,
     scheduledFor: input.scheduledFor ? new Date(input.scheduledFor) : null,
