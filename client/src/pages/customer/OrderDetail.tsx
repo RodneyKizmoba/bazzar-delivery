@@ -32,7 +32,7 @@ interface OrderFull {
   status: string; scheduledFor: string | null; notes: string | null;
   deliveryAddress: { label: string; street: string; zone: string; city: string; reference?: string | null; latitude?: number | null; longitude?: number | null };
   subtotal: number; deliveryFee: number; discount: number; pointsRedeemed: number; total: number; promoCode: string | null;
-  priorityFee?: number; riderTip?: number; cutlery?: boolean;
+  priorityFee?: number; riderTip?: number; cutlery?: boolean; serviceFee?: number; smallOrderFee?: number; deliveryKm?: number | null;
   paymentMethod: string; paymentStatus: string; cancelReason: string | null; estimatedDeliveryAt: string | null;
   createdAt: string; deliveredAt: string | null;
   canCancel: boolean; canModify: boolean; canReview: boolean; deliveryCode?: string | null; pinRequired?: boolean;
@@ -510,7 +510,9 @@ function OrderDetailInner({ id }: { id: string }) {
         </ul>
         <div className="mt-4 space-y-2 border-t pt-3">
           <PriceRow label={t(T.subtotal)} value={kz(order.subtotal)} />
-          <PriceRow label={t(T.deliveryFee)} value={order.deliveryFee === 0 ? <span className="font-semibold text-green-700">{t(T.free)}</span> : kz(order.deliveryFee)} />
+          {!!order.smallOrderFee && <PriceRow label={t({ pt: "Taxa de encomenda pequena", en: "Small order fee", fr: "Frais petite commande" })} value={kz(order.smallOrderFee)} />}
+          <PriceRow label={<>{t(T.deliveryFee)}{order.deliveryKm != null && <span className="ml-1 text-xs text-neutral-500">({order.deliveryKm.toFixed(1).replace(".", ",")} km)</span>}</>} value={order.deliveryFee === 0 ? <span className="font-semibold text-green-700">{t(T.free)}</span> : kz(order.deliveryFee)} />
+          {!!order.serviceFee && <PriceRow label={t({ pt: "Taxa de serviço", en: "Service fee", fr: "Frais de service" })} value={kz(order.serviceFee)} />}
           {!!order.priorityFee && <PriceRow label={t({ pt: "Entrega prioritária", en: "Priority delivery", fr: "Livraison prioritaire" })} value={kz(order.priorityFee)} />}
           {!!order.riderTip && <PriceRow label={t({ pt: "Gorjeta para o estafeta", en: "Rider tip", fr: "Pourboire livreur" })} value={kz(order.riderTip)} />}
           {order.discount > 0 && (

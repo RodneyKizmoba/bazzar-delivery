@@ -48,6 +48,8 @@ export interface Quote {
   pointsRedeemed: number; pointsDiscount: number; total: number; promoCode: string | null;
   isPlus: boolean; plusSavings: number; plusFreeDeliveryMinOrder: number;
   priorityFee?: number; riderTip?: number; priorityOption?: { fee: number; minutesSaved: number };
+  serviceFee?: number; smallOrderFee?: number; smallOrderMin?: number; deliveryKm?: number | null; busyLevel?: number;
+  feeRules?: { serviceFeePct: number; serviceFeeMin: number; serviceFeeMax: number };
 }
 
 export interface QuoteBody {
@@ -57,6 +59,7 @@ export interface QuoteBody {
   usePoints?: number;
   priority?: boolean;
   riderTip?: number;
+  addressId?: number | null;
 }
 
 export interface StoreSummary {
@@ -280,7 +283,8 @@ export function PaymentPicker({ value, onChange, excludeCash }: { value: string;
   const meta = useMeta();
   if (meta.isLoading) return <Loading />;
   if (meta.error) return <ErrorState error={meta.error} onRetry={() => meta.refetch()} />;
-  const methods = (meta.data?.paymentMethods ?? []).filter((m) => !excludeCash || m.id !== "cash");
+  // numerário só aparece se estiver ligado (por defeito a PedeJá só aceita pagamentos por banco)
+  const methods = (meta.data?.paymentMethods ?? []).filter((m) => m.id !== "cash" || (!excludeCash && m.available));
   return (
     <RadioGroup value={value} onValueChange={onChange} className="gap-2">
       {methods.map((m) => {
@@ -519,12 +523,33 @@ export function PriceRow({ label, value, strong, muted, children }: { label: Rea
   );
 }
 
-export function QuoteBreakdown({ quote }: { quote: Pick<Quote, "subtotal" | "deliveryFee" | "baseDeliveryFee" | "discount" | "pointsRedeemed" | "pointsDiscount" | "total" | "promoCode" | "plusSavings" | "priorityFee" | "riderTip"> }) {
+/** Primeiro método de pagamento disponível (sem numerário). */
+export function firstAvailableMethod(methods?: { id: string; available: boolean }[]) {
+  return methods?.find((m) => m.available && m.id !== "cash")?.id ?? methods?.find((m) => m.available)?.id ?? "multicaixa_express";
+}
+
+function FeeInfo({ children }: { children: React.ReactNode }) {
+  return <span className="block text-[11px] font-normal leading-snug text-neutral-500">{children}</span>;
+}
+
+export function QuoteBreakdown({ quote }: { quote: Pick<Quote, "subtotal" | "deliveryFee" | "baseDeliveryFee" | "discount" | "pointsRedeemed" | "pointsDiscount" | "total" | "promoCode" | "plusSavings" | "priorityFee" | "riderTip" | "serviceFee" | "smallOrderFee" | "smallOrderMin" | "deliveryKm" | "busyLevel" | "feeRules"> }) {
   const t = useT();
+  const fr = quote.feeRules;
   return (
     <div className="space-y-2">
       <PriceRow label={t(T.subtotal)} value={kz(quote.subtotal)} />
-      <PriceRow label={t(T.deliveryFee)} value={
+      {!!quote.smallOrderFee && (
+        <PriceRow label={<>{t({ pt: "Taxa de encomenda pequena", en: "Small order fee", fr: "Frais petite commande" })}
+          <FeeInfo>{t({ pt: `Mínimo da loja ${kz(quote.smallOrderMin ?? 0)}: junte ${kz(quote.smallOrderFee)} em produtos para não pagar esta taxa.`, en: `Store minimum ${kz(quote.smallOrderMin ?? 0)}: add ${kz(quote.smallOrderFee)} of items to avoid this fee.`, fr: `Minimum ${kz(quote.smallOrderMin ?? 0)} : ajoutez ${kz(quote.smallOrderFee)} d'articles pour éviter ces frais.` })}</FeeInfo></>}
+          value={kz(quote.smallOrderFee)} />
+      )}
+      <PriceRow label={<>{t(T.deliveryFee)}
+        {(quote.deliveryKm != null || !!quote.busyLevel) && (
+          <FeeInfo>
+            {quote.deliveryKm != null && t({ pt: `${quote.deliveryKm.toFixed(1).replace(".", ",")} km da loja`, en: `${quote.deliveryKm.toFixed(1)} km from the store`, fr: `${quote.deliveryKm.toFixed(1).replace(".", ",")} km du magasin` })}
+            {!!quote.busyLevel && <span className="ml-1 font-semibold text-amber-700">· {quote.busyLevel === 2 ? t({ pt: "muito movimentado agora", en: "very busy right now", fr: "très chargé en ce moment" }) : t({ pt: "movimentado agora", en: "busy right now", fr: "chargé en ce moment" })}</span>}
+          </FeeInfo>
+        )}</>} value={
         quote.plusSavings > 0 ? (
           <span className="flex flex-col items-end">
             <span><span className="mr-1.5 text-neutral-400 line-through">{kz(quote.baseDeliveryFee)}</span><span className="font-semibold text-green-700">{t(T.free)}</span></span>
@@ -532,6 +557,11 @@ export function QuoteBreakdown({ quote }: { quote: Pick<Quote, "subtotal" | "del
           </span>
         ) : quote.deliveryFee === 0 ? <span className="font-semibold text-green-700">{t(T.free)}</span> : kz(quote.deliveryFee)
       } />
+      {!!quote.serviceFee && (
+        <PriceRow label={<>{t({ pt: "Taxa de serviço", en: "Service fee", fr: "Frais de service" })}
+          {fr && <FeeInfo>{t({ pt: `${fr.serviceFeePct}% da comida (mín. ${kz(fr.serviceFeeMin)}, máx. ${kz(fr.serviceFeeMax)}). Ajuda a manter a app e o apoio ao cliente.`, en: `${fr.serviceFeePct}% of food (min ${kz(fr.serviceFeeMin)}, max ${kz(fr.serviceFeeMax)}). Keeps the app and support running.`, fr: `${fr.serviceFeePct} % des plats (min ${kz(fr.serviceFeeMin)}, max ${kz(fr.serviceFeeMax)}). Finance l'app et le support.` })}</FeeInfo>}</>}
+          value={kz(quote.serviceFee)} />
+      )}
       {quote.discount > 0 && (
         <PriceRow label={<>{t(T.discount)}{quote.promoCode && <span className="ml-1 rounded bg-green-50 px-1.5 py-0.5 text-[11px] font-semibold text-green-800">{quote.promoCode}</span>}</>}
           value={<span className="text-green-700">−{kz(quote.discount)}</span>} />
@@ -630,7 +660,7 @@ export function OrderErrorAlert({ error, onSchedule, onPickCash, onDismiss }: {
     case "PAYMENT_GATEWAY_MISSING":
       title = { pt: "Método de pagamento indisponível", en: "Payment method unavailable", fr: "Moyen de paiement indisponible" };
       hint = { pt: "Os pagamentos online chegam brevemente. Pode pagar em numerário na entrega.", en: "Online payments are coming soon. You can pay cash on delivery.", fr: "Les paiements en ligne arrivent bientôt. Vous pouvez payer en espèces." };
-      if (onPickCash) action = <Button size="sm" variant="outline" onClick={onPickCash}>{t({ pt: "Pagar em numerário", en: "Pay cash", fr: "Payer en espèces" })}</Button>;
+      if (onPickCash) action = <Button size="sm" variant="outline" onClick={onPickCash}>{t({ pt: "Escolher outro método", en: "Choose another method", fr: "Choisir un autre moyen" })}</Button>;
       break;
     case "BELOW_MIN_ORDER":
     case "ITEM_UNAVAILABLE":

@@ -112,6 +112,15 @@ async function login(page, username, password, next = "/") {
   await sleep(1500);
   check(`login ${username} leaves /entrar without reload (→ ${next})`, !/\/entrar/.test(page.url()), page.url());
 }
+/** Código de entrega de uma encomenda, lido como admin (o estafeta nunca o vê; na vida real o cliente di-lo). */
+async function adminCode(orderId) {
+  const h = { "Content-Type": "application/json", Origin: BASE };
+  const login = await fetch(`${BASE}/api/auth/login`, { method: "POST", headers: h, body: JSON.stringify({ username: "admin", password: "Admin#2026demo" }) });
+  const cookie = (login.headers.get("set-cookie") || "").split(";")[0];
+  const r = await fetch(`${BASE}/api/orders/${orderId}`, { headers: { Cookie: cookie, Origin: BASE } });
+  return (await r.json())?.order?.deliveryCode ?? null;
+}
+
 async function apiFetch(page, method, url, body) {
   return page.evaluate(async (m, u, b) => {
     const r = await fetch(u, { method: m, headers: b ? { "Content-Type": "application/json" } : {}, body: b ? JSON.stringify(b) : undefined, credentials: "include" });
@@ -175,7 +184,7 @@ try {
   await go(cp, "/carrinho", "06-cart");
   await sleep(1500);
   a = await audit(cp, "06-cart");
-  check("cart shows server-computed total (4.800 + 1.000 = 5.800 Kz)", /5[\s. ]?800/.test(a.text) && /Frango grelhado/.test(a.text), a.text.slice(0, 500));
+  check("cart shows server-computed total (4.800 + 1.000 delivery + 240 service = 6.040 Kz)", /6[\s. ]?040/.test(a.text) && /Taxa de serviço/.test(a.text) && /Frango grelhado/.test(a.text), a.text.slice(0, 500));
 
   // proceed to checkout -> login
   await clickText(cp, /(Finalizar|Continuar|Checkout|Ir para o pagamento)/i, { selector: "button, a" });
@@ -190,7 +199,7 @@ try {
   check("cart survives login", /Frango grelhado/.test(await textOf(cp)), "");
   await cp.waitForNetworkIdle({ idleTime: 500 }).catch(() => {});
   a = await audit(cp, "08-checkout");
-  check("checkout shows address, payment and total 5.800", /Morada de entrega/.test(a.text) && /Pagamento/.test(a.text) && /5[\s. ]?800/.test(a.text), a.text.slice(0, 600));
+  check("checkout: address, bank payment only, distance-based fee (4.800 + 500 + 240 = 5.540)", /Morada de entrega/.test(a.text) && /Pagamento/.test(a.text) && /5[\s. ]?540/.test(a.text) && /km da loja/.test(a.text) && !/Numerário/.test(a.text), a.text.slice(0, 600));
   const placed = await clickText(cp, /^Fazer encomenda/, { selector: "button" });
   await sleep(3000);
   const m = cp.url().match(/\/encomendas\/(\d+)/);
@@ -241,6 +250,9 @@ try {
   await clickText(dp, /Recolhi a encomenda/, { selector: "button" }); await sleep(1500);
   check("driver: Entreguei", await waitText(dp, /Entreguei/), "");
   await clickText(dp, /^Entreguei$/, { selector: "button" }); await sleep(800);
+  // código de entrega: o cliente di-lo ao estafeta (aqui lido como admin)
+  const code = await adminCode(orderId);
+  if (code) await dp.type("#delivery-pin", code);
   // confirm dialog
   await clickText(dp, /(Confirmar|Entreguei|Sim)/, { selector: '[role="alertdialog"] button, [role="dialog"] button' }); await sleep(1500);
   const st = await apiFetch(dp, "GET", `/api/orders/${orderId}`);

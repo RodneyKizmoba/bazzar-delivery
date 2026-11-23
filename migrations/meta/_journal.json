@@ -50,6 +50,13 @@
       "when": 1795423438067,
       "tag": "0006_money_and_pin",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795432894939,
+      "tag": "0007_fees_rider_pay_payouts",
+      "breakpoints": true
     }
   ]
 }

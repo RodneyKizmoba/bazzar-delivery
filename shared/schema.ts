@@ -24,6 +24,9 @@ export const DIETARY_TAGS = ["vegan", "vegetarian", "gluten_free", "halal", "lac
 export const ALLERGENS = ["gluten", "dairy", "eggs", "nuts", "peanuts", "seafood", "fish", "soy"] as const;
 export const STORE_TYPES = ["restaurant", "bakery", "grocery", "pharmacy", "beauty", "flowers", "retail"] as const;
 export const PAYOUT_METHODS = ["multicaixa_express", "unitel_money", "bank_transfer"] as const;
+// tipo de veículo do estafeta: muda a velocidade estimada, o valor por entrega e o mínimo por hora
+export const VEHICLE_TYPES = ["moto", "car", "ebike", "bike"] as const;
+export type VehicleType = (typeof VEHICLE_TYPES)[number];
 
 // ---------------------------------------------------------------------------
 // Users
@@ -41,6 +44,10 @@ export const users = pgTable("users", {
   referralCode: text("referral_code").notNull(),
   referredBy: integer("referred_by"),
   loyaltyPoints: integer("loyalty_points").notNull().default(0),
+  // estafetas: veículo e conta para receber os pagamentos semanais
+  vehicleType: text("vehicle_type").$type<VehicleType>(),
+  payoutMethod: text("payout_method"),
+  payoutReference: text("payout_reference"),
   preferredLanguage: text("preferred_language").default("pt"),
   dietaryPreferences: text("dietary_preferences").array().notNull().default([]),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -177,6 +184,15 @@ export const orders = pgTable("orders", {
   notes: text("notes"),
   subtotal: integer("subtotal").notNull(),
   deliveryFee: integer("delivery_fee").notNull(),
+  // taxas ao cliente (modelo Deliveroo): serviço (% da comida, com mínimo/máximo) e encomenda pequena (diferença até ao mínimo)
+  serviceFee: integer("service_fee").notNull().default(0),
+  smallOrderFee: integer("small_order_fee").notNull().default(0),
+  deliveryKm: real("delivery_km"), // loja → cliente, km de estrada estimados
+  busyLevel: integer("busy_level").notNull().default(0), // 0 normal, 1 movimentado, 2 muito movimentado
+  // pagamento ao estafeta (separado da taxa paga pelo cliente)
+  riderPay: integer("rider_pay"), // base + distância + bónus, com mínimo por hora; fixado ao aceitar
+  riderPayDetail: jsonb("rider_pay_detail").$type<RiderPayDetail>(),
+  riderWaitFee: integer("rider_wait_fee").notNull().default(0), // espera na loja acima de 5 min
   priorityFee: integer("priority_fee").notNull().default(0), // entrega prioritária (vai primeiro)
   riderTip: integer("rider_tip").notNull().default(0), // gorjeta: 100% para o estafeta
   cutlery: boolean("cutlery").notNull().default(false), // talheres só se o cliente pedir
@@ -285,6 +301,33 @@ export const driverPresence = pgTable("driver_presence", {
 export type DriverPresence = typeof driverPresence.$inferSelect;
 
 export const OFFER_STATUSES = ["pending", "accepted", "declined", "expired", "cancelled"] as const;
+export interface RiderPayDetail {
+  vehicle: VehicleType; pickupKm: number; dropKm: number; estMinutes: number;
+  base: number; distance: number; timeBonus: number; busyBonus: number; floorTopUp: number; total: number;
+  band: "night" | "peak" | "normal"; busyLevel: number;
+}
+
+export const PAYOUT_STATUSES = ["pending", "paid", "failed"] as const;
+export const payouts = pgTable("payouts", {
+  id: serial("id").primaryKey(),
+  partyType: text("party_type").$type<"store" | "driver">().notNull(),
+  partyId: integer("party_id").notNull(),
+  kind: text("kind").$type<"weekly" | "instant">().notNull(),
+  status: text("status").$type<(typeof PAYOUT_STATUSES)[number]>().notNull().default("pending"),
+  amount: integer("amount").notNull(), // valor a transferir
+  fee: integer("fee").notNull().default(0), // taxa do levantamento imediato
+  method: text("method"),
+  account: text("account"),
+  periodEnd: timestamp("period_end"), // pagamento semanal: ganhos até esta data
+  bankReference: text("bank_reference"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  paidAt: timestamp("paid_at"),
+}, (t) => [
+  index("payouts_party_idx").on(t.partyType, t.partyId),
+  uniqueIndex("payouts_weekly_once_idx").on(t.partyType, t.partyId, t.kind, t.periodEnd),
+]);
+export type Payout = typeof payouts.$inferSelect;
+
 export const dispatchOffers = pgTable("dispatch_offers", {
   id: serial("id").primaryKey(),
   orderId: integer("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
@@ -293,6 +336,7 @@ export const dispatchOffers = pgTable("dispatch_offers", {
   round: integer("round").notNull(),
   distanceKm: real("distance_km"),
   payout: integer("payout").notNull(),
+  payDetail: jsonb("pay_detail").$type<RiderPayDetail>(),
   offeredAt: timestamp("offered_at").notNull().defaultNow(),
   expiresAt: timestamp("expires_at").notNull(),
   respondedAt: timestamp("responded_at"),
@@ -438,6 +482,7 @@ export const registerSchema = z.object({
   phone: z.string().trim().regex(/^\+?[0-9 ]{9,15}$/, "Número de telefone inválido"),
   userType: z.enum(["customer", "supplier", "driver"]).default("customer"),
   referralCode: z.string().trim().max(20).optional().nullable().or(z.literal("")),
+  vehicleType: z.enum(VEHICLE_TYPES).optional().nullable(), // estafeta
   // fornecedor
   business: z.object({
     name: z.string().trim().min(2).max(100),
@@ -484,6 +529,7 @@ export const quoteSchema = z.object({
   usePoints: z.number().int().min(0).optional().default(0),
   priority: z.boolean().optional().default(false),
   riderTip: z.number().int().min(0).max(20000).optional().default(0),
+  addressId: z.number().int().positive().optional().nullable(), // para calcular a taxa de entrega pela distância
 });
 
 export const createOrderSchema = z.object({

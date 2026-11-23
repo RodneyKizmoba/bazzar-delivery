@@ -16,7 +16,7 @@ import { useLang, useT, T } from "@/lib/i18n";
 import { kz, dateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
-  AddressPicker, clearCheckoutPrefs, OrderErrorAlert, PaymentPicker, QuoteBreakdown, readCheckoutPrefs, Section,
+  AddressPicker, clearCheckoutPrefs, firstAvailableMethod, OrderErrorAlert, PaymentPicker, QuoteBreakdown, readCheckoutPrefs, Section,
   useAddresses, useMeta, useQuote, WhenPicker, noticeLabel, type StoreDetail, type WhenMode,
 } from "./_orderingKit";
 
@@ -36,7 +36,7 @@ function CheckoutInner() {
   const [addressId, setAddressId] = useState<number | null>(null);
   const [mode, setMode] = useState<WhenMode>("now");
   const [scheduledFor, setScheduledFor] = useState<string | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [paymentMethod, setPaymentMethod] = useState("multicaixa_express");
   const [notes, setNotes] = useState("");
   // Deliveroo: entrega normal ou prioritária, gorjeta e talheres
   const [priorityPick, setPriority] = useState(false);
@@ -49,14 +49,14 @@ function CheckoutInner() {
   const usePoints = prefs.usePoints && balance > 0 ? balance : 0;
   const priority = priorityPick && mode === "now";
   const body = cart.storeId && cart.lines.length
-    ? { storeId: cart.storeId, items: toApiItems(cart.lines), promoCode: prefs.promoCode, usePoints, priority, riderTip }
+    ? { storeId: cart.storeId, items: toApiItems(cart.lines), promoCode: prefs.promoCode, usePoints, priority, riderTip, addressId }
     : null;
   const quote = useQuote(body, 0);
 
-  // se o método escolhido deixar de estar disponível, voltar a numerário
+  // se o método escolhido não estiver disponível, escolher o primeiro que esteja (só pagamentos por banco)
   useEffect(() => {
     const m = meta.data?.paymentMethods.find((x) => x.id === paymentMethod);
-    if (m && !m.available) setPaymentMethod("cash");
+    if (meta.data && (!m || !m.available)) setPaymentMethod(firstAvailableMethod(meta.data.paymentMethods));
   }, [meta.data]);
 
   const storeClosedNow = store ? !store.isOpenNow : false;
@@ -121,7 +121,7 @@ function CheckoutInner() {
       <div ref={errorRef}>
         <OrderErrorAlert error={orderError} onDismiss={() => setOrderError(null)}
           onSchedule={() => { setMode("schedule"); setOrderError(null); }}
-          onPickCash={() => { setPaymentMethod("cash"); setOrderError(null); }} />
+          onPickCash={() => { setPaymentMethod(firstAvailableMethod(meta.data?.paymentMethods)); setOrderError(null); }} />
       </div>
 
       <Section title={t({ pt: "Morada de entrega", en: "Delivery address", fr: "Adresse de livraison" })} icon={<MapPin className="h-4 w-4 text-primary" />}>
@@ -182,9 +182,7 @@ function CheckoutInner() {
 
       <Section title={t({ pt: "Pagamento", en: "Payment", fr: "Paiement" })} icon={<CreditCard className="h-4 w-4 text-primary" />}>
         <PaymentPicker value={paymentMethod} onChange={setPaymentMethod} />
-        {paymentMethod === "cash" && (
-          <p className="mt-2 text-xs text-neutral-500">{t({ pt: "Pague ao estafeta quando receber. Tenha o valor certo, se possível.", en: "Pay the rider on delivery. Exact change helps.", fr: "Payez le livreur à la réception. Prévoyez l'appoint." })}</p>
-        )}
+        <p className="mt-2 text-xs text-neutral-500">{t({ pt: "Paga já, por banco. O estafeta não recebe dinheiro: na entrega só lhe diz o código de entrega.", en: "You pay now, by bank. The rider takes no money: at the door you just give the delivery code.", fr: "Vous payez maintenant, par banque. Le livreur ne prend pas d'argent : donnez-lui seulement le code de livraison." })}</p>
       </Section>
 
       <Section title={t({ pt: "Notas para o estafeta / loja", en: "Notes for the rider / store", fr: "Notes pour le livreur / magasin" })} icon={<MessageSquare className="h-4 w-4 text-primary" />}>

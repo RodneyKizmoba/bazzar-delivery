@@ -8,8 +8,10 @@ import { publicUser, requireRole } from "../lib/auth";
 import { changeStatus } from "../lib/orderFlow";
 import { STORE_THEME_IDS } from "@shared/themes";
 import { withoutSecrets } from "../lib/pos";
-import { closeOffersOnClaim, redispatch } from "../lib/dispatchEngine";
+import { closeOffersOnClaim, redispatch, riderPayQuote } from "../lib/dispatchEngine";
 import { account } from "../lib/settlement";
+import { markPayout, runWeeklyPayouts } from "../lib/payouts";
+import { nextPayday } from "../lib/fees";
 import { config } from "../config";
 import { ledgerEntries } from "@shared/schema";
 import { publishOffer, publishOrder } from "../lib/realtime";
@@ -67,6 +69,10 @@ adminRouter.get("/finance", ah(async (req, res) => {
     gmv: sql<number>`coalesce(sum(${orders.total}),0)::int`,
     food: sql<number>`coalesce(sum(${orders.subtotal}),0)::int`,
     commission: sql<number>`coalesce(sum(${orders.commissionAmount}),0)::int`,
+    deliveryFees: sql<number>`coalesce(sum(${orders.deliveryFee}),0)::int`,
+    serviceFees: sql<number>`coalesce(sum(${orders.serviceFee}),0)::int`,
+    smallOrderFees: sql<number>`coalesce(sum(${orders.smallOrderFee}),0)::int`,
+    tips: sql<number>`coalesce(sum(${orders.riderTip}),0)::int`,
     priorityFees: sql<number>`coalesce(sum(${orders.priorityFee}),0)::int`,
     discounts: sql<number>`coalesce(sum(${orders.discount}),0)::int`,
     riderPay: sql<number>`coalesce(sum(${orders.riderEarning}),0)::int`,
@@ -84,8 +90,9 @@ adminRouter.get("/finance", ah(async (req, res) => {
         and l.kind in ('cash_collected','cash_deposit')), 0))::int as "cashHeld"
     from users u where u.user_type = 'driver' and u.is_approved order by "cashHeld" desc, u.full_name`);
   res.json({
-    days, totals: { ...t, platformNet: t.commission + t.priorityFees - t.discounts },
-    defaultCommissionPct: config.commissionPct, riderCashLimit: config.riderCashLimit,
+    // receita PedeJá = comissão + taxas do cliente (entrega, serviço, pequena, prioridade) − descontos − pagamento aos estafetas (sem gorjetas)
+    days, totals: { ...t, platformNet: t.commission + t.deliveryFees + t.serviceFees + t.smallOrderFees + t.priorityFees - t.discounts - (t.riderPay - t.tips) },
+    defaultCommissionPct: config.commissionPct,
     stores: storeRows.rows, riders: riderRows.rows,
   });
 }));
@@ -119,6 +126,55 @@ adminRouter.post("/ledger", ah(async (req, res) => {
     partyType: b.partyType, partyId: b.partyId, kind: b.kind, amount, note: b.note || null, reference: b.reference || null, createdBy: req.user!.id,
   }).returning();
   res.status(201).json({ entry, ...(await account(b.partyType, b.partyId, 20)) });
+}));
+
+// ---------------------------------------------------------------------------
+// Pagamentos (semanais à terça + levantamentos imediatos): o admin transfere e marca como pago
+// ---------------------------------------------------------------------------
+async function payoutRows(status?: string) {
+  const r = await db.execute(sql`
+    select p.id, p.party_type as "partyType", p.party_id as "partyId", p.kind, p.status, p.amount, p.fee, p.method, p.account,
+      p.period_end as "periodEnd", p.bank_reference as "bankReference", p.created_at as "createdAt", p.paid_at as "paidAt",
+      coalesce(s.name, u.full_name) as name
+    from payouts p
+      left join stores s on p.party_type = 'store' and s.id = p.party_id
+      left join users u on p.party_type = 'driver' and u.id = p.party_id
+    where ${status ? sql`p.status = ${status}` : sql`true`}
+    order by p.status = 'pending' desc, p.id desc limit 300`);
+  return r.rows.map((x: any) => Object.fromEntries(Object.entries(x).map(([k, v]) =>
+    [k, typeof v === "string" && /^\d{4}-\d\d-\d\d[ T]\d\d:\d\d:\d\d(\.\d+)?$/.test(v) ? v.replace(" ", "T") + "Z" : v])));
+}
+
+adminRouter.get("/payouts", ah(async (req, res) => {
+  const status = typeof req.query.status === "string" && ["pending", "paid", "failed"].includes(req.query.status) ? req.query.status : undefined;
+  res.json({ payouts: await payoutRows(status), nextPayday: nextPayday(new Date()), weekday: config.payoutWeekday });
+}));
+
+/** Ficheiro para o banco: transferências pendentes. */
+adminRouter.get("/payouts.csv", ah(async (_req, res) => {
+  const rows = await payoutRows("pending");
+  const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const lines = [["id", "tipo", "nome", "metodo", "conta", "valor_kz", "taxa_kz", "criado"].join(",")]
+    .concat(rows.map((p: any) => [p.id, p.partyType === "store" ? "loja" : "estafeta", p.name, p.method, p.account, p.amount, p.fee, p.createdAt].map(esc).join(",")));
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="pedeja-pagamentos-${new Date().toISOString().slice(0, 10)}.csv"`);
+  res.send("\uFEFF" + lines.join("\n"));
+}));
+
+adminRouter.post("/payouts/run-weekly", ah(async (req, res) => {
+  // só com ALLOW_TEST_CLOCK=1 (testes) se pode simular outra data; em uso real é sempre "agora"
+  const asOf = process.env.ALLOW_TEST_CLOCK === "1" && typeof req.body?.asOf === "string" ? new Date(req.body.asOf) : new Date();
+  if (Number.isNaN(asOf.getTime())) throw badRequest("Data inválida.");
+  const r = await runWeeklyPayouts(asOf);
+  res.json({ periodEnd: r.periodEnd, created: r.created.length, missingAccount: r.missingAccount });
+}));
+
+adminRouter.post("/payouts/:id/:action", ah(async (req, res) => {
+  const action = req.params.action;
+  if (action !== "paid" && action !== "failed") throw notFound();
+  const { bankReference } = parse(z.object({ bankReference: z.string().trim().max(80).optional().nullable() }), req.body);
+  if (action === "paid" && !bankReference) throw badRequest("Indique a referência da transferência.", "REFERENCE_REQUIRED");
+  res.json({ payout: await markPayout(idParam(req), action, bankReference || null) });
 }));
 
 /** Centro de despacho: estafetas online, entregas à espera e últimas ofertas. */
@@ -173,6 +229,10 @@ adminRouter.post("/orders/:id/assign-driver", ah(async (req, res) => {
       : { driverId: null, driverAssignedAt: null, driverAtStoreAt: null, dispatchRound: 0, dispatchFailedAt: null, dispatchAt: now, updatedAt: now })
       .where(and(eq(orders.id, id), inArray(orders.status, ["accepted", "preparing", "ready", "picked_up"]))).returning();
     if (!row) throw conflict("Só é possível atribuir estafeta a encomendas aceites e não terminadas.");
+    if (driverId) {
+      const pay = await riderPayQuote(tx, row, driverId);
+      Object.assign(row, (await tx.update(orders).set({ riderPay: pay.total, riderPayDetail: pay }).where(eq(orders.id, id)).returning())[0]);
+    }
     const gone = await closeOffersOnClaim(tx, id, driverId ?? -1);
     await tx.execute(sql`insert into order_events (order_id, status, actor_id, note) values (${id}, ${row.status}, ${req.user!.id}, ${driverId ? "Admin atribuiu estafeta" : "Admin retirou o estafeta"})`);
     return { row, gone };

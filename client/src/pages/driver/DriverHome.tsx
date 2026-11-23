@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { ApiError, post, queryClient } from "@/lib/api";
-import { useLang, useT, T } from "@/lib/i18n";
+import { useLang, useT, T, type Tr } from "@/lib/i18n";
 import { kz, time, PAYMENT } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { poll } from "@/lib/live";
@@ -38,7 +38,8 @@ export interface DriverOrder {
   id: number; orderNumber: string; status: string; total: number; deliveryFee: number; paymentMethod: string;
   collectCash: number; deliveryAddress: Addr; notes: string | null; priority?: boolean; riderTip?: number; cutlery?: boolean;
   driverAtStoreAt?: string | null; driverAtCustomerAt?: string | null; estimatedDeliveryAt: string | null; createdAt: string;
-  readyEstimateAt?: string | null; payout?: number; tripKm?: number | null; pinRequired?: boolean;
+  readyEstimateAt?: string | null; payout?: number | null; tripKm?: number | null; pinRequired?: boolean;
+  riderPayDetail?: PayDetail | null; riderWaitFee?: number;
   store: DStore;
 }
 interface CurrentOrder extends DriverOrder {
@@ -72,8 +73,57 @@ export default function DriverHome() {
   );
 }
 
+export interface PayDetail {
+  vehicle: "moto" | "car" | "ebike" | "bike"; pickupKm: number; dropKm: number; estMinutes: number;
+  base: number; distance: number; timeBonus: number; busyBonus: number; floorTopUp: number; total: number;
+  band: "night" | "peak" | "normal"; busyLevel: number;
+}
+const VEHICLE_LABEL: Record<PayDetail["vehicle"], Tr> = {
+  moto: { pt: "Mota", en: "Motorbike", fr: "Moto" }, car: { pt: "Carro", en: "Car", fr: "Voiture" },
+  ebike: { pt: "Bicicleta eléctrica", en: "E-bike", fr: "Vélo électrique" }, bike: { pt: "Bicicleta", en: "Bicycle", fr: "Vélo" },
+};
+
+/** Como se chega ao valor desta entrega (antes de aceitar). */
+function PayBreakdown({ d, tip = 0, wait = 0 }: { d: PayDetail; tip?: number; wait?: number }) {
+  const t = useT();
+  const row = (label: string, v: number) => (
+    <div className="flex justify-between gap-2"><span>{label}</span><span className="tabular-nums">{kz(v)}</span></div>
+  );
+  return (
+    <div className="space-y-0.5 rounded-lg bg-neutral-50 p-2 text-xs text-neutral-700">
+      {row(t({ pt: "Base", en: "Base", fr: "Base" }), d.base)}
+      {(() => { const a = d.pickupKm.toFixed(1), b = d.dropKm.toFixed(1), c = (x: string) => x.replace(".", ",");
+        return row(t({ pt: `Distância (${c(a)} + ${c(b)} km)`, en: `Distance (${a} + ${b} km)`, fr: `Distance (${c(a)} + ${c(b)} km)` }), d.distance); })()}
+      {!!d.timeBonus && row(d.band === "night" ? t({ pt: "Bónus noite", en: "Night bonus", fr: "Bonus nuit" }) : t({ pt: "Bónus hora de ponta", en: "Peak bonus", fr: "Bonus heure de pointe" }), d.timeBonus)}
+      {!!d.busyBonus && row(t({ pt: "Bónus movimento", en: "Busy bonus", fr: "Bonus affluence" }), d.busyBonus)}
+      {!!d.floorTopUp && row(t({ pt: "Garantia mínima por hora", en: "Hourly minimum top-up", fr: "Complément minimum horaire" }), d.floorTopUp)}
+      {!!wait && row(t({ pt: "Espera na loja", en: "Wait at store", fr: "Attente au magasin" }), wait)}
+      {!!tip && row(t({ pt: "Gorjeta (100% sua)", en: "Tip (100% yours)", fr: "Pourboire (100 % pour vous)" }), tip)}
+      <p className="pt-1 text-[11px] text-neutral-500">{t(VEHICLE_LABEL[d.vehicle])} · ~{d.estMinutes} min</p>
+    </div>
+  );
+}
+
+/** Na loja: a espera é paga depois dos primeiros 5 minutos (ao segundo, até 30 min). */
+function WaitMeter({ since }: { since: string }) {
+  const t = useT();
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const id = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(id); }, []);
+  const min = (now - new Date(since).getTime()) / 60_000;
+  const paidMin = Math.min(30, Math.max(0, min - 5));
+  const mm = Math.floor(min), ss = Math.floor((min - mm) * 60);
+  return (
+    <p className="rounded-lg bg-brand-50 p-2 text-xs text-brand-900" aria-live="off">
+      ⏱ {t({ pt: `À espera há ${mm}:${String(ss).padStart(2, "0")}`, en: `Waiting ${mm}:${String(ss).padStart(2, "0")}`, fr: `Attente ${mm}:${String(ss).padStart(2, "0")}` })}
+      {" · "}{paidMin > 0
+        ? <b>{t({ pt: `espera paga: ~${kz(Math.round(paidMin * 30))}`, en: `paid wait: ~${kz(Math.round(paidMin * 30))}`, fr: `attente payée : ~${kz(Math.round(paidMin * 30))}` })}</b>
+        : t({ pt: "a espera é paga a partir dos 5 min", en: "wait is paid after 5 min", fr: "attente payée après 5 min" })}
+    </p>
+  );
+}
+
 interface Offer {
-  offerSeconds?: number; id: number; expiresAt: string; secondsLeft: number; distanceKm: number | null; payout: number;
+  offerSeconds?: number; id: number; expiresAt: string; secondsLeft: number; distanceKm: number | null; payout: number; payDetail?: PayDetail | null;
   order: DriverOrder;
 }
 interface Presence { isOnline: boolean; latitude?: number | null; longitude?: number | null; locationAt?: string | null }
@@ -254,6 +304,12 @@ function OfferCard({ myPos }: { myPos: LL | null }) {
             <p className="text-xs font-semibold uppercase text-primary">{t({ pt: "Nova entrega para si", en: "New delivery for you", fr: "Nouvelle livraison pour vous" })}</p>
             <p className="text-3xl font-extrabold text-neutral-900">{kz(offer.payout)}</p>
             {!!o.riderTip && <p className="text-xs font-semibold text-green-700">{t({ pt: `inclui ${kz(o.riderTip)} de gorjeta`, en: `includes ${kz(o.riderTip)} tip`, fr: `dont ${kz(o.riderTip)} de pourboire` })}</p>}
+            {offer.payDetail && (
+              <details className="mt-1">
+                <summary className="cursor-pointer text-xs font-semibold text-brand-800">{t({ pt: "Como é calculado", en: "How it's worked out", fr: "Comment c'est calculé" })}</summary>
+                <PayBreakdown d={offer.payDetail} tip={o.riderTip ?? 0} />
+              </details>
+            )}
           </div>
           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xl font-extrabold text-brand-900" aria-label={t({ pt: `${left} segundos`, en: `${left} seconds`, fr: `${left} secondes` })}>{left}</div>
         </div>
@@ -334,8 +390,18 @@ function CurrentDelivery({ order, myPos }: { order: CurrentOrder; myPos: { latit
           <p className="text-xs text-neutral-500">{t({ pt: "Entrega em curso", en: "Current delivery", fr: "Livraison en cours" })}</p>
           <p className="font-mono text-lg font-bold">{order.orderNumber}</p>
         </div>
-        <StatusBadge status={order.status} className="text-sm" />
+        <div className="text-right">
+          <StatusBadge status={order.status} className="text-sm" />
+          {order.payout != null && <p className="mt-1 text-sm font-bold text-green-700">{t({ pt: "Ganho", en: "Earning", fr: "Gain" })} {kz(order.payout)}</p>}
+        </div>
       </div>
+      {order.riderPayDetail && (
+        <details>
+          <summary className="cursor-pointer text-xs font-semibold text-brand-800">{t({ pt: "Ver o cálculo do ganho", en: "See how your earning is worked out", fr: "Voir le calcul du gain" })}</summary>
+          <PayBreakdown d={order.riderPayDetail} tip={order.riderTip ?? 0} wait={order.riderWaitFee ?? 0} />
+        </details>
+      )}
+      {order.driverAtStoreAt && order.status !== "picked_up" && <WaitMeter since={order.driverAtStoreAt} />}
 
       {order.collectCash > 0 && (
         <div className="flex items-center gap-2 rounded-lg bg-brand-100 p-3 text-brand-900" role="alert">
@@ -542,7 +608,7 @@ function AvailableList({ onClaimError, myPos }: { onClaimError: (e: Error) => vo
                 </div>
                 <div className="text-right">
                   <p className="text-lg font-bold text-green-700">{kz(o.payout ?? o.deliveryFee)}</p>
-                  <p className="text-[11px] text-neutral-500">{t({ pt: "ganho", en: "earning", fr: "gain" })}</p>
+                  <p className="text-[11px] text-neutral-500">{t({ pt: "ganho", en: "earning", fr: "gain" })}{o.riderPayDetail && <> · ~{o.riderPayDetail.estMinutes} min</>}</p>
                 </div>
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-neutral-600">

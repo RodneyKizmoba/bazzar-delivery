@@ -10,7 +10,8 @@
     "check": "tsc",
     "db:generate": "drizzle-kit generate",
     "db:photos": "tsx scripts/backfill-catalog-photos.ts",
-    "test:api": "tsx tests/api.test.ts"
+    "test:api": "tsx tests/api.test.ts",
+    "test:fees": "tsx tests/fees.unit.test.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

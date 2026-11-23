@@ -63,6 +63,7 @@ export default function Register() {
     fullName: "", username: "", phone: "", email: "", password: "", confirm: "", referralCode: sp.get("ref") ?? "",
   });
   const [biz, setBiz] = useState({ name: "", storeType: "restaurant", phone: "", street: "", zone: "", nif: "", description: "", isHomeBusiness: false, minNoticeHours: 0 });
+  const [vehicle, setVehicle] = useState("moto");
   const [terms, setTerms] = useState(false);
   const [show, setShow] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -118,6 +119,7 @@ export default function Register() {
         email: form.email.trim() || null,
         phone: form.phone.trim(),
         userType: type,
+        ...(type === "driver" ? { vehicleType: vehicle } : {}),
         referralCode: type === "customer" && form.referralCode.trim() ? form.referralCode.trim() : null,
         business: type === "supplier" ? {
           name: biz.name.trim(), storeType: biz.storeType, phone: biz.phone.trim(), street: biz.street.trim(), zone: biz.zone,
@@ -187,6 +189,19 @@ export default function Register() {
               {type === "driver"
                 ? t({ pt: "As contas de estafeta precisam de aprovação. A nossa equipa vai verificar os seus dados e contactá-lo.", en: "Rider accounts need approval. Our team will review your details and contact you.", fr: "Les comptes livreur doivent être approuvés. Notre équipe vérifiera vos informations et vous contactera." })
                 : t({ pt: "A sua loja precisa de aprovação antes de aparecer na app. Pode preparar o menu entretanto.", en: "Your store needs approval before it appears in the app. You can set up your menu meanwhile.", fr: "Votre magasin doit être approuvé avant d'apparaître dans l'app. Vous pouvez préparer le menu en attendant." })}
+            </div>
+          )}
+
+          {type === "driver" && (
+            <div className="space-y-1">
+              <Label htmlFor="vehicleType">{t({ pt: "Veículo", en: "Vehicle", fr: "Véhicule" })}</Label>
+              <select id="vehicleType" value={vehicle} onChange={(e) => setVehicle(e.target.value)} className="h-11 w-full rounded-xl border bg-white px-3 text-sm">
+                <option value="moto">{t({ pt: "Mota", en: "Motorbike", fr: "Moto" })}</option>
+                <option value="car">{t({ pt: "Carro", en: "Car", fr: "Voiture" })}</option>
+                <option value="ebike">{t({ pt: "Bicicleta eléctrica", en: "E-bike", fr: "Vélo électrique" })}</option>
+                <option value="bike">{t({ pt: "Bicicleta", en: "Bicycle", fr: "Vélo" })}</option>
+              </select>
+              <p className="text-xs text-neutral-500">{t({ pt: "Conta para o valor de cada entrega e para o mínimo garantido por hora.", en: "Used for each delivery's pay and your guaranteed hourly minimum.", fr: "Sert au calcul de chaque livraison et du minimum horaire garanti." })}</p>
             </div>
           )}
 

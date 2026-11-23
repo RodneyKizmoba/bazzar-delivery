@@ -10,6 +10,8 @@ import { ah, forbidden, idParam, notFound, parse } from "../lib/http";
 import { requireRole } from "../lib/auth";
 import { changeStatus, confirmScheduled, delayPrep } from "../lib/orderFlow";
 import { account } from "../lib/settlement";
+import { available, payoutsOf } from "../lib/payouts";
+import { nextPayday } from "../lib/fees";
 import { config } from "../config";
 import { assertSafeWebhookUrl, newApiKey, newWebhookSecret, sendPosWebhook, withoutSecrets } from "../lib/pos";
 
@@ -75,7 +77,10 @@ partnerRouter.post("/orders/:id/status", ah(async (req, res) => {
 /** Pagamentos: saldo a receber da PedeJá, comissão e movimentos. */
 partnerRouter.get("/finance", ah(async (req, res) => {
   const s = await myStore(req);
-  res.json({ ...(await account("store", s.id)), commissionPct: s.commissionPct ?? config.commissionPct, payoutMethod: s.payoutMethod, payoutReference: s.payoutReference });
+  res.json({
+    ...(await account("store", s.id)), commissionPct: s.commissionPct ?? config.commissionPct, payoutMethod: s.payoutMethod, payoutReference: s.payoutReference,
+    available: await available("store", s.id), nextPayday: nextPayday(new Date()), payouts: await payoutsOf("store", s.id),
+  });
 }));
 
 /** "Preciso de mais tempo": +5, +10 ou +15 minutos. */

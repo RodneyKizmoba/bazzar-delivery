@@ -2,7 +2,7 @@ import { and, eq, inArray, lte, ne, sql } from "drizzle-orm";
 import { randomBytes, randomInt } from "crypto";
 import { db, type DbOrTx } from "../db";
 import {
-  addresses, orderEvents, orderItems, orders, pointsLedger, promoCodes, stores, users,
+  addresses, dispatchOffers, driverPresence, orderEvents, orderItems, orders, pointsLedger, promoCodes, stores, users,
   type CartLine, type Order, type OrderStatus, type PaymentMethod, type User,
 } from "@shared/schema";
 import { config } from "../config";
@@ -13,8 +13,9 @@ import { notifyOrderStatus } from "./notify";
 import { notifyExternalDispatch } from "./dispatch";
 import { sendPosWebhook } from "./pos";
 import { publishOffer, publishOrder } from "./realtime";
-import { cashHeld, settleDeliveredOrder } from "./settlement";
-import { assertNotReservedForOther, closeOffersOnClaim, dispatchTimes } from "./dispatchEngine";
+import { settleDeliveredOrder } from "./settlement";
+import { hasLL, roadKm, waitFeeFor } from "./fees";
+import { riderPayQuote, assertNotReservedForOther, closeOffersOnClaim, dispatchTimes } from "./dispatchEngine";
 
 export type Actor = { kind: "customer" | "store" | "driver" | "admin" | "system"; userId?: number };
 
@@ -78,7 +79,7 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
     }
     const quote = await buildQuote(tx, {
       storeId: input.storeId, lines: input.lines, user, promoCode: input.promoCode, usePoints: input.usePoints,
-      priority: !!input.priority, riderTip: input.riderTip ?? 0,
+      priority: !!input.priority, riderTip: input.riderTip ?? 0, destination: addr,
     });
     const store = quote.store;
     validateSchedule(input.scheduledFor ?? null, store);
@@ -106,6 +107,10 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
       notes: input.notes || null,
       subtotal: quote.subtotal,
       deliveryFee: quote.deliveryFee,
+      serviceFee: quote.serviceFee,
+      smallOrderFee: quote.smallOrderFee,
+      deliveryKm: quote.deliveryKm,
+      busyLevel: quote.busyLevel,
       priorityFee: quote.priorityFee,
       riderTip: quote.riderTip,
       cutlery: !!input.cutlery,
@@ -115,8 +120,8 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
       promoCode: quote.promo?.code ?? null,
       paymentMethod: input.paymentMethod,
       estimatedDeliveryAt: etaBase,
-      // código de entrega: sempre se já está pago; em numerário a partir de PIN_CASH_MIN_TOTAL
-      deliveryPin: input.paymentMethod !== "cash" || quote.total >= config.pinCashMinTotal ? String(randomInt(0, 10000)).padStart(4, "0") : null,
+      // código de entrega em todas as encomendas: o cliente di-lo ao estafeta na entrega
+      deliveryPin: String(randomInt(0, 10000)).padStart(4, "0"),
     }).returning();
 
     await tx.insert(orderItems).values(quote.lines.map((l, i) => ({
@@ -179,6 +184,10 @@ export async function changeStatus(orderId: number, to: OrderStatus, actor: Acto
     if (to === "delivered") {
       patch.deliveredAt = now;
       if (order.paymentMethod === "cash") patch.paymentStatus = "paid";
+    }
+    if (to === "picked_up") {
+      // espera na loja: paga depois dos primeiros 5 min (ao segundo, máx. 30 min)
+      patch.riderWaitFee = waitFeeFor(order.driverAtStoreAt, now);
     }
     if (to === "accepted") {
       const [store] = await tx.select().from(stores).where(eq(stores.id, order.storeId));
@@ -276,13 +285,14 @@ export async function claimDelivery(orderId: number, driverId: number): Promise<
     const [active] = await tx.select({ id: orders.id }).from(orders)
       .where(and(eq(orders.driverId, driverId), inArray(orders.status, ["accepted", "preparing", "ready", "picked_up"])));
     if (active) throw conflict("Já tem uma entrega em curso. Termine-a antes de aceitar outra.", "DRIVER_BUSY");
-    const [target] = await tx.select({ id: orders.id, paymentMethod: orders.paymentMethod }).from(orders).where(eq(orders.id, orderId)).for("update");
+    const [target] = await tx.select().from(orders).where(eq(orders.id, orderId)).for("update");
     await assertNotReservedForOther(tx, orderId, driverId);
-    if (target?.paymentMethod === "cash" && (await cashHeld(tx, driverId)) >= config.riderCashLimit) {
-      throw conflict(`Tem demasiado numerário em mão (limite ${config.riderCashLimit} Kz). Entregue-o à PedeJá para voltar a levar encomendas pagas em dinheiro.`, "CASH_LIMIT");
-    }
+    // o valor mostrado na oferta é o que fica; vindo da lista aberta calcula-se agora
+    const [myOffer] = target ? await tx.select({ d: dispatchOffers.payDetail }).from(dispatchOffers)
+      .where(and(eq(dispatchOffers.orderId, orderId), eq(dispatchOffers.driverId, driverId), eq(dispatchOffers.status, "pending"))) : [];
+    const pay = myOffer?.d ?? (target ? await riderPayQuote(tx, target, driverId) : null);
     const [updated] = await tx.update(orders)
-      .set({ driverId, driverAssignedAt: new Date(), updatedAt: new Date() })
+      .set({ driverId, driverAssignedAt: new Date(), updatedAt: new Date(), riderPay: pay?.total ?? null, riderPayDetail: pay })
       .where(and(eq(orders.id, orderId), sql`${orders.driverId} is null`, inArray(orders.status, ["accepted", "preparing", "ready"])))
       .returning();
     if (!updated) throw conflict("Esta entrega já não está disponível.", "NOT_AVAILABLE");
@@ -303,6 +313,15 @@ export async function markArrived(orderId: number, driverId: number, at: "store"
     const ok = at === "store" ? ["accepted", "preparing", "ready"].includes(o.status) : o.status === "picked_up";
     if (!ok) throw conflict(at === "store" ? "Já recolheu esta encomenda." : "Recolha primeiro a encomenda na loja.", "BAD_STEP");
     const now = new Date();
+    if (at === "store" && !o.driverAtStoreAt) {
+      // a espera conta a partir daqui: confirmar pelo GPS (se recente) que está mesmo na loja
+      const [p] = await tx.select().from(driverPresence).where(eq(driverPresence.userId, driverId));
+      const [s] = await tx.select({ latitude: stores.latitude, longitude: stores.longitude }).from(stores).where(eq(stores.id, o.storeId));
+      if (p?.locationAt && now.getTime() - p.locationAt.getTime() < 3 * 60_000 && hasLL(p) && hasLL(s)) {
+        const km = roadKm(p, s) / 1.3;
+        if (km > 0.4) throw conflict(`O GPS mostra que ainda está a ${km.toFixed(1)} km da loja.`, "NOT_AT_STORE");
+      }
+    }
     const patch = at === "store" ? { driverAtStoreAt: o.driverAtStoreAt ?? now } : { driverAtCustomerAt: o.driverAtCustomerAt ?? now };
     const [updated] = await tx.update(orders).set({ ...patch, updatedAt: now }).where(eq(orders.id, orderId)).returning();
     if (at === "store" ? !o.driverAtStoreAt : !o.driverAtCustomerAt) {
@@ -388,7 +407,10 @@ export async function modifyOrder(
     if (patch.lines) {
       // Recalcular preço; mantém o mesmo código promocional se continuar válido (ignora limite de uso desta encomenda)
       const [freshUser] = await tx.select().from(users).where(eq(users.id, user.id));
-      const quote = await buildQuote(tx, { storeId: order.storeId, lines: patch.lines, user: { ...freshUser, loyaltyPoints: 0 }, promoCode: null });
+      const quote = await buildQuote(tx, {
+        storeId: order.storeId, lines: patch.lines, user: { ...freshUser, loyaltyPoints: 0 }, promoCode: null,
+        destination: (update.deliveryAddress as Order["deliveryAddress"] | undefined) ?? order.deliveryAddress, busyLevel: order.busyLevel as 0 | 1 | 2,
+      });
       let discount = 0;
       if (order.promoCode) {
         const [promo] = await tx.select().from(promoCodes).where(eq(promoCodes.code, order.promoCode));
@@ -414,8 +436,11 @@ export async function modifyOrder(
       })));
       update.subtotal = quote.subtotal;
       update.deliveryFee = quote.deliveryFee;
+      update.serviceFee = quote.serviceFee;
+      update.smallOrderFee = quote.smallOrderFee;
+      update.deliveryKm = quote.deliveryKm;
       update.discount = discount + pointsDiscount;
-      update.total = Math.max(0, quote.subtotal + quote.deliveryFee - discount - pointsDiscount) + order.priorityFee + order.riderTip;
+      update.total = Math.max(0, quote.subtotal + quote.deliveryFee - discount - pointsDiscount) + quote.serviceFee + quote.smallOrderFee + order.priorityFee + order.riderTip;
       await tx.execute(sql`update payments set amount = ${update.total}, updated_at = now() where order_id = ${order.id}`);
     }
 

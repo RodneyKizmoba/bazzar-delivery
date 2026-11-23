@@ -11,6 +11,7 @@ import { loadUser } from "./lib/auth";
 import { errorHandler } from "./lib/http";
 import { releaseScheduledOrders } from "./lib/orderFlow";
 import { startDispatcher } from "./lib/dispatchEngine";
+import { startPayoutScheduler } from "./lib/payouts";
 import { authRouter } from "./routes/auth";
 import { catalogRouter } from "./routes/catalog";
 import { customerRouter } from "./routes/customer";
@@ -145,6 +146,7 @@ app.use(errorHandler);
   // libertar encomendas agendadas a cada minuto
   setInterval(() => { releaseScheduledOrders().catch((e) => console.error("[scheduler]", e)); }, 60_000);
   startDispatcher();
+  startPayoutScheduler();
 })().catch((e) => {
   console.error("Falha ao arrancar:", e);
   process.exit(1);

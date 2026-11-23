@@ -64,6 +64,7 @@ authRouter.post("/register", authLimiter, ah(async (req, res) => {
       phone: input.phone,
       userType: input.userType,
       isApproved: input.userType === "customer" || input.userType === "supplier", // estafetas aguardam aprovação
+      vehicleType: input.userType === "driver" ? input.vehicleType ?? "moto" : null,
       referralCode,
       referredBy: referrerId,
       loyaltyPoints: referrerId && input.userType === "customer" ? config.welcomeBonusPoints : 0,

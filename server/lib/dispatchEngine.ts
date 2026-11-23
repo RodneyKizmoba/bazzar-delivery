@@ -1,7 +1,8 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db";
 import { config } from "../config";
-import { dispatchOffers, driverPresence, orders, stores, type Order } from "@shared/schema";
+import { dispatchOffers, driverPresence, orders, stores, users, type Order, type RiderPayDetail, type VehicleType } from "@shared/schema";
+import { currentBusyLevel, hasLL, riderPayFor, roadKm } from "./fees";
 import { conflict, notFound } from "./http";
 import { publishDispatchFailed, publishOffer } from "./realtime";
 import { claimDelivery } from "./orderFlow";
@@ -36,8 +37,22 @@ export function distanceKm(a: LL, b: LL) {
 export function travelMinutes(km: number) {
   return (km * 1.3 / config.riderSpeedKmh) * 60;
 }
-/** Ganho do estafeta nesta entrega (taxa de entrega + gorjeta). */
-export const payoutOf = (o: Pick<Order, "deliveryFee" | "riderTip">) => o.deliveryFee + o.riderTip;
+/**
+ * Quanto esta entrega paga a este estafeta (sem a gorjeta e a espera): base + km até à loja + km até ao cliente,
+ * ajustado pelo veículo, hora e movimento, com mínimo por hora. Usa a última posição GPS do estafeta.
+ */
+export async function riderPayQuote(tx: any, order: Order, driverId: number, busy?: 0 | 1 | 2): Promise<RiderPayDetail> {
+  const [row] = await tx.select({ v: users.vehicleType, lat: driverPresence.latitude, lng: driverPresence.longitude, sl: stores.latitude, sg: stores.longitude })
+    .from(users).leftJoin(driverPresence, eq(driverPresence.userId, users.id)).innerJoin(stores, eq(stores.id, order.storeId))
+    .where(eq(users.id, driverId));
+  const store = row ? { latitude: row.sl, longitude: row.sg } : null;
+  const me = row ? { latitude: row.lat, longitude: row.lng } : null;
+  return riderPayFor({
+    pickupKm: hasLL(me) && hasLL(store) ? roadKm(me, store) : null,
+    dropKm: order.deliveryKm ?? (hasLL(store) && hasLL(order.deliveryAddress) ? roadKm(store, order.deliveryAddress) : null),
+    vehicle: (row?.v as VehicleType | null) ?? "moto", at: new Date(), busy: busy ?? await currentBusyLevel(tx),
+  });
+}
 
 /** Quando começar a procurar estafeta, a partir da hora em que a comida fica pronta. */
 export function dispatchTimes(now: Date, readyAt: Date, priority: boolean) {
@@ -48,7 +63,7 @@ export function dispatchTimes(now: Date, readyAt: Date, priority: boolean) {
 
 type Candidate = { id: number; km: number | null; idleMin: number };
 
-async function candidatesFor(orderId: number, store: { latitude: number | null; longitude: number | null }, isCash: boolean): Promise<Candidate[]> {
+async function candidatesFor(orderId: number, store: { latitude: number | null; longitude: number | null }): Promise<Candidate[]> {
   const staleMin = config.presenceStaleMin;
   const rows = await db.execute(sql`
     select u.id, p.latitude, p.longitude,
@@ -62,8 +77,6 @@ async function candidatesFor(orderId: number, store: { latitude: number | null; 
       and not exists (select 1 from orders o where o.driver_id = u.id and o.status in ('accepted','preparing','ready','picked_up'))
       and not exists (select 1 from dispatch_offers d where d.driver_id = u.id and d.status = 'pending')
       and not exists (select 1 from dispatch_offers d where d.driver_id = u.id and d.order_id = ${orderId})
-      and (${!isCash} or coalesce((select -sum(l.amount) from ledger_entries l where l.party_type = 'driver' and l.party_id = u.id
-             and l.kind in ('cash_collected','cash_deposit')), 0) < ${config.riderCashLimit})
   `);
   const list: Candidate[] = (rows.rows as any[]).map((r) => {
     const km = r.latitude != null && r.longitude != null && store.latitude != null && store.longitude != null
@@ -104,7 +117,7 @@ export async function advanceOrder(orderId: number, now = new Date()): Promise<O
     if (o.dispatchRound >= config.dispatchMaxRounds) return giveUp();
 
     const [store] = await tx.select({ latitude: stores.latitude, longitude: stores.longitude }).from(stores).where(eq(stores.id, o.storeId));
-    const cands = await candidatesFor(orderId, store ?? { latitude: null, longitude: null }, o.paymentMethod === "cash");
+    const cands = await candidatesFor(orderId, store ?? { latitude: null, longitude: null });
     const best = cands[0];
     if (!best) {
       const since = (o.dispatchAt ?? o.updatedAt).getTime();
@@ -119,9 +132,10 @@ export async function advanceOrder(orderId: number, now = new Date()): Promise<O
       const leaveAt = o.readyEstimateAt.getTime() - (travel + config.dispatchLeadMin) * 60_000;
       if (now.getTime() < leaveAt) return;
     }
+    const pay = await riderPayQuote(tx, o, best.id);
     const [offer] = await tx.insert(dispatchOffers).values({
       orderId, driverId: best.id, status: "pending", round: o.dispatchRound + 1,
-      distanceKm: best.km, payout: payoutOf(o), offeredAt: now,
+      distanceKm: best.km, payout: pay.total + o.riderTip, payDetail: pay, offeredAt: now,
       expiresAt: new Date(now.getTime() + config.dispatchOfferSeconds * 1000),
     }).returning();
     await tx.update(orders).set({ dispatchRound: o.dispatchRound + 1 }).where(eq(orders.id, orderId));

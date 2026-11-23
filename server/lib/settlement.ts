@@ -17,12 +17,19 @@ import { ledgerEntries, orders, stores, type Order } from "@shared/schema";
  * Pagamentos e entregas de numerário são registados pelo admin; nada se apaga, corrige-se com um "ajuste".
  */
 
-export function splitOrder(o: Pick<Order, "subtotal" | "deliveryFee" | "riderTip" | "priorityFee" | "discount" | "total">, pct: number) {
+/**
+ * Divisão de uma encomenda entregue:
+ *  - loja: comida − comissão;
+ *  - estafeta: valor da entrega (riderPay) + espera + 100% da gorjeta (independente do que o cliente pagou de entrega);
+ *  - PedeJá: comissão + taxa de entrega do cliente + taxa de serviço + encomenda pequena + prioridade − descontos − pagamento ao estafeta.
+ */
+export function splitOrder(o: Pick<Order, "subtotal" | "deliveryFee" | "riderTip" | "priorityFee" | "discount" | "total" | "serviceFee" | "smallOrderFee" | "riderPay" | "riderWaitFee">, pct: number, hasRider = true) {
   const commission = Math.round((o.subtotal * pct) / 100);
   const storeEarning = o.subtotal - commission;
-  const riderEarning = o.deliveryFee + o.riderTip;
-  const platform = commission + o.priorityFee - o.discount;
-  return { commission, storeEarning, riderEarning, platform };
+  const riderPay = hasRider ? (o.riderPay ?? o.deliveryFee) + o.riderWaitFee : 0;
+  const riderEarning = hasRider ? riderPay + o.riderTip : 0;
+  const platform = commission + o.deliveryFee + o.serviceFee + o.smallOrderFee + o.priorityFee - o.discount - riderPay;
+  return { commission, storeEarning, riderEarning, riderPay, platform };
 }
 
 /** Chamado dentro da transacção que marca a encomenda como entregue. Idempotente. */
@@ -30,10 +37,10 @@ export async function settleDeliveredOrder(tx: DbOrTx, order: Order) {
   if (order.settledAt) return;
   const [store] = await tx.select({ commissionPct: stores.commissionPct }).from(stores).where(eq(stores.id, order.storeId));
   const pct = store?.commissionPct ?? config.commissionPct;
-  const s = splitOrder(order, pct);
+  const s = splitOrder(order, pct, !!order.driverId);
   await tx.update(orders).set({
     commissionPct: pct, commissionAmount: s.commission, storeEarning: s.storeEarning,
-    riderEarning: order.driverId ? s.riderEarning : 0, settledAt: new Date(),
+    riderEarning: s.riderEarning, settledAt: new Date(),
   }).where(eq(orders.id, order.id));
   const rows: (typeof ledgerEntries.$inferInsert)[] = [
     { partyType: "store", partyId: order.storeId, orderId: order.id, kind: "order_earning", amount: s.storeEarning,
@@ -41,7 +48,7 @@ export async function settleDeliveredOrder(tx: DbOrTx, order: Order) {
   ];
   if (order.driverId) {
     rows.push({ partyType: "driver", partyId: order.driverId, orderId: order.id, kind: "order_earning", amount: s.riderEarning,
-      note: `${order.orderNumber}: entrega ${order.deliveryFee} Kz${order.riderTip ? ` + gorjeta ${order.riderTip} Kz` : ""}` });
+      note: `${order.orderNumber}: entrega ${order.riderPay ?? order.deliveryFee} Kz${order.riderWaitFee ? ` + espera ${order.riderWaitFee} Kz` : ""}${order.riderTip ? ` + gorjeta ${order.riderTip} Kz` : ""}` });
     if (order.paymentMethod === "cash") {
       rows.push({ partyType: "driver", partyId: order.driverId, orderId: order.id, kind: "cash_collected", amount: -order.total,
         note: `${order.orderNumber}: numerário recebido do cliente` });

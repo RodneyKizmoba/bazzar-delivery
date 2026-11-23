@@ -97,9 +97,14 @@ customerRouter.delete("/favorites/:storeId", requireAuth, ah(async (req, res) =>
 // ---------------------------------------------------------------------------
 customerRouter.post("/cart/quote", ah(async (req, res) => {
   const input = parse(quoteSchema, req.body);
+  let destination = null;
+  if (input.addressId && req.user) {
+    const [a] = await db.select().from(addresses).where(and(eq(addresses.id, input.addressId), eq(addresses.userId, req.user.id)));
+    destination = a ?? null;
+  }
   const quote = await buildQuote(db, {
     storeId: input.storeId, lines: input.items, user: req.user ?? null, promoCode: input.promoCode, usePoints: input.usePoints,
-    priority: input.priority, riderTip: input.riderTip,
+    priority: input.priority, riderTip: input.riderTip, destination,
   });
   res.json({ quote: quoteToJson(quote) });
 }));

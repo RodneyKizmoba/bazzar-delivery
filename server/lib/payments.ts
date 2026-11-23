@@ -7,7 +7,7 @@ import { conflict } from "./http";
 
 /**
  * Pagamentos.
- * - Numerário na entrega: sempre disponível; fica "pago" quando o estafeta marca a entrega.
+ * - Numerário: DESLIGADO (os clientes pagam tudo por banco). Só com ALLOW_CASH=1, em emergência.
  * - Métodos online (Multicaixa Express, Unitel Money, cartão, transferência):
  *     PAYMENTS_MODE=sandbox  → simulação para testes (marcado claramente como SANDBOX);
  *     PAYMENTS_MODE=live     → requer um gateway real configurado (ver docs/PAGAMENTOS.md);
@@ -24,7 +24,7 @@ function liveGatewayConfigured(): boolean {
 
 export function paymentMethods(): MethodInfo[] {
   return (["cash", ...ONLINE_METHODS] as PaymentMethod[]).map((id) => {
-    if (id === "cash") return { id, available: true, sandbox: false };
+    if (id === "cash") return config.allowCash ? { id, available: true, sandbox: false } : { id, available: false, sandbox: false, reason: "Só pagamentos por banco" };
     if (config.paymentsMode === "sandbox") return { id, available: true, sandbox: true };
     if (config.paymentsMode === "live" && liveGatewayConfigured()) return { id, available: true, sandbox: false };
     return { id, available: false, sandbox: false, reason: "Brevemente" };
@@ -33,7 +33,11 @@ export function paymentMethods(): MethodInfo[] {
 
 export function assertMethodAvailable(method: PaymentMethod) {
   const m = paymentMethods().find((x) => x.id === method);
-  if (!m?.available) throw conflict("Este método de pagamento ainda não está disponível. Escolha numerário na entrega.", "PAYMENT_METHOD_UNAVAILABLE");
+  if (!m?.available) {
+    throw conflict(method === "cash"
+      ? "A PedeJá não aceita numerário: pague por Multicaixa Express, Unitel Money ou transferência."
+      : "Este método de pagamento ainda não está disponível. Escolha outro.", "PAYMENT_METHOD_UNAVAILABLE");
+  }
 }
 
 /** Inicia o pagamento de uma encomenda (dentro da transacção de criação). */

@@ -6,6 +6,7 @@ import {
 } from "@shared/schema";
 import { config } from "../config";
 import { badRequest, conflict, notFound } from "./http";
+import { currentBusyLevel, customerDeliveryFee, hasLL, roadKm, serviceFeeFor, smallOrderFeeFor } from "./fees";
 
 export interface PricedLine {
   menuItem: MenuItem;
@@ -31,6 +32,11 @@ export interface Quote {
   plusSavings: number;
   priorityFee: number;
   riderTip: number;
+  serviceFee: number;
+  smallOrderFee: number;
+  smallOrderMin: number;
+  deliveryKm: number | null;
+  busyLevel: 0 | 1 | 2;
 }
 
 // ---------------------------------------------------------------------------
@@ -188,19 +194,25 @@ async function validatePromo(db: DbOrTx, code: string, user: User | null, store:
 
 export async function buildQuote(
   db: DbOrTx,
-  opts: { storeId: number; lines: CartLine[]; user: User | null; promoCode?: string | null; usePoints?: number; priority?: boolean; riderTip?: number },
+  opts: {
+    storeId: number; lines: CartLine[]; user: User | null; promoCode?: string | null; usePoints?: number; priority?: boolean; riderTip?: number;
+    destination?: { latitude?: number | null; longitude?: number | null } | null;
+    busyLevel?: 0 | 1 | 2; // ao alterar uma encomenda: manter o nível original
+  },
 ): Promise<Quote> {
   const [store] = await db.select().from(stores).where(eq(stores.id, opts.storeId));
   if (!store || !store.isApproved) throw notFound("Loja não encontrada");
 
   const lines = await priceLines(db, store.id, opts.lines);
   const subtotal = lines.reduce((s, l) => s + l.lineTotal, 0);
-  if (subtotal < store.minOrder) {
-    throw badRequest(`O valor mínimo de encomenda nesta loja é ${store.minOrder} Kz.`, "BELOW_MIN_ORDER");
-  }
+  // abaixo do mínimo já não bloqueia: paga a diferença como "taxa de encomenda pequena"
+  const smallOrderFee = smallOrderFeeFor(subtotal, store.minOrder);
+  const serviceFee = serviceFeeFor(subtotal);
 
   const isPlus = opts.user ? await hasActivePlus(db, opts.user.id) : false;
-  const baseDeliveryFee = store.deliveryFee;
+  const deliveryKm = hasLL(store) && hasLL(opts.destination) ? Math.round(roadKm(store, opts.destination) * 10) / 10 : null;
+  const busyLevel = opts.busyLevel ?? await currentBusyLevel(db);
+  const baseDeliveryFee = customerDeliveryFee(deliveryKm, busyLevel, store.deliveryFee);
   let deliveryFee = baseDeliveryFee;
   let plusSavings = 0;
   if (isPlus && subtotal >= config.plusFreeDeliveryMinOrder) {
@@ -237,8 +249,11 @@ export async function buildQuote(
   // extras fora dos descontos: entrega prioritária e gorjeta (100% para o estafeta)
   const priorityFee = opts.priority ? config.priorityFee : 0;
   const riderTip = Math.max(0, Math.floor(opts.riderTip || 0));
-  const total = Math.max(0, subtotal + deliveryFee - discount - pointsDiscount) + priorityFee + riderTip;
-  return { store, lines, subtotal, deliveryFee, baseDeliveryFee, discount, pointsRedeemed, pointsDiscount, total, promo, isPlus, plusSavings, priorityFee, riderTip };
+  const total = Math.max(0, subtotal + deliveryFee - discount - pointsDiscount) + serviceFee + smallOrderFee + priorityFee + riderTip;
+  return {
+    store, lines, subtotal, deliveryFee, baseDeliveryFee, discount, pointsRedeemed, pointsDiscount, total, promo, isPlus, plusSavings, priorityFee, riderTip,
+    serviceFee, smallOrderFee, smallOrderMin: store.minOrder > 0 ? store.minOrder : config.smallOrderMin, deliveryKm, busyLevel,
+  };
 }
 
 export function quoteToJson(q: Quote) {
@@ -262,6 +277,12 @@ export function quoteToJson(q: Quote) {
     pointsDiscount: q.pointsDiscount,
     priorityFee: q.priorityFee,
     riderTip: q.riderTip,
+    serviceFee: q.serviceFee,
+    smallOrderFee: q.smallOrderFee,
+    smallOrderMin: q.smallOrderMin,
+    deliveryKm: q.deliveryKm,
+    busyLevel: q.busyLevel,
+    feeRules: { serviceFeePct: config.serviceFeePct, serviceFeeMin: config.serviceFeeMin, serviceFeeMax: config.serviceFeeMax },
     total: q.total,
     promoCode: q.promo?.code ?? null,
     isPlus: q.isPlus,

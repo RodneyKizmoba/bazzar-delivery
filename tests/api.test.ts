@@ -1,8 +1,8 @@
 /**
  * PedeJá — API end-to-end + security test suite.
  * Run against a FRESH seeded DB:  npx tsx tests/api.test.ts
- * The server must run with DISPATCH_OFFER_SECONDS=4 DISPATCH_TICK_MS=500 (fast dispatch timeouts), e.g.
- *   DISPATCH_OFFER_SECONDS=4 DISPATCH_TICK_MS=500 bash scripts/local-server.sh
+ * The server must run with fast dispatch timeouts, fixed pricing (no "busy" surcharge) and a test clock for payouts:
+ *   DISPATCH_OFFER_SECONDS=4 DISPATCH_TICK_MS=500 BUSY_PRICING=0 ALLOW_TEST_CLOCK=1 bash scripts/local-server.sh
  * BASE env var overrides the server URL (default http://localhost:5055).
  */
 import WebSocket from "ws";
@@ -108,6 +108,8 @@ async function main() {
 
   const anon = new Client("anon");
   const admin = new Client("admin"); await admin.login("admin", "Admin#2026demo");
+  // código de entrega (o cliente di-lo ao estafeta): nos testes lê-se como admin
+  const pinFor = async (id: number) => (await admin.get(`/api/orders/${id}`)).body.order?.deliveryCode as string;
   const cli = new Client("cliente"); const cliUser = await cli.login("cliente", "Cliente#2026");
   const cli2 = new Client("cliente2"); await cli2.login("cliente2", "Cliente#2026");
   const loja = new Client("loja"); await loja.login("loja", "Loja#2026demo");
@@ -131,7 +133,7 @@ async function main() {
     if (r.status !== 200) throw new Error(`claim: ${r.status} ${r.text}`);
     r = await driver.post(`/api/driver/orders/${orderId}/status`, { status: "picked_up" });
     if (r.status !== 200) throw new Error(`pickup: ${r.status} ${r.text}`);
-    r = await driver.post(`/api/driver/orders/${orderId}/status`, { status: "delivered" });
+    r = await driver.post(`/api/driver/orders/${orderId}/status`, { status: "delivered", pin: await pinFor(orderId) });
     if (r.status !== 200) throw new Error(`deliver: ${r.status} ${r.text}`);
   }
 
@@ -236,7 +238,7 @@ async function main() {
   // =========================================================================
   await section("Quote & price tampering", async () => {
     let r = await cli.post("/api/cart/quote", { storeId: 1, items: [FRANGO, FRANGO_FUNJE] });
-    check("quote computes server-side subtotal (4500 + 9600 = 14100) + fee 1000", r.status === 200 && r.body.quote.subtotal === 14100 && r.body.quote.deliveryFee === 1000 && r.body.quote.total === 15100, r.body?.quote);
+    check("quote computes server-side subtotal (4500 + 9600 = 14100) + fee 1000", r.status === 200 && r.body.quote.subtotal === 14100 && r.body.quote.deliveryFee === 1000 && r.body.quote.serviceFee === 710 && r.body.quote.total === 14100 + 1000 + 710, r.body?.quote);
     r = await cli.post("/api/cart/quote", { storeId: 1, items: [{ menuItemId: 1, quantity: 1, optionIds: [4] }] });
     check("missing required option group -> 400 OPTION_REQUIRED", r.status === 400 && r.body.code === "OPTION_REQUIRED", r.body);
     r = await cli.post("/api/cart/quote", { storeId: 1, items: [{ menuItemId: 1, quantity: 1, optionIds: [1, 2, 4] }] });
@@ -250,11 +252,11 @@ async function main() {
 
     // tampering on create order
     r = await cli.post("/api/orders", {
-      storeId: 1, items: [{ ...FRANGO, price: 1, unitPrice: 1, lineTotal: 1, name: "hacked" }], addressId: addrTalatona, paymentMethod: "cash",
+      storeId: 1, items: [{ ...FRANGO, price: 1, unitPrice: 1, lineTotal: 1, name: "hacked" }], addressId: addrTalatona, paymentMethod: "multicaixa_express",
       subtotal: 1, total: 1, deliveryFee: 0, discount: 99999, status: "delivered", paymentStatus: "paid", customerId: 3, driverId: 7, pointsRedeemed: -500,
     });
     const o = r.body.order;
-    check("create order ignores client price/total/status fields", r.status === 201 && o.subtotal === 4500 && o.total === 5500 && o.status === "pending" && o.paymentStatus === "pending" && o.customerId === cliUser.id && o.driverId === null && o.discount === 0, r.body);
+    check("create order ignores client price/total/status fields", r.status === 201 && o.subtotal === 4500 && o.deliveryFee === 500 && o.serviceFee === 230 && o.total === 4500 + 500 + 230 && o.status === "pending" && o.paymentStatus === "paid" && o.customerId === cliUser.id && o.driverId === null && o.discount === 0, r.body);
     if (o) {
       const d = await cli.get(`/api/orders/${o.id}`);
       check("order item name/unit price come from DB", d.body.items[0].name === "Frango grelhado" && d.body.items[0].unitPrice === 4500, d.body.items);
@@ -266,25 +268,25 @@ async function main() {
   await section("Priority delivery, rider tip, cutlery", async () => {
     let r = await cli.post("/api/cart/quote", { storeId: 1, items: [FRANGO], priority: true, riderTip: 300 });
     const q = r.body.quote;
-    check("quote adds priority fee (500) and tip (300): 4500+1000+500+300 = 6300", r.status === 200 && q.priorityFee === 500 && q.riderTip === 300 && q.total === 6300, q);
+    check("quote adds priority fee (500) and tip (300): 4500+1000+500+300 = 6300", r.status === 200 && q.priorityFee === 500 && q.riderTip === 300 && q.total === 4500 + 1000 + 500 + 300 + 230, q);
     check("quote exposes the priority option (fee + minutes saved)", q?.priorityOption?.fee === 500 && q?.priorityOption?.minutesSaved > 0, q?.priorityOption);
     r = await cli.post("/api/cart/quote", { storeId: 1, items: [FRANGO], riderTip: -50 });
     check("negative tip rejected (400)", r.status === 400, r.status);
     r = await cli.post("/api/cart/quote", { storeId: 1, items: [FRANGO], riderTip: 50000 });
     check("tip above 20 000 Kz rejected (400)", r.status === 400, r.status);
-    r = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash", priority: true, riderTip: 200, cutlery: true });
+    r = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "multicaixa_express", priority: true, riderTip: 200, cutlery: true });
     const o = r.body.order;
-    check("order stores priority fee, tip and cutlery", r.status === 201 && o.priorityFee === 500 && o.riderTip === 200 && o.cutlery === true && o.total === 4500 + 1000 + 500 + 200, r.body);
+    check("order stores priority fee, tip and cutlery", r.status === 201 && o.priorityFee === 500 && o.riderTip === 200 && o.cutlery === true && o.total === 4500 + o.deliveryFee + 500 + 200 + 230, r.body);
     if (o) {
       const pay = await cli.get(`/api/orders/${o.id}`);
       check("order detail returns tip and cutlery", pay.body.order?.riderTip === 200 && pay.body.order?.cutlery === true, pay.body.order);
       await cli.post(`/api/orders/${o.id}/cancel`, {});
     }
-    r = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash" });
+    r = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "multicaixa_express" });
     check("defaults: no priority, no tip, no cutlery", r.status === 201 && r.body.order.priorityFee === 0 && r.body.order.riderTip === 0 && r.body.order.cutlery === false, r.body.order);
     if (r.body.order) await cli.post(`/api/orders/${r.body.order.id}/cancel`, {});
     const later = new Date(Date.now() + 26 * 3600_000).toISOString();
-    r = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash", priority: true, scheduledFor: later });
+    r = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "multicaixa_express", priority: true, scheduledFor: later });
     check("priority + scheduled rejected (PRIORITY_NOT_FOR_SCHEDULED)", r.status === 400 && r.body.code === "PRIORITY_NOT_FOR_SCHEDULED", r.body);
   });
 
@@ -297,7 +299,7 @@ async function main() {
     const cLive = await openLive(cli), c2Live = await openLive(cli2), sLive = await openLive(loja), dLive = await openLive(est), aLive = await openLive(admin);
     check("customer, store, rider and admin connect", [cLive, c2Live, sLive, dLive, aLive].every((x) => !x.error && x.events.some((e) => e.type === "hello")));
 
-    const o = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash" });
+    const o = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "multicaixa_express" });
     const id = o.body.order.id;
     check("customer gets the new order live", await waitFor(cLive.events, (e) => e.type === "order" && e.id === id && e.step === "created"));
     check("store gets the new order live", await waitFor(sLive.events, (e) => e.type === "order" && e.id === id));
@@ -329,7 +331,7 @@ async function main() {
     check("rider marks 'at the customer'", r.status === 200 && !!r.body.order.driverAtCustomerAt, r.body);
     const tr = await cli.get(`/api/orders/${id}/tracking`);
     check("tracking shows the three rider moments", !!tr.body.driverAssignedAt && !!tr.body.driverAtStoreAt && !!tr.body.driverAtCustomerAt, tr.body);
-    await est.post(`/api/driver/orders/${id}/status`, { status: "delivered" });
+    await est.post(`/api/driver/orders/${id}/status`, { status: "delivered", pin: await pinFor(id) });
     check("customer sees 'delivered' live", await waitFor(cLive.events, (e) => e.id === id && e.status === "delivered"));
     for (const x of [cLive, c2Live, sLive, dLive, aLive]) x.ws.close();
   });
@@ -348,7 +350,7 @@ async function main() {
     r = await loja.get("/api/partner/integration");
     check("integration status shows only a hint, never the key", r.body.keyActive === true && !JSON.stringify(r.body).includes(key), r.body);
     const pos = (path: string, body?: unknown) => (body === undefined ? anon.req("GET", path, undefined, { authorization: `Bearer ${key}` }) : anon.post(path, body, { authorization: `Bearer ${key}` }));
-    const o = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash", cutlery: true });
+    const o = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "multicaixa_express", cutlery: true });
     r = await pos("/api/pos/orders");
     const mine = r.body.orders?.find((x: any) => x.id === o.body.order?.id);
     check("POS lists the store's active orders with items", r.status === 200 && !!mine && mine.items.length > 0 && mine.cutlery === true, r.body);
@@ -380,7 +382,7 @@ async function main() {
 
   // =========================================================================
   await section("Input validation", async () => {
-    const base = { storeId: 1, addressId: addrTalatona, paymentMethod: "cash" };
+    const base = { storeId: 1, addressId: addrTalatona, paymentMethod: "multicaixa_express" };
     const bad: [string, any][] = [
       ["quantity 0", { ...base, items: [{ ...FRANGO, quantity: 0 }] }],
       ["quantity -2", { ...base, items: [{ ...FRANGO, quantity: -2 }] }],
@@ -424,7 +426,7 @@ async function main() {
 
   // =========================================================================
   await section("Access control between users", async () => {
-    const r0 = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash", notes: "privado" });
+    const r0 = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "multicaixa_express", notes: "privado" });
     const oid = r0.body.order.id;
     let r = await cli2.get(`/api/orders/${oid}`);
     check("other customer cannot view order (403)", r.status === 403, r.status);
@@ -442,7 +444,7 @@ async function main() {
     check("cannot edit another user's address (403)", r.status === 403, r.status);
     r = await cli2.del(`/api/addresses/${addrTalatona}`);
     check("cannot delete another user's address (403)", r.status === 403, r.status);
-    r = await cli2.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash" });
+    r = await cli2.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "multicaixa_express" });
     check("cannot order to another user's address (400 INVALID_ADDRESS)", r.status === 400 && r.body.code === "INVALID_ADDRESS", r.body);
     r = await tia.get(`/api/orders/${oid}`);
     check("supplier of other store cannot view order", r.status === 403, r.status);
@@ -479,9 +481,9 @@ async function main() {
     check("supplier forbidden on admin", r.status === 403, r.status);
     r = await est.get("/api/partner/store");
     check("driver forbidden on partner", r.status === 403, r.status);
-    r = await loja.post("/api/orders", { storeId: 2, items: [{ menuItemId: 12, quantity: 1, optionIds: [] }], addressId: 1, paymentMethod: "cash" });
+    r = await loja.post("/api/orders", { storeId: 2, items: [{ menuItemId: 12, quantity: 1, optionIds: [] }], addressId: 1, paymentMethod: "multicaixa_express" });
     check("supplier cannot place orders via /api/orders (403)", r.status === 403, r.status);
-    r = await anon.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash" });
+    r = await anon.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "multicaixa_express" });
     check("anonymous cannot place order (401)", r.status === 401, r.status);
     r = await admin.patch(`/api/admin/users/1`, { isActive: false });
     check("admin cannot deactivate self", r.status === 400, r.status);
@@ -490,7 +492,7 @@ async function main() {
 
   // =========================================================================
   await section("Order lifecycle & state machine", async () => {
-    const r0 = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash" });
+    const r0 = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "multicaixa_express" });
     const id = r0.body.order.id;
     let r = await est.post(`/api/driver/orders/${id}/claim`);
     check("driver cannot claim pending (not yet accepted) order", r.status === 409, r.status);
@@ -508,7 +510,7 @@ async function main() {
     check("customer cannot cancel after preparing (409 NOT_CANCELLABLE)", r.status === 409 && r.body.code === "NOT_CANCELLABLE", r.body);
     r = await est.post(`/api/driver/orders/${id}/claim`);
     check("driver claims accepted/preparing order", r.status === 200 && r.body.order.driverId === 7, r.body);
-    r = await est.post(`/api/driver/orders/${id}/status`, { status: "delivered" });
+    r = await est.post(`/api/driver/orders/${id}/status`, { status: "delivered", pin: await pinFor(id) });
     check("driver cannot deliver before pickup (409)", r.status === 409, r.body);
     r = await est.post(`/api/driver/orders/${id}/status`, { status: "picked_up" });
     check("driver cannot pick up before store marks ready (409)", r.status === 409, r.body);
@@ -523,8 +525,8 @@ async function main() {
     r = await est.post(`/api/driver/orders/${id}/status`, { status: "picked_up" });
     check("driver picked_up", r.status === 200, r.body);
     r = await est.get("/api/driver/current");
-    check("driver current shows collectCash = total for cash", r.body.order?.id === id && r.body.order.collectCash === 5500, r.body);
-    r = await est.post(`/api/driver/orders/${id}/status`, { status: "delivered" });
+    check("paid by bank: rider collects no cash", r.body.order?.id === id && r.body.order.collectCash === 0, r.body);
+    r = await est.post(`/api/driver/orders/${id}/status`, { status: "delivered", pin: await pinFor(id) });
     check("driver delivered", r.status === 200 && r.body.order.status === "delivered" && r.body.order.paymentStatus === "paid", r.body);
     r = await admin.post(`/api/admin/orders/${id}/status`, { status: "pending" });
     check("admin cannot move delivered -> pending (409)", r.status === 409, r.body);
@@ -536,7 +538,7 @@ async function main() {
     check("order events history recorded (>= 6 events)", r.body.events.length >= 6, r.body.events?.length);
 
     // customer cancel while accepted
-    const r1 = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash" });
+    const r1 = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "multicaixa_express" });
     await loja.post(`/api/partner/orders/${r1.body.order.id}/status`, { status: "accepted" });
     r = await cli.post(`/api/orders/${r1.body.order.id}/cancel`, { reason: "mudei de ideias" });
     check("customer can cancel free while accepted", r.status === 200 && r.body.order.status === "cancelled", r.body);
@@ -544,7 +546,7 @@ async function main() {
     check("store cannot prepare a cancelled order", r.status === 409, r.body);
 
     // store reject
-    const r2 = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash" });
+    const r2 = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "multicaixa_express" });
     r = await loja.post(`/api/partner/orders/${r2.body.order.id}/status`, { status: "rejected", note: "Sem frango" });
     check("store can reject pending order with reason", r.status === 200 && r.body.order.status === "rejected" && r.body.order.cancelReason === "Sem frango", r.body);
 
@@ -574,20 +576,22 @@ async function main() {
 
   // =========================================================================
   await section("Modify order reprices", async () => {
-    let r = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash", notes: "a" });
+    let r = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "multicaixa_express", notes: "a" });
     const id = r.body.order.id;
     r = await cli.patch(`/api/orders/${id}`, { items: [FRANGO_FUNJE, AGUA], notes: "b" });
-    check("modify reprices: subtotal 10100, total 11100", r.status === 200 && r.body.order.subtotal === 10100 && r.body.order.total === 11100 && r.body.order.notes === "b", r.body);
+    check("paid order: items can't change (409 PAID_NOT_MODIFIABLE)", r.status === 409 && r.body.code === "PAID_NOT_MODIFIABLE", r.body);
+    r = await cli.patch(`/api/orders/${id}`, { notes: "b" });
+    check("paid order: notes can still change", r.status === 200 && r.body.order.notes === "b", r.body);
     r = await cli.get(`/api/orders/${id}`);
-    check("modified order items replaced", r.body.items.length === 2 && r.body.items.some((i: any) => i.unitPrice === 4800 && i.quantity === 2), r.body.items);
+    check("items unchanged", r.body.items.length === 1, r.body.items);
     r = await cli.patch(`/api/orders/${id}`, { items: [{ ...FRANGO, price: 1, unitPrice: 1 }], total: 1 });
-    check("modify ignores tampered prices", r.status === 200 && r.body.order.total === 5500, r.body);
+    check("tampered modify refused too", r.status === 409, r.body);
     r = await cli.patch(`/api/orders/${id}`, { addressId: addrIngombota });
     check("modify to address in unserved zone -> 409 ZONE_NOT_SERVED", r.status === 409, r.body);
     r = await cli.patch(`/api/orders/${id}`, { scheduledFor: luanda(1, 12) });
     check("cannot schedule an already-pending order (409)", r.status === 409, r.body);
     // scheduled order modify time
-    r = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash", scheduledFor: inMin(180) });
+    r = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "multicaixa_express", scheduledFor: inMin(180) });
     check("scheduled order created with status 'scheduled'", r.status === 201 && r.body.order.status === "scheduled", r.body);
     const tr = await cli.get(`/api/orders/${r.body.order.id}/tracking`);
     check("scheduledFor round-trips exactly (no timezone shift)", Math.abs(new Date(tr.body.scheduledFor).getTime() - new Date(r.body.order.scheduledFor).getTime()) < 1000 && Math.abs(new Date(tr.body.scheduledFor).getTime() - (Date.now() + 180 * 60_000)) < 120_000, tr.body.scheduledFor);
@@ -600,36 +604,36 @@ async function main() {
     check("store cannot accept a still-scheduled order (409)", r.status === 409, r.body);
     // modify with promo kept
     const nc = await newCustomer("mod");
-    r = await nc.c.post("/api/orders", { storeId: 1, items: [FRANGO_FUNJE], addressId: nc.addressId, paymentMethod: "cash", promoCode: "bemvindo" });
-    check("BEMVINDO (lowercase) applied 20% of 9600 = 1920", r.status === 201 && r.body.order.discount === 1920 && r.body.order.total === 9600 + 1000 - 1920, r.body);
+    r = await nc.c.post("/api/orders", { storeId: 1, items: [FRANGO_FUNJE], addressId: nc.addressId, paymentMethod: "multicaixa_express", promoCode: "bemvindo" });
+    check("BEMVINDO (lowercase) applied 20% of 9600 = 1920", r.status === 201 && r.body.order.discount === 1920 && r.body.order.total === 9600 + 1000 - 1920 + 480, r.body);
     r = await nc.c.patch(`/api/orders/${r.body.order.id}`, { items: [FRANGO] });
-    check("modify keeps promo and recomputes 20% of 4500 = 900", r.status === 200 && r.body.order.discount === 900 && r.body.order.total === 4600, r.body);
+    check("promo order paid by bank: items can't change (409)", r.status === 409 && r.body.code === "PAID_NOT_MODIFIABLE", r.body);
     await cli.post(`/api/orders/${id}/cancel`, {}); await cli.post(`/api/orders/${sid}/cancel`, {});
   });
 
   // =========================================================================
   await section("Schedule bounds, closed store, zones", async () => {
-    let r = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash", scheduledFor: inMin(10) });
+    let r = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "multicaixa_express", scheduledFor: inMin(10) });
     check("schedule 10 min ahead -> 400 SCHEDULE_TOO_SOON", r.status === 400 && r.body.code === "SCHEDULE_TOO_SOON", r.body);
-    r = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash", scheduledFor: inMin(25 * 60) });
+    r = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "multicaixa_express", scheduledFor: inMin(25 * 60) });
     check("schedule 25h ahead -> 400 SCHEDULE_TOO_FAR", r.status === 400 && r.body.code === "SCHEDULE_TOO_FAR", r.body);
-    r = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash", scheduledFor: new Date(Date.now() - 3600_000).toISOString() });
+    r = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "multicaixa_express", scheduledFor: new Date(Date.now() - 3600_000).toISOString() });
     check("schedule in the past -> 400", r.status === 400, r.body);
     // Pizzaria Ilha 11:00–23:30; schedule tomorrow 03:00 Luanda (within 24h if now > 03:00)
     const t3 = luanda(1, 3);
     if (new Date(t3).getTime() - Date.now() < 24 * 3600_000 && new Date(t3).getTime() - Date.now() > 3600_000) {
-      r = await cli.post("/api/orders", { storeId: 3, items: [{ menuItemId: 21, quantity: 1, optionIds: [] }], addressId: addrIngombota, paymentMethod: "cash", scheduledFor: t3 });
+      r = await cli.post("/api/orders", { storeId: 3, items: [{ menuItemId: 21, quantity: 1, optionIds: [] }], addressId: addrIngombota, paymentMethod: "multicaixa_express", scheduledFor: t3 });
       check("schedule outside opening hours (03:00 at Pizzaria Ilha) -> 409 OUTSIDE_HOURS", r.status === 409 && r.body.code === "OUTSIDE_HOURS", r.body);
     }
-    r = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrIngombota, paymentMethod: "cash" });
+    r = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrIngombota, paymentMethod: "multicaixa_express" });
     check("zone not served -> 409 ZONE_NOT_SERVED", r.status === 409 && r.body.code === "ZONE_NOT_SERVED", r.body);
-    r = await cli.post("/api/orders", { storeId: 11, items: [{ menuItemId: 55, quantity: 1, optionIds: [] }], addressId: addrTalatona, paymentMethod: "cash" });
+    r = await cli.post("/api/orders", { storeId: 11, items: [{ menuItemId: 55, quantity: 1, optionIds: [] }], addressId: addrTalatona, paymentMethod: "multicaixa_express" });
     check("order at unapproved store -> 404", r.status === 404, r.body);
     // store temporarily closed
     await loja.patch("/api/partner/store", { isOpen: false });
-    r = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash" });
+    r = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "multicaixa_express" });
     check("store closed (isOpen=false) -> 409 STORE_CLOSED", r.status === 409 && r.body.code === "STORE_CLOSED", r.body);
-    r = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash", scheduledFor: inMin(120) });
+    r = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "multicaixa_express", scheduledFor: inMin(120) });
     check("closed store still accepts scheduled order", r.status === 201, r.body);
     if (r.status === 201) await cli.post(`/api/orders/${r.body.order.id}/cancel`, {});
     await loja.patch("/api/partner/store", { isOpen: true });
@@ -637,7 +641,7 @@ async function main() {
     const nowL = new Date(Date.now() + 3600_000).getUTCHours();
     const o = String((nowL + 2) % 24).padStart(2, "0"), c = String((nowL + 4) % 24).padStart(2, "0");
     await loja.patch("/api/partner/store", { openingTime: `${o}:00`, closingTime: `${c}:00` });
-    r = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash" });
+    r = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "multicaixa_express" });
     check("outside opening hours immediate order -> 409 OUTSIDE_HOURS", r.status === 409 && r.body.code === "OUTSIDE_HOURS", r.body);
     const st = await anon.get("/api/stores/1");
     check("store card isOpenNow=false outside hours", st.body.store.isOpenNow === false, st.body.store);
@@ -658,21 +662,23 @@ async function main() {
     r = await loja.patch("/api/partner/store", { theme: null });
     check("partner resets theme to automatic", r.status === 200 && r.body.store.theme === null, r.body);
     // min order
-    r = await cli.post("/api/orders", { storeId: 4, items: [{ menuItemId: 26, quantity: 1, optionIds: [] }], addressId: addrIngombota, paymentMethod: "cash" });
-    check("below store minimum order -> 400 BELOW_MIN_ORDER", r.status === 400 && r.body.code === "BELOW_MIN_ORDER", r.body);
+    r = await cli.post("/api/orders", { storeId: 4, items: [{ menuItemId: 26, quantity: 1, optionIds: [] }], addressId: addrIngombota, paymentMethod: "multicaixa_express" });
+    const st4 = (await anon.get("/api/stores/4")).body.store;
+    check("below store minimum: order allowed with small-order fee = the difference", r.status === 201 && r.body.order.smallOrderFee === r.body.order.total - r.body.order.subtotal - r.body.order.deliveryFee - r.body.order.serviceFee && r.body.order.smallOrderFee > 0 && r.body.order.subtotal + r.body.order.smallOrderFee === st4?.minOrder, { o: r.body.order, min: st4?.minOrder });
+    if (r.status === 201) await cli.post(`/api/orders/${r.body.order.id}/cancel`, {});
   });
 
   // =========================================================================
   await section("Home bakery pre-order, notice, capacity", async () => {
-    let r = await cli2.post("/api/orders", { storeId: 10, items: [{ menuItemId: 52, quantity: 1, optionIds: [] }], addressId: cli2Addr, paymentMethod: "cash" });
+    let r = await cli2.post("/api/orders", { storeId: 10, items: [{ menuItemId: 52, quantity: 1, optionIds: [] }], addressId: cli2Addr, paymentMethod: "multicaixa_express" });
     check("home bakery immediate order -> 400 PREORDER_REQUIRED", r.status === 400 && r.body.code === "PREORDER_REQUIRED", r.body);
-    r = await cli2.post("/api/orders", { storeId: 10, items: [{ menuItemId: 52, quantity: 1, optionIds: [] }], addressId: cli2Addr, paymentMethod: "cash", scheduledFor: inMin(20 * 60) });
+    r = await cli2.post("/api/orders", { storeId: 10, items: [{ menuItemId: 52, quantity: 1, optionIds: [] }], addressId: cli2Addr, paymentMethod: "multicaixa_express", scheduledFor: inMin(20 * 60) });
     check("home bakery with 20h notice (< 24h) -> 400 NOTICE_TOO_SHORT", r.status === 400 && r.body.code === "NOTICE_TOO_SHORT", r.body);
-    r = await cli2.post("/api/orders", { storeId: 10, items: [{ menuItemId: 52, quantity: 1, optionIds: [] }], addressId: cli2Addr, paymentMethod: "cash", scheduledFor: luanda(8, 10) });
+    r = await cli2.post("/api/orders", { storeId: 10, items: [{ menuItemId: 52, quantity: 1, optionIds: [] }], addressId: cli2Addr, paymentMethod: "multicaixa_express", scheduledFor: luanda(8, 10) });
     check("home bakery 8 days ahead -> 400 SCHEDULE_TOO_FAR", r.status === 400 && r.body.code === "SCHEDULE_TOO_FAR", r.body);
-    r = await cli2.post("/api/orders", { storeId: 10, items: [{ menuItemId: 52, quantity: 1, optionIds: [] }], addressId: cli2Addr, paymentMethod: "cash", scheduledFor: luanda(2, 21) });
+    r = await cli2.post("/api/orders", { storeId: 10, items: [{ menuItemId: 52, quantity: 1, optionIds: [] }], addressId: cli2Addr, paymentMethod: "multicaixa_express", scheduledFor: luanda(2, 21) });
     check("home bakery at 21:00 (closes 19:00) -> 409 OUTSIDE_HOURS", r.status === 409, r.body);
-    r = await cli2.post("/api/orders", { storeId: 10, items: [{ menuItemId: 52, quantity: 1, optionIds: [] }], addressId: cli2Addr, paymentMethod: "cash", scheduledFor: luanda(5, 10) });
+    r = await cli2.post("/api/orders", { storeId: 10, items: [{ menuItemId: 52, quantity: 1, optionIds: [] }], addressId: cli2Addr, paymentMethod: "multicaixa_express", scheduledFor: luanda(5, 10) });
     check("home bakery 5 days ahead accepted (pre-order up to 7 days)", r.status === 201 && r.body.order.status === "scheduled", r.body);
     if (r.status === 201) {
       const preId = r.body.order.id;
@@ -689,7 +695,7 @@ async function main() {
     const custs = [{ c: cli2, addressId: cli2Addr }, { c: cli, addressId: addrTalatona }];
     for (let i = 0; i < 6; i++) { const n = await newCustomer(`cap${i}`, {}, "Kilamba"); custs.push({ c: n.c, addressId: n.addressId }); }
     const day = luanda(3, 11);
-    const rs = await Promise.all(custs.map((x, i) => x.c.post("/api/orders", { storeId: 10, items: [{ menuItemId: 52, quantity: 1, optionIds: [] }], addressId: x.addressId, paymentMethod: "cash", scheduledFor: luanda(3, 9 + i) })));
+    const rs = await Promise.all(custs.map((x, i) => x.c.post("/api/orders", { storeId: 10, items: [{ menuItemId: 52, quantity: 1, optionIds: [] }], addressId: x.addressId, paymentMethod: "multicaixa_express", scheduledFor: luanda(3, 9 + i) })));
     const ok = rs.filter((x) => x.status === 201).length;
     const full = rs.filter((x) => x.status === 409 && x.body.code === "STORE_FULL_DAY").length;
     check(`8 parallel bakery orders same day -> exactly 5 succeed (got ${ok} ok, ${full} full)`, ok === 5 && full === 3, rs.map((x) => x.status + ":" + (x.body?.code ?? "")));
@@ -698,17 +704,17 @@ async function main() {
     const winner = rs.findIndex((x) => x.status === 201);
     await custs[winner].c.post(`/api/orders/${rs[winner].body.order.id}/cancel`, {});
     const loser = rs.findIndex((x) => x.status === 409);
-    r = await custs[loser].c.post("/api/orders", { storeId: 10, items: [{ menuItemId: 52, quantity: 1, optionIds: [] }], addressId: custs[loser].addressId, paymentMethod: "cash", scheduledFor: luanda(3, 17) });
+    r = await custs[loser].c.post("/api/orders", { storeId: 10, items: [{ menuItemId: 52, quantity: 1, optionIds: [] }], addressId: custs[loser].addressId, paymentMethod: "multicaixa_express", scheduledFor: luanda(3, 17) });
     check("capacity slot freed after cancellation", r.status === 201, r.body);
     // modify scheduled order into the full day
-    const d4 = await cli2.post("/api/orders", { storeId: 10, items: [{ menuItemId: 52, quantity: 1, optionIds: [] }], addressId: cli2Addr, paymentMethod: "cash", scheduledFor: luanda(4, 10) });
+    const d4 = await cli2.post("/api/orders", { storeId: 10, items: [{ menuItemId: 52, quantity: 1, optionIds: [] }], addressId: cli2Addr, paymentMethod: "multicaixa_express", scheduledFor: luanda(4, 10) });
     r = await cli2.patch(`/api/orders/${d4.body.order.id}`, { scheduledFor: luanda(3, 12) });
     check("moving a pre-order into a full day -> 409 STORE_FULL_DAY", r.status === 409 && r.body.code === "STORE_FULL_DAY", r.body);
     // partner settings for notice/capacity/payout
     r = await tia.patch("/api/partner/store", { maxOrdersPerDay: 7, minNoticeMin: 2880, payoutMethod: "unitel_money", payoutReference: "923000008", isApproved: true, ratingAvg: 5, ownerId: 1 });
     check("partner updates notice/capacity/payout; cannot inject isApproved/rating/owner",
       r.status === 200 && r.body.store.maxOrdersPerDay === 7 && r.body.store.minNoticeMin === 2880 && r.body.store.payoutMethod === "unitel_money" && r.body.store.ownerId === 6, r.body?.store);
-    r = await cli2.post("/api/orders", { storeId: 10, items: [{ menuItemId: 52, quantity: 1, optionIds: [] }], addressId: cli2Addr, paymentMethod: "cash", scheduledFor: inMin(30 * 60) });
+    r = await cli2.post("/api/orders", { storeId: 10, items: [{ menuItemId: 52, quantity: 1, optionIds: [] }], addressId: cli2Addr, paymentMethod: "multicaixa_express", scheduledFor: inMin(30 * 60) });
     check("new 48h notice enforced (30h ahead rejected)", r.status === 400 && r.body.code === "NOTICE_TOO_SHORT", r.body);
     await tia.patch("/api/partner/store", { maxOrdersPerDay: 5, minNoticeMin: 1440 });
   });
@@ -720,7 +726,7 @@ async function main() {
     const reg = await d2.post("/api/auth/register", { username: `drvb_${uniq}`, password: "Teste#2026xx", fullName: "Driver Dois", phone: "+244923111666", userType: "driver" });
     let r = await admin.patch(`/api/admin/users/${reg.body.user.id}`, { isApproved: true });
     check("admin approves new driver", r.status === 200 && r.body.user.isApproved === true, r.body);
-    const o = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash" });
+    const o = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "multicaixa_express" });
     const id = o.body.order.id;
     await loja.post(`/api/partner/orders/${id}/status`, { status: "accepted" });
     const [a, b] = await Promise.all([est.post(`/api/driver/orders/${id}/claim`), d2.post(`/api/driver/orders/${id}/claim`)]);
@@ -732,10 +738,10 @@ async function main() {
     await loja.post(`/api/partner/orders/${id}/status`, { status: "preparing" });
     await loja.post(`/api/partner/orders/${id}/status`, { status: "ready" });
     await winner.post(`/api/driver/orders/${id}/status`, { status: "picked_up" });
-    await winner.post(`/api/driver/orders/${id}/status`, { status: "delivered" });
+    await winner.post(`/api/driver/orders/${id}/status`, { status: "delivered", pin: await pinFor(id) });
     // same driver claiming two different orders concurrently
-    const o1 = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash" });
-    const o2 = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash" });
+    const o1 = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "multicaixa_express" });
+    const o2 = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "multicaixa_express" });
     await loja.post(`/api/partner/orders/${o1.body.order.id}/status`, { status: "accepted" });
     await loja.post(`/api/partner/orders/${o2.body.order.id}/status`, { status: "accepted" });
     const [c1, c2] = await Promise.all([d2.post(`/api/driver/orders/${o1.body.order.id}/claim`), d2.post(`/api/driver/orders/${o2.body.order.id}/claim`)]);
@@ -788,12 +794,12 @@ async function main() {
     r = await admin.post("/api/admin/promos", { code: "X", discountType: "percent", value: 10 });
     check("invalid promo code format rejected", r.status === 400, r.status);
     // admin status override
-    const o = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash" });
+    const o = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "multicaixa_express" });
     r = await admin.post(`/api/admin/orders/${o.body.order.id}/status`, { status: "accepted" });
     check("admin status override pending -> accepted", r.status === 200, r.body);
     r = await admin.post(`/api/admin/orders/${o.body.order.id}/assign-driver`, { driverId: 7 });
     check("admin assigns driver", r.status === 200 && r.body.order.driverId === 7, r.body);
-    const busy = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash" });
+    const busy = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "multicaixa_express" });
     await loja.post(`/api/partner/orders/${busy.body.order.id}/status`, { status: "accepted" });
     r = await admin.post(`/api/admin/orders/${busy.body.order.id}/assign-driver`, { driverId: 7 });
     check("admin cannot assign a driver who already has an active delivery", r.status === 409 || r.status === 400, `${r.status}: driver 7 now has 2 active orders`);
@@ -807,7 +813,7 @@ async function main() {
   // =========================================================================
   await section("Promo rules", async () => {
     const n = await newCustomer("promo");
-    let r = await n.c.post("/api/orders", { storeId: 1, items: [FRANGO_FUNJE], addressId: n.addressId, paymentMethod: "cash", promoCode: "BEMVINDO" });
+    let r = await n.c.post("/api/orders", { storeId: 1, items: [FRANGO_FUNJE], addressId: n.addressId, paymentMethod: "multicaixa_express", promoCode: "BEMVINDO" });
     check("BEMVINDO on first order", r.status === 201 && r.body.order.promoCode === "BEMVINDO", r.body);
     const first = r.body.order.id;
     r = await n.c.post("/api/cart/quote", { storeId: 1, items: [FRANGO], promoCode: "BEMVINDO" });
@@ -824,25 +830,25 @@ async function main() {
     check("ENTREGAGRATIS below 5000 -> 400 PROMO_MIN_ORDER", r.status === 400 && r.body.code === "PROMO_MIN_ORDER", r.body);
     const ids: number[] = [];
     for (let i = 0; i < 3; i++) {
-      r = await n.c.post("/api/orders", { storeId: 1, items: [FRANGO_FUNJE], addressId: n.addressId, paymentMethod: "cash", promoCode: "ENTREGAGRATIS" });
-      check(`ENTREGAGRATIS use ${i + 1}/3 gives free delivery`, r.status === 201 && r.body.order.discount === 1000 && r.body.order.total === 9600, r.body);
+      r = await n.c.post("/api/orders", { storeId: 1, items: [FRANGO_FUNJE], addressId: n.addressId, paymentMethod: "multicaixa_express", promoCode: "ENTREGAGRATIS" });
+      check(`ENTREGAGRATIS use ${i + 1}/3 gives free delivery`, r.status === 201 && r.body.order.discount === 1000 && r.body.order.total === 9600 + 480, r.body);
       if (r.status === 201) ids.push(r.body.order.id);
     }
-    r = await n.c.post("/api/orders", { storeId: 1, items: [FRANGO_FUNJE], addressId: n.addressId, paymentMethod: "cash", promoCode: "ENTREGAGRATIS" });
+    r = await n.c.post("/api/orders", { storeId: 1, items: [FRANGO_FUNJE], addressId: n.addressId, paymentMethod: "multicaixa_express", promoCode: "ENTREGAGRATIS" });
     check("ENTREGAGRATIS 4th use -> 400 PROMO_ALREADY_USED", r.status === 400 && r.body.code === "PROMO_ALREADY_USED", r.body);
     await n.c.post(`/api/orders/${ids[0]}/cancel`, {});
     r = await n.c.post("/api/cart/quote", { storeId: 1, items: [FRANGO_FUNJE], promoCode: "ENTREGAGRATIS" });
     check("cancelled order returns promo use", r.status === 200, r.body);
     // concurrent promo reuse by same user (first order)
     const n3 = await newCustomer("promorace");
-    const rs = await Promise.all([0, 1, 2].map(() => n3.c.post("/api/orders", { storeId: 1, items: [FRANGO_FUNJE], addressId: n3.addressId, paymentMethod: "cash", promoCode: "BEMVINDO" })));
+    const rs = await Promise.all([0, 1, 2].map(() => n3.c.post("/api/orders", { storeId: 1, items: [FRANGO_FUNJE], addressId: n3.addressId, paymentMethod: "multicaixa_express", promoCode: "BEMVINDO" })));
     check("parallel BEMVINDO orders by same new user -> only 1 succeeds", rs.filter((x) => x.status === 201).length === 1, rs.map((x) => x.status + ":" + (x.body?.code ?? "")));
     // global maxUses race: promo with maxUses=1, 4 different users in parallel
     const code = `UMAVEZ${uniq}`.toUpperCase();
     await admin.post("/api/admin/promos", { code, discountType: "fixed", value: 500, maxUses: 1 });
     const racers = [] as { c: Client; addressId: number }[];
     for (let i = 0; i < 4; i++) { const x = await newCustomer(`mx${i}`); racers.push({ c: x.c, addressId: x.addressId }); }
-    const pr = await Promise.all(racers.map((x) => x.c.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: x.addressId, paymentMethod: "cash", promoCode: code })));
+    const pr = await Promise.all(racers.map((x) => x.c.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: x.addressId, paymentMethod: "multicaixa_express", promoCode: code })));
     check("promo with maxUses=1 used in parallel by 4 users -> only 1 succeeds", pr.filter((x) => x.status === 201).length === 1, pr.map((x) => x.status));
     for (let i = 0; i < 4; i++) if (pr[i].status === 201) await racers[i].c.post(`/api/orders/${pr[i].body.order.id}/cancel`, {});
     // PLUS10
@@ -898,15 +904,15 @@ async function main() {
     check("usePoints capped at 50% of total (1500*50% = 750 Kz -> 75 pts)", r.status === 200 && r.body.quote.pointsRedeemed === 75, r.body.quote);
     r = await anon.post("/api/cart/quote", { storeId: 1, items: [FRANGO], usePoints: 10 });
     check("anonymous usePoints -> 400", r.status === 400, r.body);
-    r = await n.c.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: n.addressId, paymentMethod: "cash", usePoints: 100 });
-    check("order with points: total 5500 - 1000 = 4500", r.status === 201 && r.body.order.pointsRedeemed === 100 && r.body.order.total === 4500, r.body);
+    r = await n.c.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: n.addressId, paymentMethod: "multicaixa_express", usePoints: 100 });
+    check("order with points: total 5500 - 1000 = 4500", r.status === 201 && r.body.order.pointsRedeemed === 100 && r.body.order.total === 4500 + 230, r.body);
     let me = (await n.c.get("/api/auth/me")).body.user;
     check("points deducted after order (0)", me.loyaltyPoints === 0, me);
     await n.c.post(`/api/orders/${r.body.order.id}/cancel`, {});
     me = (await n.c.get("/api/auth/me")).body.user;
     check("points refunded after cancel (100)", me.loyaltyPoints === 100, me);
     // parallel points double-spend
-    const rs = await Promise.all([0, 1].map(() => n.c.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: n.addressId, paymentMethod: "cash", usePoints: 100 })));
+    const rs = await Promise.all([0, 1].map(() => n.c.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: n.addressId, paymentMethod: "multicaixa_express", usePoints: 100 })));
     const redeemed = rs.filter((x) => x.status === 201).reduce((s, x) => s + x.body.order.pointsRedeemed, 0);
     me = (await n.c.get("/api/auth/me")).body.user;
     check("parallel orders cannot double-spend points", redeemed <= 100 && me.loyaltyPoints >= 0, { redeemed, bal: me.loyaltyPoints });
@@ -920,15 +926,15 @@ async function main() {
     me = (await n.c.get("/api/auth/me")).body.user;
     const ord = (await n.c.get(`/api/orders/${toDeliver}`)).body.order;
     check("customer earns 1 pt / 100 Kz on delivery", me.loyaltyPoints === balBeforeDelivery + Math.floor(ord.total / 100), { before: balBeforeDelivery, pts: me.loyaltyPoints, total: ord.total });
-    const o2 = await n.c.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: n.addressId, paymentMethod: "cash" });
+    const o2 = await n.c.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: n.addressId, paymentMethod: "multicaixa_express" });
     await deliver(o2.body.order.id);
     const after2 = (await cli.get("/api/auth/me")).body.user.loyaltyPoints;
     check("no referral bonus on referee's second delivery", after2 === after, { after, after2 });
     // modify an order that used points down to a small basket: points discount must respect 50% cap
     const m = await newCustomer("ptsmod", { referralCode: pts.referralCode });
-    const mo = await m.c.post("/api/orders", { storeId: 1, items: [FRANGO_FUNJE], addressId: m.addressId, paymentMethod: "cash", usePoints: 100 });
+    const mo = await m.c.post("/api/orders", { storeId: 1, items: [FRANGO_FUNJE], addressId: m.addressId, paymentMethod: "multicaixa_express", usePoints: 100 });
     const mm = await m.c.patch(`/api/orders/${mo.body.order.id}`, { items: [AGUA] });
-    check("modify order: points discount still capped at 50% of total (AGUA 500+1000 fee -> max 750 Kz off)", mm.status === 200 && mm.body.order.total >= 750, { total: mm.body?.order?.total, discount: mm.body?.order?.discount, pointsRedeemed: mm.body?.order?.pointsRedeemed });
+    check("order paid with points: items can't change afterwards (409)", mm.status === 409, mm.body);
     await m.c.post(`/api/orders/${mo.body.order.id}/cancel`, {});
     const hist = (await n.c.get("/api/auth/points")).body;
     check("points history lists welcome/redeem/refund/earned", ["welcome_bonus", "order_redeemed", "refund", "order_earned"].every((k) => hist.history.some((h: any) => h.reason === k)), hist.history?.map((h: any) => h.reason));
@@ -937,7 +943,7 @@ async function main() {
   // =========================================================================
   await section("Reviews", async () => {
     const n = await newCustomer("rev");
-    const o = await n.c.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: n.addressId, paymentMethod: "cash" });
+    const o = await n.c.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: n.addressId, paymentMethod: "multicaixa_express" });
     const id = o.body.order.id;
     let r = await n.c.post(`/api/orders/${id}/review`, { rating: 5 });
     check("review before delivery -> 409 NOT_DELIVERED", r.status === 409, r.body);
@@ -999,20 +1005,20 @@ async function main() {
     r = await guest.del(`/api/groups/${token}/items/abc`, g);
     check("DELETE group item with non-numeric id -> 400/404 (not 500)", r.status === 400 || r.status === 404, `${r.status} ${r.text.slice(0, 100)}`);
     // non-host checkout
-    r = await cli2.post(`/api/groups/${token}/checkout`, { addressId: cli2Addr, paymentMethod: "cash" });
+    r = await cli2.post(`/api/groups/${token}/checkout`, { addressId: cli2Addr, paymentMethod: "multicaixa_express" });
     check("non-host checkout -> 403", r.status === 403, r.body);
-    r = await guest.post(`/api/groups/${token}/checkout`, { addressId: 1, paymentMethod: "cash" });
+    r = await guest.post(`/api/groups/${token}/checkout`, { addressId: 1, paymentMethod: "multicaixa_express" });
     check("anonymous guest checkout -> 401", r.status === 401, r.body);
     r = await cli2.post(`/api/groups/${token}/lock`, { locked: true });
     check("non-host lock -> 403", r.status === 403, r.body);
     // concurrent double checkout by host
-    const rs = await Promise.all([0, 1].map(() => cli.post(`/api/groups/${token}/checkout`, { addressId: addrTalatona, paymentMethod: "cash", notes: "grupo" })));
+    const rs = await Promise.all([0, 1].map(() => cli.post(`/api/groups/${token}/checkout`, { addressId: addrTalatona, paymentMethod: "multicaixa_express", notes: "grupo" })));
     const okN = rs.filter((x) => x.status === 201).length;
     check("concurrent double group checkout -> exactly one order", okN === 1, rs.map((x) => x.status + ":" + (x.body?.code ?? x.body?.order?.id)));
     const oid = rs.find((x) => x.status === 201)?.body.order.id;
     r = await cli.get(`/api/orders/${oid}`);
     check("group order items carry addedBy names", r.body.items?.some((i: any) => i.addedBy === "Zé Convidado") && r.body.items.some((i: any) => i.addedBy === "Maria"), r.body.items?.map((i: any) => i.addedBy));
-    check("group order total server-computed (10100 + 1000)", r.body.order?.total === 11100, r.body.order?.total);
+    check("group order total server-computed (10100 + delivery + 5% service)", r.body.order?.total === 10100 + r.body.order.deliveryFee + 510, r.body.order?.total);
     r = await guest.post(`/api/groups/${token}/items`, AGUA, g);
     check("cannot add items after checkout", r.status === 409, r.body);
     r = await guest.del(`/api/groups/${token}/items/${guestItem}`, g);
@@ -1024,7 +1030,7 @@ async function main() {
     const la = await loja.post("/api/addresses", { label: "Loja", street: "Rua da loja", zone: "Kilamba" });
     const lg = await loja.post("/api/groups", { storeId: 2 });
     await loja.post(`/api/groups/${lg.body.token}/items`, { menuItemId: 13, quantity: 1, optionIds: [] }, { "X-Group-Participant": String(lg.body.participantId), "X-Group-Secret": lg.body.secret });
-    r = await loja.post(`/api/groups/${lg.body.token}/checkout`, { addressId: la.body.address?.id, paymentMethod: "cash" });
+    r = await loja.post(`/api/groups/${lg.body.token}/checkout`, { addressId: la.body.address?.id, paymentMethod: "multicaixa_express" });
     check("supplier account cannot place orders via group checkout (should be 403 like /api/orders)", r.status === 403, `${r.status} ${r.body?.order ? "order " + r.body.order.id + " created" : r.text.slice(0, 100)}`);
     if (r.status === 201) await admin.post(`/api/admin/orders/${r.body.order.id}/status`, { status: "cancelled" });
   });
@@ -1085,7 +1091,7 @@ async function main() {
     const liveAdmin = await openLive(admin);
 
     // --- prep time chosen by the store
-    let o = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash" });
+    let o = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "multicaixa_express" });
     const A = o.body.order.id;
     r = await loja.post(`/api/partner/orders/${A}/status`, { status: "accepted", prepMinutes: 3 });
     check("prepMinutes below 5 rejected (400)", r.status === 400, r.status);
@@ -1114,7 +1120,7 @@ async function main() {
     let offer: any = null;
     for (let i = 0; i < 10 && !offer; i++) { await sleep(400); offer = (await r1.c.get("/api/driver/offers")).body.offer; }
     check("ready -> offer to the NEAREST rider within ~1s", offer && offer.order.id === A && offer.distanceKm < 0.5, offer);
-    check("offer shows payout (fee + tip), store, drop-off zone, countdown", offer && offer.payout === offer.order.deliveryFee + offer.order.riderTip && offer.order.store.name && offer.order.deliveryAddress.zone && offer.secondsLeft > 0 && offer.secondsLeft <= 4, offer);
+    check("offer shows payout (fee + tip), store, drop-off zone, countdown", offer && offer.payout === offer.payDetail.total + offer.order.riderTip && offer.payDetail.base > 0 && offer.order.store.name && offer.order.deliveryAddress.zone && offer.secondsLeft > 0 && offer.secondsLeft <= 4, offer);
     r = await r2.c.get("/api/driver/offers");
     check("farther rider gets no offer at the same time", r.body.offer === null, r.body);
     r = await r2.c.get("/api/driver/available");
@@ -1161,7 +1167,7 @@ async function main() {
     check("rider takes it from the open list", r.status === 200 && r.body.order.driverId === r1.id, r.body);
 
     // --- B: r1 busy -> r2 gets it and accepts
-    o = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash" });
+    o = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "multicaixa_express" });
     const B = o.body.order.id;
     await loja.post(`/api/partner/orders/${B}/status`, { status: "accepted", prepMinutes: 5 });
     await loja.post(`/api/partner/orders/${B}/status`, { status: "preparing" });
@@ -1179,11 +1185,11 @@ async function main() {
     // finish B and A
     for (const [c, id] of [[r2.c, B], [r1.c, A]] as const) {
       await c.post(`/api/driver/orders/${id}/status`, { status: "picked_up" });
-      await c.post(`/api/driver/orders/${id}/status`, { status: "delivered" });
+      await c.post(`/api/driver/orders/${id}/status`, { status: "delivered", pin: await pinFor(id) });
     }
 
     // --- C: rider goes offline while holding an offer -> declined, passed on
-    o = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash" });
+    o = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "multicaixa_express" });
     const C = o.body.order.id;
     await loja.post(`/api/partner/orders/${C}/status`, { status: "accepted" });
     await loja.post(`/api/partner/orders/${C}/status`, { status: "preparing" });
@@ -1209,123 +1215,156 @@ async function main() {
   });
 
   // =========================================================================
-  await section("Delivery PIN, settlement (commission, store & rider accounts), payouts, cash limit", async () => {
+  await section("Bank-only payments, delivery code, Deliveroo-style fees, rider pay, settlement, payouts", async () => {
+    const STORE1 = { latitude: -8.9172, longitude: 13.1846 };
+    // --- no cash
+    let r = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash" });
+    check("cash refused (409 PAYMENT_METHOD_UNAVAILABLE)", r.status === 409 && r.body.code === "PAYMENT_METHOD_UNAVAILABLE" && /banco|Multicaixa/.test(r.body.message), r.body);
+    r = await anon.get("/api/meta");
+    const cashMeta = r.body.paymentMethods?.find((m: any) => m.id === "cash");
+    check("meta: cash not available, bank methods are", cashMeta && cashMeta.available === false && r.body.paymentMethods.some((m: any) => m.id === "multicaixa_express" && m.available), r.body.paymentMethods);
+
+    // --- customer fees
+    r = await cli.post("/api/cart/quote", { storeId: 1, items: [FRANGO], addressId: addrTalatona });
+    let q = r.body.quote;
+    check("quote with address: delivery by distance (~0.8 km road -> min 500 Kz)", r.status === 200 && q.deliveryKm > 0.5 && q.deliveryKm < 1.2 && q.deliveryFee === 500, q && { km: q.deliveryKm, fee: q.deliveryFee });
+    check("service fee 5% of food (4500 -> 230 Kz, rounded to 10)", q.serviceFee === 230 && q.total === 4500 + 500 + 230, q && { sf: q.serviceFee, total: q.total });
+    r = await cli.post("/api/cart/quote", { storeId: 1, items: [AGUA] });
+    check("service fee minimum 150 Kz on a 500 Kz order", r.body.quote.serviceFee === 150, r.body.quote?.serviceFee);
+    r = await cli.post("/api/cart/quote", { storeId: 1, items: [{ ...FRANGO, quantity: 15 }] });
+    check("service fee capped at 2 500 Kz", r.body.quote.serviceFee === 2500, r.body.quote?.serviceFee);
+    r = await cli.post("/api/cart/quote", { storeId: 1, items: [FRANGO], addressId: 999999 });
+    check("someone else's / unknown address ignored (store fee fallback)", r.status === 200 && r.body.quote.deliveryKm === null && r.body.quote.deliveryFee === 1000, r.body.quote);
+
+    // --- rider: vehicle + payout account
     const reg = new Client("rmoney");
-    const rr = await reg.post("/api/auth/register", { username: `rmoney_${uniq}`, password: "Teste#2026xx", fullName: "Rider Money", phone: "+244923222011", userType: "driver" });
+    const rr = await reg.post("/api/auth/register", { username: `rmoney_${uniq}`, password: "Teste#2026xx", fullName: "Rider Money", phone: "+244923222011", userType: "driver", vehicleType: "car" });
+    check("rider signs up with vehicle type", rr.status === 201 && rr.body.user.vehicleType === "car", rr.body.user);
     const rid = rr.body.user.id;
     await admin.patch(`/api/admin/users/${rid}`, { isApproved: true });
     const rm = new Client("rmoney2"); await rm.login(`rmoney_${uniq}`, "Teste#2026xx");
+    r = await rm.put("/api/driver/payout-account", { payoutMethod: "bank_transfer", payoutReference: "AO06 1234" });
+    check("bad IBAN rejected (400)", r.status === 400 && r.body.code === "BAD_IBAN", r.body);
+    r = await rm.put("/api/driver/payout-account", { payoutMethod: "multicaixa_express", payoutReference: "12345" });
+    check("bad phone rejected (400)", r.status === 400, r.body);
+    r = await rm.post("/api/driver/cashout");
+    check("cash-out without a payout account -> 400 NO_PAYOUT_ACCOUNT", r.status === 400 && r.body.code === "NO_PAYOUT_ACCOUNT", r.body);
+    r = await rm.put("/api/driver/payout-account", { payoutMethod: "multicaixa_express", payoutReference: "+244 923 222 011" });
+    check("rider saves Multicaixa Express number (normalised)", r.status === 200 && r.body.payoutReference === "+244923222011", r.body);
+
+    // --- paid order, rider pay shown before accepting
     const storeBefore = (await loja.get("/api/partner/finance")).body;
-    check("store finance readable (default 15% commission)", storeBefore.commissionPct === 15 && typeof storeBefore.balance === "number", storeBefore);
-    const prep = async (body: any) => {
-      const o = await cli.post("/api/orders", { storeId: 1, addressId: addrTalatona, ...body });
+    const mk = async (extra: any = {}) => {
+      const o = await cli.post("/api/orders", { storeId: 1, addressId: addrTalatona, items: [FRANGO], paymentMethod: "multicaixa_express", ...extra });
       const id = o.body.order.id;
-      await loja.post(`/api/partner/orders/${id}/status`, { status: "accepted" });
-      await loja.post(`/api/partner/orders/${id}/status`, { status: "preparing" });
-      await loja.post(`/api/partner/orders/${id}/status`, { status: "ready" });
+      for (const st of ["accepted", "preparing", "ready"]) await loja.post(`/api/partner/orders/${id}/status`, { status: st });
       return { id, order: o.body.order };
     };
+    const P = await mk({ riderTip: 300 });
+    await rm.post("/api/driver/location", { latitude: STORE1.latitude + 0.018, longitude: STORE1.longitude }); // ~2 km away
+    r = await rm.get("/api/driver/available");
+    const av = r.body.orders.find((x: any) => x.id === P.id);
+    check("open list shows MY pay before accepting (car, ~2.6 km to store + drop)", av && av.riderPayDetail.vehicle === "car" && av.riderPayDetail.pickupKm > 2 && av.payout === av.riderPayDetail.total + 300, av?.riderPayDetail);
+    check("pay = base + distance + bonuses, never below the hourly floor", av && av.riderPayDetail.total >= Math.round(2400 * av.riderPayDetail.estMinutes / 60) && av.riderPayDetail.total === av.riderPayDetail.base + av.riderPayDetail.distance + av.riderPayDetail.timeBonus + av.riderPayDetail.busyBonus + av.riderPayDetail.floorTopUp, av?.riderPayDetail);
+    r = await rm.post(`/api/driver/orders/${P.id}/claim`);
+    check("claim fixes the rider pay on the order", r.status === 200 && r.body.order.riderPay === av.riderPayDetail.total && !("deliveryPin" in r.body.order), r.body.order?.riderPay);
+    r = await rm.post(`/api/driver/orders/${P.id}/arrived`, { at: "store" });
+    check("'arrived at store' refused when GPS says 2 km away (NOT_AT_STORE)", r.status === 409 && r.body.code === "NOT_AT_STORE", r.body);
+    await rm.post("/api/driver/location", STORE1);
+    r = await rm.post(`/api/driver/orders/${P.id}/arrived`, { at: "store" });
+    check("'arrived at store' accepted at the store", r.status === 200, r.body);
 
-    // --- PIN on a paid order
-    const P = await prep({ items: [FRANGO], paymentMethod: "multicaixa_express", riderTip: 300 });
-    check("paid order: PIN not in the create response", !("deliveryPin" in P.order), Object.keys(P.order).filter((k) => /pin/i.test(k)));
-    let r = await cli.get(`/api/orders/${P.id}`);
+    // --- delivery code
+    r = await cli.get(`/api/orders/${P.id}`);
     const code = r.body.order.deliveryCode;
-    check("customer sees a 4-digit delivery code", /^\d{4}$/.test(code ?? "") && r.body.order.pinRequired === true && !("deliveryPin" in r.body.order), r.body.order.deliveryCode);
+    check("every order has a 4-digit code for the customer", /^\d{4}$/.test(code ?? "") && r.body.order.pinRequired === true && !("deliveryPin" in r.body.order), r.body.order.deliveryCode);
     r = await loja.get("/api/partner/orders?scope=active");
     const so = r.body.orders.find((x: any) => x.id === P.id);
-    check("store never sees the code", so && !("deliveryPin" in so) && !so.deliveryCode && !JSON.stringify(so).includes(`"${code}"`), so && Object.keys(so));
-    r = await rm.post(`/api/driver/orders/${P.id}/claim`);
-    check("rider claims paid order", r.status === 200 && !("deliveryPin" in r.body.order), r.body);
+    check("store never sees the code", so && !("deliveryPin" in so) && !JSON.stringify(so).includes(`"${code}"`), so && Object.keys(so));
     r = await rm.get("/api/driver/current");
-    check("rider sees 'PIN required' but not the code", r.body.order.pinRequired === true && !JSON.stringify(r.body).includes(`"${code}"`), r.body.order?.pinRequired);
-    r = await loja.get(`/api/orders/${P.id}`);
-    check("store opening the order page gets no code", r.status === 200 && r.body.order.deliveryCode === null, r.body.order?.deliveryCode);
+    check("rider sees 'code required' but not the code", r.body.order.pinRequired === true && !JSON.stringify(r.body).includes(`"${code}"`), r.body.order?.pinRequired);
     r = await rm.get(`/api/orders/${P.id}`);
     check("rider opening the order page gets no code", r.status === 200 && r.body.order.deliveryCode === null, r.body.order?.deliveryCode);
-    await rm.post(`/api/driver/orders/${P.id}/status`, { status: "picked_up" });
+    r = await rm.post(`/api/driver/orders/${P.id}/status`, { status: "picked_up" });
+    check("picked up quickly: no wait fee", r.status === 200 && r.body.order.riderWaitFee === 0, r.body.order?.riderWaitFee);
     r = await rm.post(`/api/driver/orders/${P.id}/status`, { status: "delivered" });
     check("deliver without code -> 400 PIN_REQUIRED", r.status === 400 && r.body.code === "PIN_REQUIRED", r.body);
     const wrong = code === "0000" ? "1111" : "0000";
     r = await rm.post(`/api/driver/orders/${P.id}/status`, { status: "delivered", pin: wrong });
     check("wrong code -> 400 BAD_PIN with tries left", r.status === 400 && r.body.code === "BAD_PIN" && /Restam 4/.test(r.body.message), r.body);
-    r = await rm.post(`/api/driver/orders/${P.id}/status`, { status: "delivered", pin: "12a4" });
-    check("malformed code rejected (400)", r.status === 400, r.status);
     r = await rm.post(`/api/driver/orders/${P.id}/status`, { status: "delivered", pin: code });
     check("right code -> delivered", r.status === 200 && r.body.order.status === "delivered", r.body);
-    r = await cli.get(`/api/orders/${P.id}`);
-    check("code hidden after delivery", r.body.order.deliveryCode === null, r.body.order.deliveryCode);
 
-    // --- settlement of P
+    // --- settlement
     const op = r.body.order;
-    check("order settled: 15% of food, store gets the rest, rider fee+tip", op.commissionPct === 15 && op.commissionAmount === Math.round(op.subtotal * 0.15) && op.storeEarning === op.subtotal - op.commissionAmount && op.riderEarning === op.deliveryFee + 300 && op.settledAt, op);
+    check("store: food − 20% commission (default)", op.commissionPct === 20 && op.commissionAmount === Math.round(op.subtotal * 0.2) && op.storeEarning === op.subtotal - op.commissionAmount, op);
+    check("rider: own pay + wait + 100% tip (not the customer's delivery fee)", op.riderEarning === op.riderPay + op.riderWaitFee + 300 && op.riderPay !== op.deliveryFee, { pay: op.riderPay, fee: op.deliveryFee, earn: op.riderEarning });
     r = await loja.get("/api/partner/finance");
-    check("store balance grows by its earning", r.body.balance - storeBefore.balance === op.storeEarning && r.body.entries[0].kind === "order_earning", { before: storeBefore.balance, after: r.body.balance });
+    check("store balance grows by its earning; next payday shown", r.body.balance - storeBefore.balance === op.storeEarning && new Date(r.body.nextPayday).getUTCDay() === 1 /* terça 00:00 Luanda = segunda 23:00 UTC */, { b: r.body.balance, pd: r.body.nextPayday });
     let w = (await rm.get("/api/driver/wallet")).body;
-    check("rider wallet: owed fee + tip, no cash in hand (paid online)", w.balance === op.riderEarning && w.cashHeld === 0 && w.cashLimit === 50000, w);
-
-    // --- cash order: rider owes the cash; big cash order needs a PIN too
-    const C = await prep({ items: [{ ...FRANGO, quantity: 12 }], paymentMethod: "cash" });
-    r = await cli.get(`/api/orders/${C.id}`);
-    const ccode = r.body.order.deliveryCode;
-    check("cash order above 20 000 Kz gets a code", /^\d{4}$/.test(ccode ?? ""), r.body.order.total);
-    const small = await cli.post("/api/orders", { storeId: 1, addressId: addrTalatona, items: [FRANGO], paymentMethod: "cash" });
-    r = await cli.get(`/api/orders/${small.body.order.id}`);
-    check("small cash order has no code", r.body.order.pinRequired === false && r.body.order.deliveryCode === null, r.body.order);
-    await rm.post(`/api/driver/orders/${C.id}/claim`);
-    await rm.post(`/api/driver/orders/${C.id}/status`, { status: "picked_up" });
-    r = await rm.post(`/api/driver/orders/${C.id}/status`, { status: "delivered", pin: ccode });
-    check("cash order delivered with code", r.status === 200, r.body);
-    const total = r.body.order.total;
-    w = (await rm.get("/api/driver/wallet")).body;
-    check("rider holds the cash and owes it", w.cashHeld === total && w.balance === op.riderEarning + r.body.order.riderEarning - total, w);
-
-    // --- cash limit (50 000 Kz): no more cash orders, card orders still OK
-    await loja.post(`/api/partner/orders/${small.body.order.id}/status`, { status: "accepted" });
-    r = await rm.post(`/api/driver/orders/${small.body.order.id}/claim`);
-    check("over the cash limit -> 409 CASH_LIMIT for cash orders", r.status === 409 && r.body.code === "CASH_LIMIT", r.body);
+    check("rider wallet: balance, available now, Tuesday payday, no cash", w.balance === op.riderEarning && w.available.now === op.riderEarning && w.available.weekly === 0 && w.cashHeld === 0 && w.vehicleType === "car", w);
     const fin = (await admin.get("/api/admin/finance")).body;
-    const rowR = fin.riders.find((x: any) => x.id === rid);
-    check("admin finance shows rider cash in hand", rowR && rowR.cashHeld === total, rowR);
-    check("admin finance totals: commission, net, store list", fin.totals.commission >= op.commissionAmount && typeof fin.totals.platformNet === "number" && fin.stores.some((x: any) => x.id === 1), fin.totals);
+    check("admin revenue = commission + customer fees − discounts − rider pay", fin.totals.platformNet === fin.totals.commission + fin.totals.deliveryFees + fin.totals.serviceFees + fin.totals.smallOrderFees + fin.totals.priorityFees - fin.totals.discounts - (fin.totals.riderPay - fin.totals.tips) && fin.totals.serviceFees > 0, fin.totals);
 
-    // --- admin records money movements
-    r = await admin.post("/api/admin/ledger", { partyType: "driver", partyId: rid, kind: "cash_deposit", amount: total, reference: "REC-1" });
-    check("admin records cash handed in -> cash in hand back to 0", r.status === 201 && r.body.cashHeld === 0, r.body);
-    r = await rm.post(`/api/driver/orders/${small.body.order.id}/claim`);
-    check("after handing in cash the rider can take cash orders again", r.status === 200, r.body);
-    await rm.post(`/api/admin/ledger`, {});
-    const sb = (await loja.get("/api/partner/finance")).body.balance;
-    r = await admin.post("/api/admin/ledger", { partyType: "store", partyId: 1, kind: "payout", amount: 5000, reference: "TRF-77", note: "Multicaixa" });
-    check("admin pays the store -> store balance down", r.status === 201 && r.body.balance === sb - 5000 && r.body.entries[0].reference === "TRF-77", r.body);
-    r = await admin.post("/api/admin/ledger", { partyType: "store", partyId: 1, kind: "payout", amount: -5 });
-    check("negative payout rejected (400)", r.status === 400, r.status);
-    r = await admin.post("/api/admin/ledger", { partyType: "store", partyId: 1, kind: "cash_deposit", amount: 5 });
-    check("stores can't 'hand in cash' (400)", r.status === 400, r.status);
-    r = await admin.post("/api/admin/ledger", { partyType: "driver", partyId: 1, kind: "payout", amount: 5 });
-    check("payout to a non-rider id rejected (404)", r.status === 404, r.status);
-    r = await loja.post("/api/admin/ledger", { partyType: "store", partyId: 1, kind: "adjustment", amount: 999999 });
-    check("store can't write to the ledger (403)", r.status === 403, r.status);
-    r = await rm.get("/api/partner/finance");
-    check("rider can't read store finance (403)", r.status === 403, r.status);
-    r = await admin.get(`/api/admin/finance/driver/${rid}`);
-    check("admin sees a rider's statement", r.status === 200 && r.body.entries.some((e: any) => e.kind === "cash_deposit" && e.reference === "REC-1"), r.body.entries?.length);
+    // --- instant cash-out
+    r = await rm.post("/api/driver/cashout");
+    check("cash-out below 2 000 Kz refused", r.status === 400 && r.body.code === "CASHOUT_TOO_SMALL", r.body);
+    await admin.post("/api/admin/ledger", { partyType: "driver", partyId: rid, kind: "adjustment", amount: 5000, note: "bónus teste" });
+    const bal = (await rm.get("/api/driver/wallet")).body.balance;
+    r = await rm.post("/api/driver/cashout");
+    const fee = Math.max(200, Math.round(bal * 0.02));
+    check("instant cash-out takes the balance minus a small fee", r.status === 201 && r.body.payout.amount === bal - fee && r.body.payout.fee === fee && r.body.payout.account === "+244923222011", r.body);
+    const cashoutId = r.body.payout.id;
+    w = (await rm.get("/api/driver/wallet")).body;
+    check("balance 0 after cash-out; payout listed as pending", w.balance === 0 && w.payouts[0]?.status === "pending", { bal: w.balance, p: w.payouts[0] });
+    r = await rm.post("/api/driver/cashout");
+    check("second cash-out while one is pending -> 409", r.status === 409 && r.body.code === "CASHOUT_PENDING", r.body);
+    r = await admin.get("/api/admin/payouts?status=pending");
+    check("admin sees the pending transfer", r.body.payouts.some((p: any) => p.id === cashoutId && p.name === "Rider Money" && p.kind === "instant"), r.body.payouts?.length);
+    const csv = await admin.req("GET", "/api/admin/payouts.csv");
+    check("bank CSV lists pending transfers", csv.status === 200 && csv.text.includes("+244923222011") && csv.text.includes("Rider Money"), csv.text.slice(0, 200));
+    r = await admin.post(`/api/admin/payouts/${cashoutId}/paid`, {});
+    check("mark paid needs the bank reference (400)", r.status === 400, r.body);
+    r = await admin.post(`/api/admin/payouts/${cashoutId}/paid`, { bankReference: "MCX-889" });
+    check("admin marks transfer paid", r.status === 200 && r.body.payout.status === "paid" && r.body.payout.bankReference === "MCX-889", r.body);
+    r = await admin.post(`/api/admin/payouts/${cashoutId}/failed`, {});
+    check("closed payout can't change (409)", r.status === 409, r.body);
+    r = await rm.get("/api/admin/payouts");
+    check("riders can't see the payouts board (403)", r.status === 403, r.status);
+
+    // --- weekly payout (Tuesday): simulate next week's run
+    const P2 = await mk();
+    await rm.post(`/api/driver/orders/${P2.id}/claim`);
+    await rm.post(`/api/driver/orders/${P2.id}/status`, { status: "picked_up" });
+    r = await rm.post(`/api/driver/orders/${P2.id}/status`, { status: "delivered", pin: await pinFor(P2.id) });
+    const earned2 = r.body.order.riderEarning;
+    const nextTue = new Date(Date.now() + 8 * 86_400_000).toISOString();
+    r = await admin.post("/api/admin/payouts/run-weekly", { asOf: nextTue });
+    check("weekly run creates payouts (rider has account)", r.status === 200 && r.body.created >= 1, r.body);
+    check("weekly run lists people without a payout account", Array.isArray(r.body.missingAccount), r.body.missingAccount);
+    const pend = (await admin.get("/api/admin/payouts?status=pending")).body.payouts.find((p: any) => p.partyType === "driver" && p.partyId === rid && p.kind === "weekly");
+    check("rider's weekly payout = what was earned", pend && pend.amount === earned2 && pend.fee === 0, pend);
+    r = await admin.post("/api/admin/payouts/run-weekly", { asOf: nextTue });
+    check("running the same week again creates nothing (idempotent)", r.status === 200 && r.body.created === 0, r.body);
+    r = await admin.post(`/api/admin/payouts/${pend.id}/failed`, {});
+    w = (await rm.get("/api/driver/wallet")).body;
+    check("failed transfer: money goes back to the balance", r.status === 200 && w.balance === earned2, { s: r.status, bal: w.balance });
 
     // --- per-store commission
     r = await admin.patch("/api/admin/stores/1", { commissionPct: 10 });
     check("admin sets store commission to 10%", r.status === 200 && r.body.store.commissionPct === 10, r.body);
-    await rm.post(`/api/driver/orders/${small.body.order.id}/status`, { status: "picked_up" }).catch(() => {});
-    // small order was only 'accepted' — move it on
-    await loja.post(`/api/partner/orders/${small.body.order.id}/status`, { status: "preparing" });
-    await loja.post(`/api/partner/orders/${small.body.order.id}/status`, { status: "ready" });
-    await rm.post(`/api/driver/orders/${small.body.order.id}/status`, { status: "picked_up" });
-    r = await rm.post(`/api/driver/orders/${small.body.order.id}/status`, { status: "delivered" });
+    const P3 = await mk();
+    await rm.post(`/api/driver/orders/${P3.id}/claim`);
+    await rm.post(`/api/driver/orders/${P3.id}/status`, { status: "picked_up" });
+    r = await rm.post(`/api/driver/orders/${P3.id}/status`, { status: "delivered", pin: await pinFor(P3.id) });
     check("next order uses the store's 10% commission", r.body.order?.commissionPct === 10 && r.body.order.commissionAmount === Math.round(r.body.order.subtotal * 0.1), r.body.order);
     await admin.patch("/api/admin/stores/1", { commissionPct: null });
+    r = await loja.post("/api/admin/ledger", { partyType: "store", partyId: 1, kind: "adjustment", amount: 999999 });
+    check("store can't write to the ledger (403)", r.status === 403, r.status);
 
     // --- 5 wrong codes lock it; admin finishes
-    const L = await prep({ items: [FRANGO], paymentMethod: "multicaixa_express" });
-    const lcode = (await cli.get(`/api/orders/${L.id}`)).body.order.deliveryCode;
+    const L = await mk();
+    const lcode = await pinFor(L.id);
     await rm.post(`/api/driver/orders/${L.id}/claim`);
     await rm.post(`/api/driver/orders/${L.id}/status`, { status: "picked_up" });
     const bad = lcode === "9999" ? "8888" : "9999";
@@ -1340,7 +1379,7 @@ async function main() {
 
   // =========================================================================
   await section("Scheduled release (scheduler)", async () => {
-    const o = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "cash", scheduledFor: inMin(32) });
+    const o = await cli.post("/api/orders", { storeId: 1, items: [FRANGO], addressId: addrTalatona, paymentMethod: "multicaixa_express", scheduledFor: inMin(32) });
     check("scheduled order (32 min) created", o.status === 201 && o.body.order.status === "scheduled", o.body);
     let status = "scheduled";
     for (let i = 0; i < 15 && status === "scheduled"; i++) { await sleep(5000); status = (await cli.get(`/api/orders/${o.body.order.id}`)).body.order.status; }

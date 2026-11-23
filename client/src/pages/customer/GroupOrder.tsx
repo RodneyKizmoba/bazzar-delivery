@@ -83,7 +83,7 @@ function HostCheckout({ view, token }: { view: GroupView; token: string }) {
   const [addressId, setAddressId] = useState<number | null>(null);
   const [mode, setMode] = useState<WhenMode>(store.isOpenNow ? "now" : "schedule");
   const [scheduledFor, setScheduledFor] = useState<string | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [paymentMethod, setPaymentMethod] = useState("multicaixa_express");
   const [notes, setNotes] = useState("");
   const [promo, setPromo] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -105,12 +105,12 @@ function HostCheckout({ view, token }: { view: GroupView; token: string }) {
   const addrs = useAddresses();
   const chosenZone = addrs.data?.addresses.find((a) => a.id === addressId)?.zone;
   const zoneServed = !chosenZone || !store.zonesServed?.length || store.zonesServed.some((z) => z.toLowerCase() === chosenZone.toLowerCase());
-  const canPlace = view.itemCount > 0 && !!addressId && zoneServed && !(mode === "schedule" && !scheduledFor) && !hasProblems && !belowMin && !checkout.isPending;
+  const canPlace = view.itemCount > 0 && !!addressId && zoneServed && !(mode === "schedule" && !scheduledFor) && !hasProblems && !checkout.isPending;
 
   return (
     <div className="space-y-4">
       <h2 className="px-1 pt-2 text-lg font-bold">{t({ pt: "Finalizar (anfitrião)", en: "Checkout (host)", fr: "Finaliser (hôte)" })}</h2>
-      <OrderErrorAlert error={error} onDismiss={() => setError(null)} onSchedule={() => { setMode("schedule"); setError(null); }} onPickCash={() => { setPaymentMethod("cash"); setError(null); }} />
+      <OrderErrorAlert error={error} onDismiss={() => setError(null)} onSchedule={() => { setMode("schedule"); setError(null); }} onPickCash={() => { setPaymentMethod("unitel_money"); setError(null); }} />
       <Section title={t({ pt: "Morada de entrega", en: "Delivery address", fr: "Adresse de livraison" })} icon={<MapPin className="h-4 w-4 text-primary" />}>
         <AddressPicker value={addressId} onChange={setAddressId} zonesServed={store.zonesServed} />
       </Section>
@@ -142,7 +142,7 @@ function HostCheckout({ view, token }: { view: GroupView; token: string }) {
       <div className="rounded-2xl border bg-white p-4 shadow-sm">
         <div className="flex justify-between text-sm"><span>{t(T.subtotal)}</span><span className="font-semibold">{kz(view.subtotal)}</span></div>
         <p className="mt-1 text-xs text-neutral-500">{t({ pt: "Taxa de entrega e descontos calculados ao confirmar.", en: "Delivery fee and discounts are calculated on confirm.", fr: "Frais et réductions calculés à la confirmation." })} {t(T.deliveryFee)}: {kz(store.deliveryFee)}</p>
-        {belowMin && <p className="mt-2 text-xs font-medium text-red-600">{t({ pt: `Mínimo de encomenda: ${kz(store.minOrder)}`, en: `Minimum order: ${kz(store.minOrder)}`, fr: `Minimum : ${kz(store.minOrder)}` })}</p>}
+        {belowMin && <p className="mt-2 text-xs font-medium text-amber-700">{t({ pt: `Abaixo do mínimo (${kz(store.minOrder)}): paga ${kz(store.minOrder - view.subtotal)} de taxa de encomenda pequena.`, en: `Below the minimum (${kz(store.minOrder)}): ${kz(store.minOrder - view.subtotal)} small order fee.`, fr: `Sous le minimum (${kz(store.minOrder)}) : ${kz(store.minOrder - view.subtotal)} de frais petite commande.` })}</p>}
         {hasProblems && <p className="mt-2 text-xs font-medium text-red-600">{t({ pt: "Remova os itens com aviso antes de finalizar.", en: "Remove items with warnings before checking out.", fr: "Retirez les articles signalés." })}</p>}
         <Button className="mt-3 h-12 w-full rounded-xl text-base" disabled={!canPlace} onClick={() => { setError(null); checkout.mutate(); }}>
           {checkout.isPending && <Loader2 className="mr-2 h-5 w-5 animate-spin" />}

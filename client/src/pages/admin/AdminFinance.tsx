@@ -9,15 +9,15 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { patch, post, queryClient } from "@/lib/api";
-import { useT, T } from "@/lib/i18n";
+import { useLang, useT, T } from "@/lib/i18n";
 import { kz } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 interface StoreRow { id: number; name: string; payoutMethod: string | null; payoutReference: string | null; commissionPct: number; customCommission: boolean; balance: number }
 interface RiderRow { id: number; name: string; phone: string; balance: number; cashHeld: number }
 interface Finance {
-  days: number; defaultCommissionPct: number; riderCashLimit: number;
-  totals: { orders: number; gmv: number; food: number; commission: number; priorityFees: number; discounts: number; riderPay: number; storePay: number; platformNet: number };
+  days: number; defaultCommissionPct: number;
+  totals: { orders: number; gmv: number; food: number; commission: number; priorityFees: number; discounts: number; riderPay: number; storePay: number; platformNet: number; deliveryFees: number; serviceFees: number; smallOrderFees: number; tips: number };
   stores: StoreRow[]; riders: RiderRow[];
 }
 type Party = { type: "store" | "driver"; id: number; name: string; kind: "payout" | "cash_deposit" | "adjustment" };
@@ -62,12 +62,15 @@ function Board() {
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label={t({ pt: "Vendas (entregues)", en: "Sales (delivered)", fr: "Ventes (livrées)" })} value={kz(tt.gmv)} sub={t({ pt: `${tt.orders} encomendas`, en: `${tt.orders} orders`, fr: `${tt.orders} commandes` })} />
         <Stat label={t({ pt: "Comissões", en: "Commission", fr: "Commissions" })} value={kz(tt.commission)} />
-        <Stat label={t({ pt: "Prioridade − descontos", en: "Priority − discounts", fr: "Priorité − remises" })} value={kz(tt.priorityFees - tt.discounts)} />
+        <Stat label={t({ pt: "Taxas ao cliente − estafetas", en: "Customer fees − riders", fr: "Frais clients − livreurs" })} value={kz(tt.deliveryFees + tt.serviceFees + tt.smallOrderFees + tt.priorityFees - tt.discounts - (tt.riderPay - tt.tips))}
+          sub={t({ pt: `serviço ${kz(tt.serviceFees)} · entrega ${kz(tt.deliveryFees)}`, en: `service ${kz(tt.serviceFees)} · delivery ${kz(tt.deliveryFees)}`, fr: `service ${kz(tt.serviceFees)} · livraison ${kz(tt.deliveryFees)}` })} />
         <Stat label={t({ pt: "Receita PedeJá", en: "PedeJá revenue", fr: "Revenu PedeJá" })} value={kz(tt.platformNet)} strong />
       </div>
       <p className="-mt-3 text-xs text-neutral-500">
-        {t({ pt: `Comissão geral ${f.defaultCommissionPct}% sobre a comida. A taxa de entrega e as gorjetas vão para o estafeta (${kz(tt.riderPay)}); às lojas cabe ${kz(tt.storePay)}.`, en: `Default commission ${f.defaultCommissionPct}% of food. Delivery fees and tips go to riders (${kz(tt.riderPay)}); stores get ${kz(tt.storePay)}.`, fr: `Commission par défaut ${f.defaultCommissionPct} % des plats. Frais et pourboires aux livreurs (${kz(tt.riderPay)}) ; aux magasins ${kz(tt.storePay)}.` })}
+        {t({ pt: `Comissão geral ${f.defaultCommissionPct}% sobre a comida. Estafetas receberam ${kz(tt.riderPay)} (com ${kz(tt.tips)} de gorjetas); lojas ${kz(tt.storePay)}.`, en: `Default commission ${f.defaultCommissionPct}% of food. Riders earned ${kz(tt.riderPay)} (incl. ${kz(tt.tips)} tips); stores ${kz(tt.storePay)}.`, fr: `Commission par défaut ${f.defaultCommissionPct} % des plats. Livreurs : ${kz(tt.riderPay)} (dont ${kz(tt.tips)} de pourboires) ; magasins ${kz(tt.storePay)}.` })}
       </p>
+
+      <PayoutsBoard onChange={() => queryClient.invalidateQueries({ queryKey: [key] })} />
 
       <section>
         <h2 className="mb-2 text-lg font-bold">{t({ pt: "Lojas — a pagar", en: "Stores — to pay", fr: "Magasins — à payer" })}</h2>
@@ -102,7 +105,7 @@ function Board() {
               {f.riders.map((r) => (
                 <tr key={r.id} className="border-t">
                   <td className="p-2"><button type="button" className="font-medium underline-offset-2 hover:underline" onClick={() => setView({ type: "driver", id: r.id, name: r.name })}>{r.name}</button> <a href={`tel:${r.phone}`} className="text-xs text-neutral-500">{r.phone}</a></td>
-                  <td className={cn("p-2 text-right font-semibold tabular-nums", r.cashHeld >= f.riderCashLimit ? "text-red-700" : "")}>{kz(r.cashHeld)}{r.cashHeld >= f.riderCashLimit && " ⚠"}</td>
+                  <td className="p-2 text-right font-semibold tabular-nums">{kz(r.cashHeld)}</td>
                   <td className={cn("p-2 text-right font-semibold tabular-nums", r.balance > 0 ? "text-green-700" : r.balance < 0 ? "text-red-700" : "")}>{kz(r.balance)}</td>
                   <td className="space-x-1 whitespace-nowrap p-2 text-right">
                     <Button size="sm" variant="outline" disabled={r.cashHeld <= 0} onClick={() => setAct({ type: "driver", id: r.id, name: r.name, kind: "cash_deposit" })}>{t({ pt: "Recebi numerário", en: "Cash received", fr: "Espèces reçues" })}</Button>
@@ -113,12 +116,91 @@ function Board() {
             </tbody>
           </table>
         </div>
-        <p className="mt-1 text-xs text-neutral-500">{t({ pt: `Saldo positivo: a PedeJá deve ao estafeta. Negativo: o estafeta deve numerário. Acima de ${kz(f.riderCashLimit)} em mão deixa de receber encomendas em numerário.`, en: `Positive balance: PedeJá owes the rider. Negative: the rider owes cash. Above ${kz(f.riderCashLimit)} in hand they stop getting cash orders.`, fr: `Solde positif : PedeJá doit au livreur. Négatif : le livreur doit des espèces. Au-delà de ${kz(f.riderCashLimit)} en main, plus de commandes en espèces.` })}</p>
+        <p className="mt-1 text-xs text-neutral-500">{t({ pt: "Saldo positivo: a PedeJá deve ao estafeta. Os clientes pagam tudo por banco, por isso normalmente ninguém tem numerário em mão.", en: "Positive balance: PedeJá owes the rider. Customers pay everything by bank, so normally nobody holds cash.", fr: "Solde positif : PedeJá doit au livreur. Les clients paient tout par banque, donc personne n'a normalement d'espèces." })}</p>
       </section>
 
       {act && <MoneyDialog party={act} onClose={() => setAct(null)} onDone={() => { setAct(null); queryClient.invalidateQueries({ queryKey: [key] }); }} />}
       {view && <Statement party={view} onClose={() => setView(null)} />}
     </div>
+  );
+}
+
+interface PayoutRow { id: number; partyType: "store" | "driver"; name: string; kind: "weekly" | "instant"; status: string; amount: number; fee: number; method: string | null; account: string | null; createdAt: string }
+
+/** Pagamentos a fazer por banco: semanais (terça) e levantamentos imediatos. */
+function PayoutsBoard({ onChange }: { onChange: () => void }) {
+  const t = useT();
+  const { lang } = useLang();
+  const { toast } = useToast();
+  const KEY = "/api/admin/payouts?status=pending";
+  const q = useQuery<{ payouts: PayoutRow[]; nextPayday: string }>({ queryKey: [KEY] });
+  const [paying, setPaying] = useState<PayoutRow | null>(null);
+  const refresh = () => { queryClient.invalidateQueries({ queryKey: [KEY] }); onChange(); };
+  const run = useMutation({
+    mutationFn: () => post<{ created: number; missingAccount: { name: string; amount: number }[] }>("/api/admin/payouts/run-weekly"),
+    onSuccess: (r) => {
+      refresh();
+      toast({ title: t({ pt: `${r.created} pagamentos criados`, en: `${r.created} payouts created`, fr: `${r.created} paiements créés` }),
+        description: r.missingAccount.length ? t({ pt: `Sem conta para receber: ${r.missingAccount.map((m) => m.name).join(", ")}`, en: `No payout account: ${r.missingAccount.map((m) => m.name).join(", ")}`, fr: `Sans compte : ${r.missingAccount.map((m) => m.name).join(", ")}` }) : undefined });
+    },
+    onError: (e: Error) => toast({ variant: "destructive", title: t(T.error), description: e.message }),
+  });
+  const fail = useMutation({
+    mutationFn: (id: number) => post(`/api/admin/payouts/${id}/failed`),
+    onSuccess: refresh,
+    onError: (e: Error) => toast({ variant: "destructive", title: t(T.error), description: e.message }),
+  });
+  const rows = q.data?.payouts ?? [];
+  const total = rows.reduce((s, p) => s + p.amount, 0);
+  const payday = q.data ? new Date(q.data.nextPayday).toLocaleDateString(lang === "en" ? "en-GB" : lang === "fr" ? "fr-FR" : "pt-PT", { weekday: "long", day: "numeric", month: "short", timeZone: "Africa/Luanda" }) : "";
+  return (
+    <section className="rounded-lg border-2 border-primary bg-white p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 className="mr-auto text-lg font-bold">{t({ pt: "Transferências a fazer", en: "Transfers to make", fr: "Virements à faire" })} {rows.length > 0 && <span className="text-primary">· {kz(total)}</span>}</h2>
+        <a href="/api/admin/payouts.csv" className="inline-flex h-9 items-center rounded-md border px-3 text-sm font-semibold hover:bg-neutral-50">{t({ pt: "Ficheiro para o banco (CSV)", en: "Bank file (CSV)", fr: "Fichier banque (CSV)" })}</a>
+        <Button size="sm" variant="outline" disabled={run.isPending} onClick={() => run.mutate()}>{t({ pt: "Gerar pagamentos da semana", en: "Create this week's payouts", fr: "Créer les paiements de la semaine" })}</Button>
+      </div>
+      <p className="mt-1 text-xs text-neutral-500">{t({ pt: `Pagamento semanal automático: ${payday}, com os ganhos até domingo. Os levantamentos imediatos aparecem aqui logo que o estafeta pede.`, en: `Automatic weekly payout: ${payday}, covering earnings up to Sunday. Instant cash-outs appear here as soon as a rider asks.`, fr: `Paiement hebdo automatique : ${payday}, gains jusqu'à dimanche. Les retraits immédiats apparaissent ici dès la demande.` })}</p>
+      {!rows.length ? <p className="mt-3 text-sm text-neutral-500">{t({ pt: "Nada pendente.", en: "Nothing pending.", fr: "Rien en attente." })}</p> : (
+        <ul className="mt-3 divide-y text-sm">
+          {rows.map((p) => (
+            <li key={p.id} className="flex flex-wrap items-center gap-2 py-2">
+              <span className="min-w-0 flex-1">
+                <b>{p.name}</b> <span className="text-xs text-neutral-500">{p.partyType === "store" ? t({ pt: "loja", en: "store", fr: "magasin" }) : t({ pt: "estafeta", en: "rider", fr: "livreur" })} · {p.kind === "instant" ? t({ pt: "imediato", en: "instant", fr: "immédiat" }) : t({ pt: "semanal", en: "weekly", fr: "hebdo" })}</span>
+                <span className="block text-xs text-neutral-600">{PAYOUT[p.method ?? ""] ?? p.method}: {p.account}</span>
+              </span>
+              <span className="font-bold tabular-nums">{kz(p.amount)}</span>
+              <Button size="sm" onClick={() => setPaying(p)}>{t({ pt: "Marcar pago", en: "Mark paid", fr: "Marquer payé" })}</Button>
+              <Button size="sm" variant="ghost" disabled={fail.isPending} onClick={() => fail.mutate(p.id)}>{t({ pt: "Falhou", en: "Failed", fr: "Échoué" })}</Button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {paying && <MarkPaidDialog p={paying} onClose={() => setPaying(null)} onDone={() => { setPaying(null); refresh(); }} />}
+    </section>
+  );
+}
+
+function MarkPaidDialog({ p, onClose, onDone }: { p: PayoutRow; onClose: () => void; onDone: () => void }) {
+  const t = useT();
+  const { toast } = useToast();
+  const [ref, setRef] = useState("");
+  const save = useMutation({
+    mutationFn: () => post(`/api/admin/payouts/${p.id}/paid`, { bankReference: ref.trim() }),
+    onSuccess: () => { toast({ title: t({ pt: "Marcado como pago", en: "Marked paid", fr: "Marqué payé" }) }); onDone(); },
+    onError: (e: Error) => toast({ variant: "destructive", title: t(T.error), description: e.message }),
+  });
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t({ pt: `Transferência para ${p.name}`, en: `Transfer to ${p.name}`, fr: `Virement à ${p.name}` })}</DialogTitle>
+          <DialogDescription>{kz(p.amount)} · {PAYOUT[p.method ?? ""] ?? p.method}: {p.account}</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-1"><Label htmlFor="pay-ref">{t({ pt: "Referência da transferência", en: "Transfer reference", fr: "Référence du virement" })}</Label><Input id="pay-ref" maxLength={80} value={ref} onChange={(e) => setRef(e.target.value)} /></div>
+        <Button className="w-full" disabled={!ref.trim() || save.isPending} onClick={() => save.mutate()}>{t(T.save)}</Button>
+      </DialogContent>
+    </Dialog>
   );
 }
 

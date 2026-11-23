@@ -2,14 +2,16 @@ import { Router } from "express";
 import { and, asc, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
-import { dispatchOffers, driverPresence, orderItems, orders, stores, users } from "@shared/schema";
-import { ah, idParam, notFound, parse } from "../lib/http";
+import { PAYOUT_METHODS, VEHICLE_TYPES, dispatchOffers, driverPresence, orderItems, orders, stores, users } from "@shared/schema";
+import { ah, badRequest, idParam, notFound, parse } from "../lib/http";
 import { requireRole } from "../lib/auth";
 import { changeStatus, claimDelivery, markArrived } from "../lib/orderFlow";
 import { publishLocation } from "../lib/realtime";
-import { acceptOffer, declineOffer, distanceKm, setPresence, touchPresence } from "../lib/dispatchEngine";
+import { acceptOffer, declineOffer, distanceKm, riderPayQuote, setPresence, touchPresence } from "../lib/dispatchEngine";
 import { config } from "../config";
 import { account } from "../lib/settlement";
+import { available, instantCashout, payoutsOf } from "../lib/payouts";
+import { currentBusyLevel, instantCashoutFee, nextPayday } from "../lib/fees";
 
 export const driverRouter = Router();
 driverRouter.use(requireRole("driver"));
@@ -35,7 +37,10 @@ function summary(o: typeof orders.$inferSelect, s: typeof stores.$inferSelect) {
     estimatedDeliveryAt: o.estimatedDeliveryAt,
     readyEstimateAt: o.readyEstimateAt,
     pinRequired: !!o.deliveryPin,
-    payout: o.deliveryFee + o.riderTip,
+    // ganho do estafeta: fixado ao aceitar (base + distância + bónus, mínimo por hora) + espera + gorjeta
+    payout: o.riderPay != null ? o.riderPay + o.riderWaitFee + o.riderTip : null,
+    riderPayDetail: o.riderPayDetail,
+    riderWaitFee: o.riderWaitFee,
     tripKm: s.latitude != null && s.longitude != null && o.deliveryAddress.latitude != null && o.deliveryAddress.longitude != null
       ? Math.round(distanceKm({ latitude: s.latitude, longitude: s.longitude }, { latitude: o.deliveryAddress.latitude, longitude: o.deliveryAddress.longitude! }) * 10) / 10
       : null,
@@ -45,12 +50,19 @@ function summary(o: typeof orders.$inferSelect, s: typeof stores.$inferSelect) {
 }
 
 // Entregas disponíveis: aceites pela loja, sem estafeta e sem oferta em aberto (essas vão para um estafeta de cada vez)
-driverRouter.get("/available", ah(async (_req, res) => {
+driverRouter.get("/available", ah(async (req, res) => {
   const rows = await db.select({ o: orders, s: stores }).from(orders).innerJoin(stores, eq(stores.id, orders.storeId))
     .where(and(isNull(orders.driverId), inArray(orders.status, ["accepted", "preparing", "ready"]),
       sql`not exists (select 1 from dispatch_offers d where d.order_id = ${orders.id} and d.status = 'pending' and d.expires_at > now())`))
     .orderBy(desc(orders.priorityFee), asc(orders.createdAt)).limit(50);
-  res.json({ orders: rows.map((r) => summary(r.o, r.s)) });
+  // quanto cada entrega me pagaria (a partir da minha posição e do meu veículo), antes de aceitar
+  const busy = await currentBusyLevel(db);
+  const list = [];
+  for (const r of rows) {
+    const pay = await riderPayQuote(db, r.o, req.user!.id, busy);
+    list.push({ ...summary(r.o, r.s), payout: pay.total + r.o.riderTip, riderPayDetail: pay });
+  }
+  res.json({ orders: list });
 }));
 
 driverRouter.get("/current", ah(async (req, res) => {
@@ -87,7 +99,7 @@ driverRouter.get("/offers", ah(async (req, res) => {
   if (!row) return res.json({ offer: null });
   res.json({ offer: {
     id: row.d.id, offerSeconds: config.dispatchOfferSeconds, expiresAt: row.d.expiresAt, secondsLeft: Math.max(0, Math.round((row.d.expiresAt.getTime() - Date.now()) / 1000)),
-    distanceKm: row.d.distanceKm != null ? Math.round(row.d.distanceKm * 10) / 10 : null, payout: row.d.payout,
+    distanceKm: row.d.distanceKm != null ? Math.round(row.d.distanceKm * 10) / 10 : null, payout: row.d.payout, payDetail: row.d.payDetail,
     order: summary(row.o, row.s),
   } });
 }));
@@ -142,7 +154,7 @@ driverRouter.get("/history", ah(async (req, res) => {
   res.json({ orders: rows.map((r) => summary(r.o, r.s)), last30Days: tot });
 }));
 
-/** Ganhos do estafeta (taxa de entrega + gorjetas): hoje, 7 e 30 dias, e o detalhe dos últimos 7 dias. */
+/** Ganhos do estafeta (valor das entregas + espera + gorjetas): hoje, 7 e 30 dias, e o detalhe dos últimos 7 dias. */
 driverRouter.get("/earnings", ah(async (req, res) => {
   // meia-noite de hoje em Luanda (UTC+1)
   const shifted = new Date(Date.now() + 3_600_000);
@@ -152,7 +164,7 @@ driverRouter.get("/earnings", ah(async (req, res) => {
   const sum = async (since: Date) => {
     const [r] = await db.select({
       deliveries: sql<number>`count(*)::int`,
-      fees: sql<number>`coalesce(sum(${orders.deliveryFee}),0)::int`,
+      fees: sql<number>`coalesce(sum(coalesce(${orders.riderPay}, ${orders.deliveryFee}) + ${orders.riderWaitFee}),0)::int`,
       tips: sql<number>`coalesce(sum(${orders.riderTip}),0)::int`,
     }).from(orders).where(mine(since));
     return { ...r, total: r.fees + r.tips };
@@ -161,7 +173,7 @@ driverRouter.get("/earnings", ah(async (req, res) => {
   const days = await db.select({
     day: sql<string>`to_char((${orders.deliveredAt} at time zone 'Africa/Luanda')::date, 'YYYY-MM-DD')`,
     deliveries: sql<number>`count(*)::int`,
-    total: sql<number>`coalesce(sum(${orders.deliveryFee} + ${orders.riderTip}),0)::int`,
+    total: sql<number>`coalesce(sum(coalesce(${orders.riderPay}, ${orders.deliveryFee}) + ${orders.riderWaitFee} + ${orders.riderTip}),0)::int`,
   }).from(orders).where(mine(week)).groupBy(sql`1`).orderBy(sql`1`);
   res.json({
     today: await sum(startOfDay),
@@ -171,9 +183,43 @@ driverRouter.get("/earnings", ah(async (req, res) => {
   });
 }));
 
-/** Carteira: o que a PedeJá me deve, numerário em mão e movimentos. */
+/** Carteira: saldo, o que entra no próximo pagamento (terça), levantamento imediato, conta e movimentos. */
 driverRouter.get("/wallet", ah(async (req, res) => {
-  res.json({ ...(await account("driver", req.user!.id)), cashLimit: config.riderCashLimit });
+  const me = req.user!;
+  const avail = await available("driver", me.id);
+  res.json({
+    ...(await account("driver", me.id)),
+    available: avail,
+    nextPayday: nextPayday(new Date()),
+    instant: { min: config.instantCashoutMin, feePct: config.instantCashoutFeePct, feeMin: config.instantCashoutFeeMin, feeNow: avail.now ? instantCashoutFee(avail.now) : 0 },
+    payouts: await payoutsOf("driver", me.id),
+    payoutMethod: me.payoutMethod, payoutReference: me.payoutReference, vehicleType: me.vehicleType ?? "moto",
+  });
+}));
+
+/** Conta para receber e veículo. */
+driverRouter.put("/payout-account", ah(async (req, res) => {
+  const b = parse(z.object({
+    payoutMethod: z.enum(PAYOUT_METHODS), payoutReference: z.string().trim().min(9, "Indique o número ou IBAN").max(60),
+    vehicleType: z.enum(VEHICLE_TYPES).optional(),
+  }), req.body);
+  const ref = b.payoutReference.replace(/[\s-]/g, "").toUpperCase();
+  if (b.payoutMethod === "bank_transfer" && !/^(AO06)?\d{21}$/.test(ref)) {
+    throw badRequest("IBAN inválido (AO06 seguido de 21 dígitos).", "BAD_IBAN");
+  }
+  if (b.payoutMethod !== "bank_transfer" && !/^(\+?244)?9\d{8}$/.test(ref)) {
+    throw badRequest("Número de telefone inválido (9 dígitos, começa por 9).", "BAD_PHONE");
+  }
+  b.payoutReference = ref;
+  const [u] = await db.update(users).set({ payoutMethod: b.payoutMethod, payoutReference: b.payoutReference, ...(b.vehicleType ? { vehicleType: b.vehicleType } : {}) })
+    .where(eq(users.id, req.user!.id)).returning();
+  res.json({ payoutMethod: u.payoutMethod, payoutReference: u.payoutReference, vehicleType: u.vehicleType });
+}));
+
+/** Levantamento imediato (com taxa). */
+driverRouter.post("/cashout", ah(async (req, res) => {
+  const p = await instantCashout(req.user!.id);
+  res.status(201).json({ payout: p });
 }));
 
 driverRouter.get("/orders/:id", ah(async (req, res) => {

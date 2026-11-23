@@ -60,5 +60,6 @@ export function publicUser(u: User) {
     loyaltyPoints: u.loyaltyPoints,
     preferredLanguage: u.preferredLanguage,
     dietaryPreferences: u.dietaryPreferences,
+    vehicleType: u.vehicleType,
   };
 }
