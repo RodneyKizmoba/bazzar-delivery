@@ -44,31 +44,31 @@ try {
   };
   const accountGroup = '[role="radiogroup"][aria-labelledby="account-type-label"]';
   const businessGroup = 'form [role="radiogroup"]:not([aria-labelledby])';
-  async function switchLanguage(lang) {
+  async function switchLanguage(lang, target = page) {
     const selector = 'select[aria-label="Idioma / Language"]';
     // Use the real LanguageSwitch with keyboard input, never mutate its value or storage.
-    await page.focus(selector);
-    await page.keyboard.press("Home");
+    await target.focus(selector);
+    await target.keyboard.press("Home");
     for (let i = 0; i < ["pt", "en", "fr"].indexOf(lang); i++) {
-      await page.keyboard.press("ArrowDown");
+      await target.keyboard.press("ArrowDown");
     }
-    await page.keyboard.press("Enter");
-    await page.waitForFunction((lang) =>
+    await target.keyboard.press("Enter");
+    await target.waitForFunction((lang) =>
       document.documentElement.lang === (lang === "pt" ? "pt-AO" : lang)
       && document.querySelector('select[aria-label="Idioma / Language"]').value === lang,
     {}, lang);
-    assert.equal(await page.evaluate(() => localStorage.getItem("lang")), lang);
+    assert.equal(await target.evaluate(() => localStorage.getItem("lang")), lang);
   }
-  async function accessibleGroups(lang, supplier = false) {
+  async function accessibleGroups(lang, supplier = false, target = page) {
     const expected = translations[lang];
-    assert.equal((await page.$$('[role="radiogroup"]')).length, supplier ? 2 : 1);
+    assert.equal((await target.$$('[role="radiogroup"]')).length, supplier ? 2 : 1);
     for (const [selector, name, options] of [
       [accountGroup, expected.account, expected.accounts],
       ...(supplier ? [[businessGroup, expected.business, expected.businesses]] : []),
     ]) {
-      const root = await page.$(selector);
+      const root = await target.$(selector);
       try {
-        const tree = await page.accessibility.snapshot({ root, interestingOnly: false });
+        const tree = await target.accessibility.snapshot({ root, interestingOnly: false });
         assert.equal(tree?.role, "radiogroup");
         assert.equal(tree.name, name, `${lang}: accessible group name`);
         const radios = [];
@@ -134,6 +134,54 @@ try {
     }
     return request.continue();
   });
+
+  // A separate page has no evaluateOnNewDocument hook that resets the saved language to PT.
+  const persistencePage = await browser.newPage();
+  const persistenceErrors = [];
+  persistencePage.on("pageerror", (error) => persistenceErrors.push(error.message));
+  await persistencePage.setRequestInterception(true);
+  persistencePage.on("request", (request) => {
+    const path = new URL(request.url()).pathname;
+    const respond = (body, status = 200) => request.respond({
+      status, contentType: "application/json", body: JSON.stringify(body),
+    });
+    if (!["GET", "HEAD", "OPTIONS"].includes(request.method())) return request.abort();
+    if (!path.startsWith("/api/")) return request.continue();
+    if (path === "/api/auth/me") return respond({ user: null });
+    if (path === "/api/meta") return respond({
+      zones: ["Talatona", "Maianga"], welcomeBonusPoints: 100,
+      storeTypes: ["restaurant", "bakery"], dietaryTags: [], cuisines: [],
+      plus: { monthlyPrice: 3000, freeDeliveryMinOrder: 5000 },
+      points: { pointValueKz: 1, kzPerPointEarned: 100, maxDiscountPct: 20 },
+    });
+    if (Object.hasOwn(destinationReplies, path)) return respond(destinationReplies[path]);
+    return respond({});
+  });
+  async function assertPersistedLanguage(lang) {
+    await persistencePage.waitForFunction((expected) =>
+      document.documentElement.lang === (expected === "pt" ? "pt-AO" : expected)
+      && document.querySelector('select[aria-label="Idioma / Language"]')?.value === expected,
+    {}, lang);
+    await accessibleGroups(lang, false, persistencePage);
+  }
+  for (const lang of ["en", "fr"]) {
+    await persistencePage.goto(`${BASE}/registar`, { waitUntil: "networkidle0" });
+    await persistencePage.waitForSelector("#fullName");
+    await switchLanguage(lang, persistencePage);
+    await assertPersistedLanguage(lang);
+
+    await persistencePage.reload({ waitUntil: "networkidle0" });
+    await persistencePage.waitForSelector("#fullName");
+    await assertPersistedLanguage(lang);
+
+    await persistencePage.goto(`${BASE}/`, { waitUntil: "networkidle0" });
+    await persistencePage.goto(`${BASE}/registar`, { waitUntil: "networkidle0" });
+    await persistencePage.waitForSelector("#fullName");
+    await assertPersistedLanguage(lang);
+    assert.deepEqual(persistenceErrors, [], `${lang}: no page errors while restoring language`);
+    console.log(`PASS language persistence ${lang}: reload and leave/return preserve document, selector and accessible group name`);
+  }
+  await persistencePage.close();
 
   const keyboardCases = [1280, 390].flatMap((width) =>
     Object.keys(translations).map((lang) => ({ width, lang })));
