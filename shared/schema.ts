@@ -59,6 +59,11 @@ export const users = pgTable("users", {
   dietaryPreferences: text("dietary_preferences").array().notNull().default([]),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   lastLoginAt: timestamp("last_login_at"),
+  // verificação em dois passos (app autenticadora): segredo cifrado, códigos de recuperação (hash) e último passo usado
+  totpSecret: text("totp_secret"),
+  totpEnabledAt: timestamp("totp_enabled_at"),
+  totpRecovery: text("totp_recovery").array(),
+  totpLastStep: integer("totp_last_step"),
 }, (t) => [
   uniqueIndex("users_username_idx").on(t.username),
   uniqueIndex("users_referral_idx").on(t.referralCode),
@@ -311,6 +316,22 @@ export const driverPresence = pgTable("driver_presence", {
 export type DriverPresence = typeof driverPresence.$inferSelect;
 
 export const OFFER_STATUSES = ["pending", "accepted", "declined", "expired", "cancelled"] as const;
+// Registo de tudo o que a equipa do admin faz (quem, o quê, quando, de onde)
+export const adminAudit = pgTable("admin_audit", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id"),
+  username: text("username"),
+  action: text("action").notNull(), // ex.: "POST /orders/12/status" ou "login.ok"
+  targetType: text("target_type"),
+  targetId: text("target_id"),
+  details: jsonb("details").$type<Record<string, unknown>>(),
+  status: integer("status"),
+  ip: text("ip"),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [index("admin_audit_created_idx").on(t.createdAt), index("admin_audit_user_idx").on(t.userId)]);
+export type AdminAudit = typeof adminAudit.$inferSelect;
+
 // Publicidade: lojas pagam para aparecer primeiro nas pesquisas e listas ("Patrocinado")
 export const sponsorships = pgTable("sponsorships", {
   id: serial("id").primaryKey(),

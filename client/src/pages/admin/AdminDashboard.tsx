@@ -2,6 +2,7 @@ import { Link, useLocation } from "wouter";
 import { useAuth, canAdmin, type AdminPerm } from "@/hooks/useAuth";
 import { AdminCharts } from "./AdminCharts";
 import { ChangePassword } from "@/components/ChangePassword";
+import { TwoFactorSetup } from "./TwoFactorSetup";
 import { useQuery } from "@tanstack/react-query";
 import { Guard, Loading, ErrorState, EmptyState } from "@/components/common";
 import { PanelShell } from "@/components/AppShell";
@@ -21,6 +22,7 @@ export const ADMIN_AREAS: { href: string; perm: AdminPerm | "owner" | null; labe
   { href: "/admin/promocoes", perm: "marketing", label: { pt: "Promoções", en: "Promotions", fr: "Promotions" } },
   { href: "/admin/publicidade", perm: "marketing", label: { pt: "Publicidade", en: "Ads", fr: "Publicité" } },
   { href: "/admin/equipa", perm: "owner", label: { pt: "Equipa", en: "Team", fr: "Équipe" } },
+  { href: "/admin/registo", perm: "owner", label: { pt: "Registo", en: "Activity log", fr: "Journal" } },
 ];
 
 /** Separadores da área de administração: só as áreas a que esta pessoa tem acesso. */
@@ -47,7 +49,7 @@ export function AdminPage({ children }: { children: React.ReactNode }) {
   return (
     <Guard roles={["admin"]}>
       <PanelShell title={title} tabs={tabs}>
-        {allowed ? children : (
+        {user?.twoFactorSetupRequired ? <TwoFactorSetup /> : allowed ? children : (
           <EmptyState icon="🔒" title={t({ pt: "Sem acesso a esta área", en: "No access to this area", fr: "Pas d'accès à cette zone" })}
             text={t({ pt: "Peça ao dono da conta para lhe dar acesso.", en: "Ask the account owner to give you access.", fr: "Demandez l'accès au propriétaire du compte." })} />
         )}

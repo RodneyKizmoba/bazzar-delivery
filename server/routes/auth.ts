@@ -1,12 +1,14 @@
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import bcrypt from "bcryptjs";
+import QRCode from "qrcode";
+import { config } from "../config";
+import { audit, checkTotp, ipAllowed, isAdminHost, newRecoveryCodes, newTotpSecret, seal, totpFor, unseal, useRecoveryCode } from "../lib/adminSecurity";
 import { randomBytes } from "crypto";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
 import { pointsLedger, registerSchema, loginSchema, stores, users, DIETARY_TAGS } from "@shared/schema";
-import { config } from "../config";
 import { ah, badRequest, conflict, HttpError, parse } from "../lib/http";
 import { publicUser, requireAuth } from "../lib/auth";
 
@@ -14,7 +16,7 @@ export const authRouter = Router();
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: config.isProd ? 10 : 200,
+  limit: Number(process.env.AUTH_RATE_LIMIT) || (config.isProd ? 10 : 200), // falhas por ligação em 15 min
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true,
@@ -116,14 +118,89 @@ authRouter.post("/login", authLimiter, ah(async (req, res) => {
   const { username, password } = parse(loginSchema, req.body);
   const [user] = await db.select().from(users).where(eq(users.username, username.toLowerCase()));
   const ok = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH);
-  if (!user || !ok) throw new HttpError(401, "Nome de utilizador ou palavra-passe incorrectos.", "INVALID_CREDENTIALS");
+  if (!user || !ok) {
+    if (user?.userType === "admin") await audit(req, "login.fail", { user, status: 401 });
+    throw new HttpError(401, "Nome de utilizador ou palavra-passe incorrectos.", "INVALID_CREDENTIALS");
+  }
   if (!user.isActive) throw new HttpError(403, "Esta conta foi desactivada.", "ACCOUNT_DISABLED");
 
+  // a equipa do admin só entra pelo endereço do admin (e ligações permitidas); os outros nunca entram por lá
+  if (user.userType === "admin") {
+    if (!isAdminHost(req)) throw new HttpError(403, `A administração está em https://${config.adminHost}`, "ADMIN_HOST_ONLY");
+    if (!ipAllowed(req.ip)) {
+      await audit(req, "login.blocked_ip", { user, status: 403 });
+      throw new HttpError(403, "Esta ligação não está autorizada a aceder à administração.", "IP_NOT_ALLOWED");
+    }
+  } else if (config.adminHost && isAdminHost(req)) {
+    throw new HttpError(403, "Este endereço é só para a equipa PedeJá.", "ADMIN_HOST_STAFF_ONLY");
+  }
+
+  await regenerate(req);
+  // verificação em dois passos activada: falta o código da app autenticadora
+  if (user.userType === "admin" && user.totpEnabledAt) {
+    req.session.pending2fa = { userId: user.id, at: Date.now(), tries: 0 };
+    await audit(req, "login.password_ok", { user });
+    return res.json({ twoFactorRequired: true });
+  }
+  req.session.userId = user.id;
+  req.session.userType = user.userType;
+  req.session.lastSeen = Date.now();
+  await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id));
+  if (user.userType === "admin") await audit(req, "login.ok", { user });
+  res.json({ user: publicUser(user) });
+}));
+
+/** Segundo passo do login: código de 6 dígitos (ou um código de recuperação). */
+authRouter.post("/2fa/verify", authLimiter, ah(async (req, res) => {
+  const { code } = parse(z.object({ code: z.string().trim().min(6).max(20) }), req.body);
+  const p = req.session.pending2fa;
+  if (!p || Date.now() - p.at > 5 * 60_000) {
+    req.session.pending2fa = undefined;
+    throw new HttpError(401, "O tempo para o código acabou. Entre de novo.", "TWO_FACTOR_EXPIRED");
+  }
+  const [user] = await db.select().from(users).where(eq(users.id, p.userId));
+  if (!user || !user.isActive || !user.totpEnabledAt) { req.session.pending2fa = undefined; throw new HttpError(401, "Entre de novo.", "TWO_FACTOR_EXPIRED"); }
+  const isRecovery = code.includes("-") || code.replace(/\s/g, "").length > 6;
+  const ok = isRecovery ? await useRecoveryCode(user, code) : await checkTotp(user, code);
+  if (!ok) {
+    p.tries += 1;
+    await audit(req, "login.2fa_fail", { user, status: 401 });
+    if (p.tries >= 5) { req.session.pending2fa = undefined; throw new HttpError(401, "Demasiados códigos errados. Entre de novo.", "TWO_FACTOR_EXPIRED"); }
+    throw new HttpError(401, "Código errado ou já usado.", "BAD_2FA_CODE");
+  }
   await regenerate(req);
   req.session.userId = user.id;
   req.session.userType = user.userType;
+  req.session.lastSeen = Date.now();
   await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id));
-  res.json({ user: publicUser(user) });
+  await audit(req, isRecovery ? "login.ok_recovery_code" : "login.ok_2fa", { user });
+  const [fresh] = await db.select().from(users).where(eq(users.id, user.id));
+  res.json({ user: publicUser(fresh), recoveryCodesLeft: isRecovery ? fresh.totpRecovery?.length ?? 0 : undefined });
+}));
+
+/** Activar a verificação em dois passos (equipa do admin): 1) gerar o código QR … */
+authRouter.post("/2fa/setup", ah(async (req, res) => {
+  if (!req.user || req.user.userType !== "admin") throw new HttpError(403, "Só para a equipa do admin.", "FORBIDDEN");
+  if (req.user.totpEnabledAt) throw new HttpError(409, "A verificação em dois passos já está activa.", "ALREADY_ENABLED");
+  const secret = newTotpSecret();
+  req.session.totpSetup = seal(secret);
+  const url = totpFor(secret, req.user.username).toString();
+  res.json({ otpauthUrl: url, qr: await QRCode.toDataURL(url, { margin: 1, width: 220 }), secret: secret.replace(/(.{4})/g, "$1 ").trim() });
+}));
+
+/** … 2) confirmar com o primeiro código; devolve os códigos de recuperação (mostrados uma única vez). */
+authRouter.post("/2fa/enable", authLimiter, ah(async (req, res) => {
+  if (!req.user || req.user.userType !== "admin") throw new HttpError(403, "Só para a equipa do admin.", "FORBIDDEN");
+  const { code } = parse(z.object({ code: z.string().trim().min(6).max(8) }), req.body);
+  if (!req.session.totpSetup) throw new HttpError(400, "Comece de novo a activação.", "NO_SETUP");
+  const secret = unseal(req.session.totpSetup);
+  if (!(await checkTotp(req.user, code, secret))) throw new HttpError(400, "Código errado. Confirme a hora do telemóvel e tente o código seguinte.", "BAD_2FA_CODE");
+  const rc = newRecoveryCodes();
+  await db.update(users).set({ totpSecret: seal(secret), totpEnabledAt: new Date(), totpRecovery: rc.hashes }).where(eq(users.id, req.user.id));
+  req.session.totpSetup = undefined;
+  await audit(req, "2fa.enabled");
+  const [fresh] = await db.select().from(users).where(eq(users.id, req.user.id));
+  res.json({ user: publicUser(fresh), recoveryCodes: rc.codes });
 }));
 
 authRouter.post("/logout", (req, res, next) => {
@@ -135,7 +212,10 @@ authRouter.post("/logout", (req, res, next) => {
 });
 
 authRouter.get("/me", (req, res) => {
-  if (!req.user) return res.status(401).json({ message: "Não autenticado", code: "AUTH_REQUIRED" });
+  if (!req.user) {
+    if ((req as any).sessionExpired) return res.status(401).json({ message: "A sessão terminou por inactividade. Entre de novo.", code: "SESSION_EXPIRED" });
+    return res.status(401).json({ message: "Não autenticado", code: "AUTH_REQUIRED" });
+  }
   res.json({ user: publicUser(req.user) });
 });
 

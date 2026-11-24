@@ -6,8 +6,9 @@ import { ADMIN_PERMS, bannerInputSchema, banners, orders, promoCodes, promoInput
 import { ah, badRequest, conflict, HttpError, idParam, notFound, parse } from "../lib/http";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "crypto";
-import type { AdminPerm } from "@shared/schema";
+import { adminAudit, type AdminPerm } from "@shared/schema";
 import { hasAdminPerm, isOwner, publicUser, requireAdminPerm, requireRole } from "../lib/auth";
+import { adminNetworkGate, auditAdminWrites, require2faSetup } from "../lib/adminSecurity";
 import { changeStatus } from "../lib/orderFlow";
 import { STORE_THEME_IDS } from "@shared/themes";
 import { withoutSecrets } from "../lib/pos";
@@ -21,7 +22,12 @@ import { ledgerEntries } from "@shared/schema";
 import { publishOffer, publishOrder } from "../lib/realtime";
 
 export const adminRouter = Router();
+// 1) endereço e ligação (antes do login, para não revelar nada fora do endereço do admin)
+adminRouter.use(adminNetworkGate);
 adminRouter.use(requireRole("admin"));
+// 2) verificação em dois passos activada  3) tudo o que se altera fica registado
+adminRouter.use(require2faSetup);
+adminRouter.use(auditAdminWrites);
 
 // Equipa: cada área do portal só para quem tem essa permissão (o dono tem todas)
 const AREAS: [RegExp, AdminPerm | "owner" | null][] = [
@@ -32,6 +38,7 @@ const AREAS: [RegExp, AdminPerm | "owner" | null][] = [
   [/^\/(stores|users|drivers)(\/|$)/, "people"],
   [/^\/(promos|banners|ads)(\/|$)/, "marketing"],
   [/^\/staff(\/|$)/, "owner"],
+  [/^\/audit(\/|$)/, "owner"],
 ];
 adminRouter.use((req, res, next) => {
   const u = req.user!;
@@ -273,7 +280,20 @@ adminRouter.post("/ads/:id/cancel", ah(async (req, res) => {
 // ---------------------------------------------------------------------------
 // Equipa (só o dono): contas de admin com acesso limitado
 // ---------------------------------------------------------------------------
-const staffOut = (u: typeof users.$inferSelect) => ({ id: u.id, username: u.username, fullName: u.fullName, phone: u.phone, isActive: u.isActive, adminPerms: u.adminPerms, isOwner: !u.adminPerms, createdAt: u.createdAt });
+const staffOut = (u: typeof users.$inferSelect) => ({
+  id: u.id, username: u.username, fullName: u.fullName, phone: u.phone, isActive: u.isActive, adminPerms: u.adminPerms, isOwner: !u.adminPerms,
+  createdAt: u.createdAt, lastLoginAt: u.lastLoginAt, twoFactor: !!u.totpEnabledAt,
+});
+
+/** Registo de actividade da equipa (só o dono). */
+adminRouter.get("/audit", ah(async (req, res) => {
+  const userId = Number(req.query.userId) || null;
+  const q = typeof req.query.q === "string" ? req.query.q.trim().slice(0, 60) : "";
+  const rows = await db.select().from(adminAudit)
+    .where(and(userId ? eq(adminAudit.userId, userId) : sql`true`, q ? sql`(${adminAudit.action} ilike ${"%" + q + "%"} or ${adminAudit.username} ilike ${"%" + q + "%"})` : sql`true`))
+    .orderBy(desc(adminAudit.id)).limit(300);
+  res.json({ entries: rows });
+}));
 const permsSchema = z.array(z.enum(ADMIN_PERMS)).min(1, "Escolha pelo menos uma área.").max(ADMIN_PERMS.length);
 
 adminRouter.get("/staff", ah(async (_req, res) => {
@@ -302,7 +322,7 @@ adminRouter.patch("/staff/:id", ah(async (req, res) => {
   const id = idParam(req);
   if (id === req.user!.id) throw badRequest("Não pode alterar a sua própria conta aqui.");
   const b = parse(z.object({
-    perms: permsSchema.optional(), isActive: z.boolean().optional(),
+    perms: permsSchema.optional(), isActive: z.boolean().optional(), reset2fa: z.literal(true).optional(),
     password: z.string().min(12, "A palavra-passe da equipa tem pelo menos 12 caracteres").max(128).optional(),
   }), req.body);
   const [t] = await db.select().from(users).where(eq(users.id, id));
@@ -312,9 +332,11 @@ adminRouter.patch("/staff/:id", ah(async (req, res) => {
     ...(b.perms ? { adminPerms: [...new Set(b.perms)] } : {}),
     ...(b.isActive !== undefined ? { isActive: b.isActive } : {}),
     ...(b.password ? { passwordHash: await bcrypt.hash(b.password, 12) } : {}),
+    // telemóvel perdido: volta a configurar a verificação em dois passos no próximo login
+    ...(b.reset2fa ? { totpSecret: null, totpEnabledAt: null, totpRecovery: null, totpLastStep: null } : {}),
   }).where(eq(users.id, id)).returning();
   // desactivado ou palavra-passe nova: termina as sessões abertas dessa pessoa
-  if (b.isActive === false || b.password) await db.execute(sql`delete from sessions where (sess->>'userId')::int = ${id}`).catch(() => {});
+  if (b.isActive === false || b.password || b.reset2fa) await db.execute(sql`delete from sessions where (sess->>'userId')::int = ${id}`).catch(() => {});
   res.json({ member: staffOut(u) });
 }));
 

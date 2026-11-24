@@ -2,10 +2,13 @@
  * PedeJá — API end-to-end + security test suite.
  * Run against a FRESH seeded DB:  npx tsx tests/api.test.ts
  * The server must run with fast dispatch timeouts, fixed pricing (no "busy" surcharge) and a test clock for payouts:
- *   DISPATCH_OFFER_SECONDS=4 DISPATCH_TICK_MS=500 BUSY_PRICING=0 ALLOW_TEST_CLOCK=1 bash scripts/local-server.sh
+ *   DISPATCH_OFFER_SECONDS=4 DISPATCH_TICK_MS=500 BUSY_PRICING=0 ALLOW_TEST_CLOCK=1 ADMIN_REQUIRE_2FA=0 AUTH_RATE_LIMIT=60 bash scripts/local-server.sh
+ * (ADMIN_REQUIRE_2FA=0 so the suite's admin can work without a phone; 2FA itself is tested in its own section
+ *  and the "required" switch, admin address, allowed IPs and idle timeout in tests/admin-security.smoke.mjs)
  * BASE env var overrides the server URL (default http://localhost:5055).
  */
 import WebSocket from "ws";
+import * as OTPAuth from "otpauth";
 const BASE = process.env.BASE || "http://localhost:5055";
 const ORIGIN = BASE;
 
@@ -1597,6 +1600,84 @@ async function main() {
     await c3.post("/api/auth/register", { username: `pwc_${uniq}`, password: "Cliente#2026", fullName: "Pw Cliente", phone: "+244923333010", userType: "customer" });
     r = await c3.post("/api/auth/password", { currentPassword: "Cliente#2026", newPassword: "Cliente#2027" });
     check("customer changes password (8+ chars)", r.status === 200, r.body);
+  });
+
+  // =========================================================================
+  await section("Admin security: two-step login, recovery codes, activity log", async () => {
+    const totpNow = (secret: string, offsetSec = 0) => new OTPAuth.TOTP({ issuer: "PedeJá Admin", digits: 6, period: 30, secret: OTPAuth.Secret.fromBase32(secret.replace(/\s/g, "")) })
+      .generate({ timestamp: Date.now() + offsetSec * 1000 });
+    let r = await admin.post("/api/admin/staff", { fullName: "Carla Ops", username: `carla_${uniq}`, phone: "+244923555001", password: "Operacoes#2026!", perms: ["orders"] });
+    check("owner creates staff for 2FA test", r.status === 201, r.body);
+    const carlaId = r.body.member.id;
+    const carla = new Client("carla"); await carla.login(`carla_${uniq}`, "Operacoes#2026!");
+    r = await carla.get("/api/auth/me");
+    check("staff starts without 2FA", r.body.user.twoFactorEnabled === false, r.body.user);
+    r = await cli.post("/api/auth/2fa/setup");
+    check("customers can't set up admin 2FA (403)", r.status === 403, r.status);
+    r = await carla.post("/api/auth/2fa/setup");
+    const secret: string = r.body.secret;
+    check("setup returns a QR image and a key", r.status === 200 && r.body.qr?.startsWith("data:image/png;base64,") && /^[A-Z2-7 ]{20,}$/.test(secret) && r.body.otpauthUrl.startsWith("otpauth://totp/"), { s: r.status });
+    r = await carla.post("/api/auth/2fa/enable", { code: "000000" });
+    check("wrong code doesn't enable it (400)", r.status === 400 && r.body.code === "BAD_2FA_CODE", r.body);
+    r = await carla.post("/api/auth/2fa/enable", { code: totpNow(secret) });
+    const recovery: string[] = r.body.recoveryCodes ?? [];
+    check("right code enables 2FA; 8 recovery codes shown once", r.status === 200 && r.body.user.twoFactorEnabled === true && recovery.length === 8, r.body);
+    r = await carla.post("/api/auth/2fa/setup");
+    check("can't set up twice (409)", r.status === 409, r.status);
+    const row = await admin.get("/api/admin/staff");
+    check("team list shows 2FA on", row.body.staff.find((m: any) => m.id === carlaId)?.twoFactor === true, "no");
+
+    // login now needs the code
+    const c2 = new Client("carla2");
+    r = await c2.post("/api/auth/login", { username: `carla_${uniq}`, password: "Operacoes#2026!" });
+    check("password alone isn't enough: asks for the code, no user yet", r.status === 200 && r.body.twoFactorRequired === true && !r.body.user, r.body);
+    r = await c2.get("/api/admin/orders");
+    check("not logged in before the code (401)", r.status === 401, r.status);
+    r = await c2.post("/api/auth/2fa/verify", { code: "123456" });
+    check("wrong code refused (401 BAD_2FA_CODE)", r.status === 401 && r.body.code === "BAD_2FA_CODE", r.body);
+    r = await c2.post("/api/auth/2fa/verify", { code: totpNow(secret) });
+    check("the code already used to enable can't be reused", r.status === 401, r.status);
+    r = await c2.post("/api/auth/2fa/verify", { code: totpNow(secret, 30) });
+    check("next code logs in", r.status === 200 && r.body.user?.username === `carla_${uniq}`, r.body);
+    r = await c2.get("/api/admin/orders");
+    check("…and the portal works", r.status === 200, r.status);
+
+    // recovery code
+    const c3 = new Client("carla3");
+    await c3.post("/api/auth/login", { username: `carla_${uniq}`, password: "Operacoes#2026!" });
+    r = await c3.post("/api/auth/2fa/verify", { code: recovery[0] });
+    check("recovery code logs in (7 left)", r.status === 200 && r.body.recoveryCodesLeft === 7, r.body);
+    const c4 = new Client("carla4");
+    await c4.post("/api/auth/login", { username: `carla_${uniq}`, password: "Operacoes#2026!" });
+    r = await c4.post("/api/auth/2fa/verify", { code: recovery[0] });
+    check("a recovery code works only once", r.status === 401, r.status);
+    r = await c4.post("/api/auth/2fa/verify", { code: "zzzz" });
+    check("garbage code rejected", r.status === 400 || r.status === 401, r.status);
+    const c5 = new Client("carla5");
+    r = await c5.post("/api/auth/2fa/verify", { code: totpNow(secret) });
+    check("code without the password step first is refused", r.status === 401 && r.body.code === "TWO_FACTOR_EXPIRED", r.body);
+
+    // activity log
+    r = await admin.get("/api/admin/audit");
+    const log = r.body.entries ?? [];
+    check("owner sees the activity log", r.status === 200 && log.length > 0, r.status);
+    check("log has logins with code, recovery code and 2FA activation", ["login.ok_2fa", "login.ok_recovery_code", "2fa.enabled", "login.2fa_fail"].every((a) => log.some((e: any) => e.action === a && e.username === `carla_${uniq}`)), log.slice(0, 8).map((e: any) => e.action));
+    const created = log.find((e: any) => e.action === "POST /staff" && e.details?.username === `carla_${uniq}`);
+    check("log records admin changes, with passwords hidden", created && created.details.password === "•••" && created.username === "admin" && created.status === 201, created);
+    check("log keeps the connection address", !!created?.ip, created?.ip);
+    r = await admin.get(`/api/admin/audit?q=login.fail`);
+    check("log is searchable", r.status === 200 && r.body.entries.every((e: any) => e.action.includes("login.fail") || (e.username ?? "").includes("login.fail")), r.body.entries?.length);
+    r = await c2.get("/api/admin/audit");
+    check("staff can't read the activity log (403)", r.status === 403, r.status);
+
+    // lost phone: owner resets 2FA
+    r = await admin.patch(`/api/admin/staff/${carlaId}`, { reset2fa: true });
+    check("owner resets staff 2FA", r.status === 200 && r.body.member.twoFactor === false, r.body);
+    r = await c2.get("/api/admin/orders");
+    check("reset ends her open sessions (401)", r.status === 401, r.status);
+    const c6 = new Client("carla6");
+    r = await c6.post("/api/auth/login", { username: `carla_${uniq}`, password: "Operacoes#2026!" });
+    check("after reset she logs in with password and sets 2FA up again", r.status === 200 && r.body.user?.twoFactorEnabled === false, r.body);
   });
 
   // =========================================================================

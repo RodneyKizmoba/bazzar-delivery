@@ -12,6 +12,7 @@ import { errorHandler } from "./lib/http";
 import { releaseScheduledOrders } from "./lib/orderFlow";
 import { startDispatcher } from "./lib/dispatchEngine";
 import { startPayoutScheduler } from "./lib/payouts";
+import { emergencyReset2fa } from "./lib/adminSecurity";
 import { authRouter } from "./routes/auth";
 import { catalogRouter } from "./routes/catalog";
 import { customerRouter } from "./routes/customer";
@@ -128,6 +129,7 @@ app.use(errorHandler);
 (async () => {
   await runMigrations();
   await ensureAdmin();
+  await emergencyReset2fa();
   if (process.env.SEED_LAUNCH === "true") await seedLaunchData();
   if (process.env.SEED_DEMO === "true" || (!config.isProd && process.env.SEED_DEMO !== "false")) {
     await seedDemoData();

@@ -17,6 +17,8 @@ export interface User {
   // admin: null = dono (acesso total); lista = membro da equipa
   adminPerms?: AdminPerm[] | null;
   isOwner?: boolean;
+  twoFactorEnabled?: boolean;
+  twoFactorSetupRequired?: boolean;
 }
 export type AdminPerm = "orders" | "finance" | "people" | "marketing";
 /** O dono (sem lista) tem todas as áreas; a equipa só as suas. */
@@ -29,7 +31,9 @@ export function canAdmin(u: User | null | undefined, perm: AdminPerm | "owner") 
 interface AuthCtx {
   user: User | null;
   isLoading: boolean;
-  login: (username: string, password: string) => Promise<User>;
+  /** null = falta o código da verificação em dois passos (equipa do admin) */
+  login: (username: string, password: string) => Promise<User | null>;
+  verify2fa: (code: string) => Promise<User>;
   logout: () => Promise<void>;
   setUser: (u: User | null) => void;
   refresh: () => Promise<void>;
@@ -68,7 +72,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser,
     refresh: async () => { await queryClient.invalidateQueries({ queryKey: KEY }); },
     login: async (username, password) => {
-      const { user } = await post<{ user: User }>("/api/auth/login", { username, password });
+      const r = await post<{ user?: User; twoFactorRequired?: boolean }>("/api/auth/login", { username, password });
+      if (r.twoFactorRequired || !r.user) return null;
+      resetOtherQueries();
+      setUser(r.user);
+      return r.user;
+    },
+    verify2fa: async (code) => {
+      const { user } = await post<{ user: User }>("/api/auth/2fa/verify", { code });
       resetOtherQueries();
       setUser(user);
       return user;

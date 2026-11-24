@@ -69,6 +69,7 @@ catalogRouter.get("/meta", ah(async (_req, res) => {
       welcomeBonusPoints: config.welcomeBonusPoints, referralBonusPoints: config.referralBonusPoints,
     },
     welcomeBonusPoints: config.welcomeBonusPoints,
+    adminHost: config.adminHost || null, // a administração só funciona neste endereço (se definido)
   });
 }));
 

@@ -1,6 +1,6 @@
-import { lazy, Suspense } from "react";
-import { Route, Switch } from "wouter";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { lazy, Suspense, useEffect } from "react";
+import { Route, Switch, useLocation } from "wouter";
+import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { queryClient } from "@/lib/api";
@@ -44,6 +44,7 @@ const AdminDashboard = lazy(() => import("@/pages/admin/AdminDashboard"));
 const AdminOrders = lazy(() => import("@/pages/admin/AdminOrders"));
 const PartnerAds = lazy(() => import("@/pages/partner/PartnerAds"));
 const PartnerPayouts = lazy(() => import("@/pages/partner/PartnerPayouts"));
+const AdminAudit = lazy(() => import("@/pages/admin/AdminAudit"));
 const AdminTeam = lazy(() => import("@/pages/admin/AdminTeam"));
 const AdminFinance = lazy(() => import("@/pages/admin/AdminFinance"));
 const AdminDispatch = lazy(() => import("@/pages/admin/AdminDispatch"));
@@ -91,6 +92,7 @@ function Routes() {
         <Route path="/admin/despacho" component={AdminDispatch} />
         <Route path="/admin/financas" component={AdminFinance} />
         <Route path="/admin/equipa" component={AdminTeam} />
+        <Route path="/admin/registo" component={AdminAudit} />
         <Route path="/admin/lojas" component={AdminStores} />
         <Route path="/admin/utilizadores" component={AdminUsers} />
         <Route path="/admin/promocoes" component={AdminPromos} />
@@ -102,6 +104,19 @@ function Routes() {
   );
 }
 
+/** No endereço próprio da administração (ADMIN_HOST) só existe o portal admin e o login. */
+function AdminHostRedirect() {
+  const [path, navigate] = useLocation();
+  const { data } = useQuery<{ adminHost: string | null }>({ queryKey: ["/api/meta"], staleTime: 300_000 });
+  useEffect(() => {
+    const host = data?.adminHost;
+    if (host && window.location.hostname.toLowerCase() === host && !path.startsWith("/admin") && !path.startsWith("/entrar")) {
+      navigate("/admin", { replace: true });
+    }
+  }, [data?.adminHost, path]);
+  return null;
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -110,6 +125,7 @@ export default function App() {
           <LiveProvider>
           <CartProvider>
             <TooltipProvider>
+              <AdminHostRedirect />
               <Routes />
               <Toaster />
             </TooltipProvider>

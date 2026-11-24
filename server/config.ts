@@ -14,6 +14,12 @@ export const config = {
   isProd,
   port: num("PORT", 5000),
   sessionSecret: process.env.SESSION_SECRET || "dev-only-secret-change-me",
+  // Segurança do admin
+  adminRequire2fa: process.env.ADMIN_REQUIRE_2FA !== "0", // verificação em dois passos obrigatória para a equipa
+  adminHost: (process.env.ADMIN_HOST || "").trim().toLowerCase(), // ex.: admin.pedeja.ao — vazio = em qualquer endereço
+  adminAllowedIps: (process.env.ADMIN_ALLOWED_IPS || "").split(",").map((s) => s.trim()).filter(Boolean), // vazio = qualquer ligação
+  adminIdleMin: Number(process.env.ADMIN_IDLE_MIN || 30), // sessão do admin termina após X min sem uso
+  adminReset2faFor: (process.env.ADMIN_RESET_2FA || "").trim().toLowerCase(), // emergência: utilizador cuja 2FA é removida ao arrancar
   appOrigins: (process.env.APP_ORIGINS || "").split(",").map((s) => s.trim()).filter(Boolean),
 
   // Pagamentos: "disabled" (só numerário), "sandbox" (simulação para testes) ou "live" (gateway real)

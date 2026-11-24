@@ -12,7 +12,7 @@ import { dateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { AdminPerm } from "@/hooks/useAuth";
 
-interface Member { id: number; username: string; fullName: string; phone: string; isActive: boolean; adminPerms: AdminPerm[] | null; isOwner: boolean; createdAt: string }
+interface Member { id: number; username: string; fullName: string; phone: string; isActive: boolean; adminPerms: AdminPerm[] | null; isOwner: boolean; createdAt: string; lastLoginAt: string | null; twoFactor: boolean }
 
 export const PERM_INFO: Record<AdminPerm, { label: Tr; desc: Tr }> = {
   orders: { label: { pt: "Encomendas e despacho", en: "Orders & dispatch", fr: "Commandes et dispatch" }, desc: { pt: "Ver e cancelar encomendas, atribuir estafetas", en: "See and cancel orders, assign riders", fr: "Voir et annuler les commandes, assigner des livreurs" } },
@@ -65,7 +65,9 @@ function Team() {
             <div className="flex flex-wrap items-start gap-2">
               <div className="min-w-0 flex-1">
                 <p className="font-semibold">{m.fullName} <span className="text-sm font-normal text-neutral-500">@{m.username}</span></p>
-                <p className="text-xs text-neutral-500">{m.isOwner ? t({ pt: "Dono — acesso total", en: "Owner — full access", fr: "Propriétaire — accès total" }) : `${t({ pt: "Desde", en: "Since", fr: "Depuis" })} ${dateTime(m.createdAt, lang)}`}{!m.isActive && ` · ${t({ pt: "desactivado", en: "deactivated", fr: "désactivé" })}`}</p>
+                <p className="text-xs text-neutral-500">{m.isOwner ? t({ pt: "Dono — acesso total", en: "Owner — full access", fr: "Propriétaire — accès total" }) : `${t({ pt: "Desde", en: "Since", fr: "Depuis" })} ${dateTime(m.createdAt, lang)}`}{!m.isActive && ` · ${t({ pt: "desactivado", en: "deactivated", fr: "désactivé" })}`}
+                  {m.lastLoginAt && ` · ${t({ pt: "última entrada", en: "last login", fr: "dernière connexion" })} ${dateTime(m.lastLoginAt, lang)}`}</p>
+                <p className={cn("text-xs font-semibold", m.twoFactor ? "text-green-700" : "text-amber-700")}>{m.twoFactor ? `🔐 ${t({ pt: "Verificação em dois passos activa", en: "Two-step verification on", fr: "Validation en deux étapes active" })}` : `⚠ ${t({ pt: "Ainda sem verificação em dois passos (pedida no próximo login)", en: "No two-step verification yet (asked at next login)", fr: "Pas encore de validation en deux étapes (demandée à la prochaine connexion)" })}`}</p>
               </div>
               {!m.isOwner && (
                 <div className="flex gap-2">
@@ -73,6 +75,7 @@ function Team() {
                     const pw = window.prompt(t({ pt: "Nova palavra-passe provisória (mín. 12 caracteres):", en: "New temporary password (min 12 characters):", fr: "Nouveau mot de passe provisoire (min 12 caractères) :" }));
                     if (pw) update.mutate({ id: m.id, body: { password: pw } });
                   }}>{t({ pt: "Repor palavra-passe", en: "Reset password", fr: "Réinitialiser" })}</Button>
+                  {m.twoFactor && <Button size="sm" variant="outline" onClick={() => update.mutate({ id: m.id, body: { reset2fa: true } })}>{t({ pt: "Repor 2 passos (telemóvel perdido)", en: "Reset 2-step (lost phone)", fr: "Réinitialiser 2 étapes" })}</Button>}
                   <Button size="sm" variant={m.isActive ? "outline" : "default"} onClick={() => update.mutate({ id: m.id, body: { isActive: !m.isActive } })}>
                     {m.isActive ? t({ pt: "Desactivar", en: "Deactivate", fr: "Désactiver" }) : t({ pt: "Reactivar", en: "Reactivate", fr: "Réactiver" })}
                   </Button>

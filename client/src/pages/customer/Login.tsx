@@ -26,7 +26,9 @@ const DEMO = [
 export default function Login() {
   const t = useT();
   const [, navigate] = useLocation();
-  const { login } = useAuth();
+  const { login, verify2fa } = useAuth();
+  const [needCode, setNeedCode] = useState(false);
+  const [code, setCode] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
@@ -35,17 +37,25 @@ export default function Login() {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!username.trim() || !password) {
+    if (!needCode && (!username.trim() || !password)) {
       setError(t({ pt: "Indique o nome de utilizador e a palavra-passe.", en: "Enter your username and password.", fr: "Saisissez votre identifiant et votre mot de passe." }));
       return;
     }
     setBusy(true);
     setError(null);
     try {
+      if (needCode) {
+        const user = await verify2fa(code.trim());
+        navigate(safeNext() ?? homeFor(user), { replace: true });
+        return;
+      }
       const user = await login(username.trim(), password);
+      if (!user) { setNeedCode(true); setPassword(""); return; } // equipa do admin: falta o código
       navigate(safeNext() ?? homeFor(user), { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : t(T.error));
+      // tempo esgotado ou demasiadas tentativas: voltar ao primeiro passo
+      if (needCode && err instanceof Error && /TWO_FACTOR_EXPIRED/.test((err as any).code ?? "")) { setNeedCode(false); setCode(""); }
     } finally {
       setBusy(false);
     }
@@ -72,6 +82,18 @@ export default function Login() {
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden /> {error}
             </div>
           )}
+          {needCode ? (
+            <div className="space-y-1.5">
+              <Label htmlFor="otp">{t({ pt: "Código da app autenticadora", en: "Authenticator app code", fr: "Code de l'app d'authentification" })}</Label>
+              <Input id="otp" inputMode="numeric" autoComplete="one-time-code" autoFocus maxLength={11} value={code}
+                onChange={(e) => setCode(e.target.value)} className="h-14 rounded-xl text-center font-mono text-2xl tracking-[0.4em]" placeholder="000000"
+                aria-describedby="otp-help" />
+              <p id="otp-help" className="text-xs text-neutral-500">{t({ pt: "Abra a app (Google ou Microsoft Authenticator) e escreva o código de 6 dígitos de \"PedeJá Admin\". Perdeu o telemóvel? Escreva um dos códigos de recuperação.", en: "Open your authenticator app and type the 6-digit \"PedeJá Admin\" code. Lost your phone? Type one of your recovery codes.", fr: "Ouvrez votre app d'authentification et saisissez le code à 6 chiffres « PedeJá Admin ». Téléphone perdu ? Saisissez un code de récupération." })}</p>
+              <button type="button" className="text-xs font-semibold text-primary underline" onClick={() => { setNeedCode(false); setCode(""); setError(null); }}>
+                {t({ pt: "Voltar", en: "Back", fr: "Retour" })}
+              </button>
+            </div>
+          ) : (<>
           <div className="space-y-1.5">
             <Label htmlFor="username">{t({ pt: "Nome de utilizador", en: "Username", fr: "Nom d'utilisateur" })}</Label>
             <Input id="username" autoComplete="username" autoCapitalize="none" autoCorrect="off" value={username}
@@ -89,15 +111,16 @@ export default function Login() {
               </button>
             </div>
           </div>
+          </>)}
           <Button type="submit" className="h-12 w-full rounded-full text-base" disabled={busy}>
-            {busy ? t(T.loading) : t(T.login)}
+            {busy ? t(T.loading) : needCode ? t({ pt: "Confirmar", en: "Confirm", fr: "Confirmer" }) : t(T.login)}
           </Button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-neutral-600">
+        {!needCode && <p className="mt-6 text-center text-sm text-neutral-600">
           {t({ pt: "Ainda não tem conta?", en: "Don't have an account?", fr: "Pas encore de compte ?" })}{" "}
           <Link href={next ? `/registar?next=${encodeURIComponent(next)}` : "/registar"} className="font-semibold text-primary hover:underline">{t(T.register)}</Link>
-        </p>
+        </p>}
 
         {import.meta.env.DEV && (
           <Collapsible className="mt-8 rounded-xl border border-dashed bg-neutral-50 p-3">
