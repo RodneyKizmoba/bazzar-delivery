@@ -14,6 +14,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useStoreVocab } from "@/lib/storeVocab";
 import { useToast } from "@/hooks/use-toast";
 import { del, patch, post, put, queryClient } from "@/lib/api";
 import { useT, T, type Tr } from "@/lib/i18n";
@@ -77,6 +78,7 @@ export default function PartnerMenu() {
 
 function MenuContent() {
   const t = useT();
+  const vocab = useStoreVocab();
   const onErr = useErr();
   const { toast } = useToast();
   const { data, isLoading, error, refetch } = useQuery<{ sections: Section[]; items: Item[] }>({ queryKey: [MENU] });
@@ -127,7 +129,7 @@ function MenuContent() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-bold">{t({ pt: "Menu", en: "Menu", fr: "Menu" })}</h1>
+        <h1 className="text-xl font-bold">{t(vocab.catalog)}</h1>
         <Button onClick={() => setEditing("new")}><Plus className="h-4 w-4" />{t({ pt: "Novo produto", en: "New item", fr: "Nouveau produit" })}</Button>
       </div>
 
@@ -136,13 +138,13 @@ function MenuContent() {
         <div className="flex-1 min-w-[200px] space-y-1">
           <Label htmlFor="new-section">{t({ pt: "Nova secção", en: "New section", fr: "Nouvelle section" })}</Label>
           <Input id="new-section" value={newSection} maxLength={60} onChange={(e) => setNewSection(e.target.value)}
-            placeholder={t({ pt: "Ex.: Grelhados, Bebidas…", en: "E.g. Grills, Drinks…", fr: "Ex. : Grillades, Boissons…" })} />
+            placeholder={t(vocab.sectionExample)} />
         </div>
         <Button type="submit" variant="outline" disabled={!newSection.trim() || addSection.isPending}>{t(T.add)}</Button>
       </form>
 
       {!items.length && !sections.length && (
-        <EmptyState icon="🍽️" title={t({ pt: "O seu menu está vazio", en: "Your menu is empty", fr: "Votre menu est vide" })}
+        <EmptyState icon={vocab.emptyIcon} title={t(vocab.emptyTitle)}
           text={t({ pt: "Crie secções e adicione produtos para começar a vender.", en: "Create sections and add items to start selling.", fr: "Créez des sections et ajoutez des produits pour commencer à vendre." })} />
       )}
 

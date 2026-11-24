@@ -16,6 +16,8 @@ import { useT, T, type Tr } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { usePartnerTabs, usePartnerTitle } from "./PartnerOrders";
 import { PinPicker } from "@/components/OrderMap";
+import { ChangePassword } from "@/components/ChangePassword";
+import { useStoreVocab } from "@/lib/storeVocab";
 
 export default function PartnerStore() {
   const tabs = usePartnerTabs();
@@ -25,6 +27,7 @@ export default function PartnerStore() {
       <PanelShell title={title} tabs={tabs}>
         <StoreForm />
         <PosIntegration />
+        <div className="mx-auto mt-6 max-w-3xl"><ChangePassword /></div>
       </PanelShell>
     </Guard>
   );
@@ -46,6 +49,7 @@ function StoreForm() {
   const metaQ = useQuery<{ zones: string[] }>({ queryKey: ["/api/meta"] });
   const [f, setF] = useState<Form | null>(null);
   const [cuisineInput, setCuisineInput] = useState("");
+  const vocab = useStoreVocab();
   const [locating, setLocating] = useState(false);
   const rates = useQuery<{ delivery: number; pickup: number; storeDelivery: number }>({ queryKey: ["/api/partner/commissions"] }).data;
   const useHere = () => {
@@ -155,11 +159,11 @@ function StoreForm() {
           <Field id="st-desc" label={{ pt: "Descrição", en: "Description", fr: "Description" }} className="sm:col-span-2">
             <Textarea id="st-desc" value={form.description} maxLength={500} onChange={(e) => set("description", e.target.value)} />
           </Field>
-          <Field id="st-cuisine" label={{ pt: "Cozinhas / categorias (separe por vírgulas)", en: "Cuisines / categories (comma separated)", fr: "Cuisines / catégories (séparées par des virgules)" }} className="sm:col-span-2">
+          <Field id="st-cuisine" label={vocab.categories} className="sm:col-span-2">
             <div className="flex gap-2">
               <Input id="st-cuisine" value={cuisineInput} onChange={(e) => setCuisineInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addCuisine(); } }}
-                placeholder={t({ pt: "Ex.: Angolana, Grelhados", en: "E.g. Angolan, Grills", fr: "Ex. : Angolaise, Grillades" })} />
+                placeholder={t(vocab.categoriesExample)} />
               <Button type="button" variant="outline" onClick={addCuisine}>{t(T.add)}</Button>
             </div>
             {form.cuisines.length > 0 && (
@@ -338,6 +342,7 @@ function StoreForm() {
 /** Integração com o sistema de cozinha / POS: chave de API e webhook assinado. */
 function PosIntegration() {
   const t = useT();
+  const vocab = useStoreVocab();
   const { toast } = useToast();
   const q = useQuery<{ keyActive: boolean; keyHint: string | null; webhookUrl: string | null }>({ queryKey: ["/api/partner/integration"] });
   const [shown, setShown] = useState<{ label: string; value: string } | null>(null);
@@ -370,7 +375,7 @@ function PosIntegration() {
   if (!q.data) return null;
   return (
     <div className="mx-auto mt-4 max-w-3xl">
-      <Card title={{ pt: "Integração com a cozinha / POS", en: "Kitchen / POS integration", fr: "Intégration cuisine / caisse" }}>
+      <Card title={vocab.integration}>
         <div className="space-y-4">
         <p className="text-sm text-neutral-600">
           {t({

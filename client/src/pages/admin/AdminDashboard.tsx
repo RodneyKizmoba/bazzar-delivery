@@ -1,24 +1,33 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
+import { useAuth, canAdmin, type AdminPerm } from "@/hooks/useAuth";
+import { AdminCharts } from "./AdminCharts";
+import { ChangePassword } from "@/components/ChangePassword";
 import { useQuery } from "@tanstack/react-query";
-import { Guard, Loading, ErrorState } from "@/components/common";
+import { Guard, Loading, ErrorState, EmptyState } from "@/components/common";
 import { PanelShell } from "@/components/AppShell";
 import { useT, type Tr } from "@/lib/i18n";
 import { kz } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 /** Separadores da área de administração (reutilizados nas outras páginas admin). */
+/** Que área do portal cada página é (a equipa só vê as suas). */
+export const ADMIN_AREAS: { href: string; perm: AdminPerm | "owner" | null; label: Tr }[] = [
+  { href: "/admin", perm: null, label: { pt: "Resumo", en: "Overview", fr: "Résumé" } },
+  { href: "/admin/encomendas", perm: "orders", label: { pt: "Encomendas", en: "Orders", fr: "Commandes" } },
+  { href: "/admin/despacho", perm: "orders", label: { pt: "Despacho", en: "Dispatch", fr: "Dispatch" } },
+  { href: "/admin/financas", perm: "finance", label: { pt: "Finanças", en: "Finance", fr: "Finances" } },
+  { href: "/admin/lojas", perm: "people", label: { pt: "Lojas", en: "Stores", fr: "Magasins" } },
+  { href: "/admin/utilizadores", perm: "people", label: { pt: "Utilizadores", en: "Users", fr: "Utilisateurs" } },
+  { href: "/admin/promocoes", perm: "marketing", label: { pt: "Promoções", en: "Promotions", fr: "Promotions" } },
+  { href: "/admin/publicidade", perm: "marketing", label: { pt: "Publicidade", en: "Ads", fr: "Publicité" } },
+  { href: "/admin/equipa", perm: "owner", label: { pt: "Equipa", en: "Team", fr: "Équipe" } },
+];
+
+/** Separadores da área de administração: só as áreas a que esta pessoa tem acesso. */
 export function useAdminTabs() {
   const t = useT();
-  return [
-    { href: "/admin", label: t({ pt: "Resumo", en: "Overview", fr: "Résumé" }) },
-    { href: "/admin/encomendas", label: t({ pt: "Encomendas", en: "Orders", fr: "Commandes" }) },
-    { href: "/admin/despacho", label: t({ pt: "Despacho", en: "Dispatch", fr: "Dispatch" }) },
-    { href: "/admin/financas", label: t({ pt: "Finanças", en: "Finance", fr: "Finances" }) },
-    { href: "/admin/lojas", label: t({ pt: "Lojas", en: "Stores", fr: "Magasins" }) },
-    { href: "/admin/utilizadores", label: t({ pt: "Utilizadores", en: "Users", fr: "Utilisateurs" }) },
-    { href: "/admin/promocoes", label: t({ pt: "Promoções", en: "Promotions", fr: "Promotions" }) },
-    { href: "/admin/publicidade", label: t({ pt: "Publicidade", en: "Ads", fr: "Publicité" }) },
-  ];
+  const { user } = useAuth();
+  return ADMIN_AREAS.filter((a) => a.perm === null || canAdmin(user, a.perm)).map((a) => ({ href: a.href, label: t(a.label) }));
 }
 export function useAdminTitle() {
   const t = useT();
@@ -29,9 +38,20 @@ export function useAdminTitle() {
 export function AdminPage({ children }: { children: React.ReactNode }) {
   const tabs = useAdminTabs();
   const title = useAdminTitle();
+  const [path] = useLocation();
+  const { user } = useAuth();
+  const t = useT();
+  // página de uma área que esta conta da equipa não tem: não mostra nada (o servidor também recusa)
+  const area = [...ADMIN_AREAS].sort((a, b) => b.href.length - a.href.length).find((a) => path === a.href || path.startsWith(a.href + "/"));
+  const allowed = !area || area.perm === null || canAdmin(user, area.perm);
   return (
     <Guard roles={["admin"]}>
-      <PanelShell title={title} tabs={tabs}>{children}</PanelShell>
+      <PanelShell title={title} tabs={tabs}>
+        {allowed ? children : (
+          <EmptyState icon="🔒" title={t({ pt: "Sem acesso a esta área", en: "No access to this area", fr: "Pas d'accès à cette zone" })}
+            text={t({ pt: "Peça ao dono da conta para lhe dar acesso.", en: "Ask the account owner to give you access.", fr: "Demandez l'accès au propriétaire du compte." })} />
+        )}
+      </PanelShell>
     </Guard>
   );
 }
@@ -61,6 +81,8 @@ function Tile({ label, value, href, warn }: { label: Tr; value: string | number;
 
 function Dashboard() {
   const t = useT();
+  const { user } = useAuth();
+  const can = (p: AdminPerm) => canAdmin(user, p);
   const { data, isLoading, error, refetch } = useQuery<Stats>({ queryKey: ["/api/admin/stats"], refetchInterval: 30_000 });
   if (isLoading) return <Loading />;
   if (error) return <ErrorState error={error} onRetry={() => refetch()} />;
@@ -71,7 +93,7 @@ function Dashboard() {
       <section>
         <h2 className="mb-2 text-sm font-semibold text-neutral-700">{t({ pt: "Últimas 24 horas", en: "Last 24 hours", fr: "Dernières 24 heures" })}</h2>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <Tile label={{ pt: "Encomendas", en: "Orders", fr: "Commandes" }} value={s.last24h.total} href="/admin/encomendas" />
+          <Tile label={{ pt: "Encomendas", en: "Orders", fr: "Commandes" }} value={s.last24h.total} href={can("orders") ? "/admin/encomendas" : undefined} />
           <Tile label={{ pt: "Entregues", en: "Delivered", fr: "Livrées" }} value={s.last24h.delivered} />
           <Tile label={{ pt: "Em curso", en: "Active", fr: "En cours" }} value={s.last24h.active} />
           <Tile label={{ pt: "GMV (entregues)", en: "GMV (delivered)", fr: "GMV (livrées)" }} value={kz(s.last24h.gmv)} />
@@ -81,20 +103,22 @@ function Dashboard() {
         <h2 className="mb-2 text-sm font-semibold text-neutral-700">{t({ pt: "Requer atenção", en: "Needs attention", fr: "À traiter" })}</h2>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
           <Tile label={{ pt: "Encomendas sem estafeta", en: "Orders without rider", fr: "Commandes sans livreur" }} value={s.pending.unassigned}
-            href="/admin/encomendas?unassigned=1" warn={s.pending.unassigned > 0} />
+            href={can("orders") ? "/admin/encomendas?unassigned=1" : undefined} warn={s.pending.unassigned > 0} />
           <Tile label={{ pt: "Lojas por aprovar", en: "Stores to approve", fr: "Magasins à approuver" }} value={s.pending.stores}
-            href="/admin/lojas?pending=1" warn={s.pending.stores > 0} />
+            href={can("people") ? "/admin/lojas?pending=1" : undefined} warn={s.pending.stores > 0} />
           <Tile label={{ pt: "Estafetas por aprovar", en: "Riders to approve", fr: "Livreurs à approuver" }} value={s.pending.drivers}
-            href="/admin/utilizadores?type=driver&pending=1" warn={s.pending.drivers > 0} />
+            href={can("people") ? "/admin/utilizadores?type=driver&pending=1" : undefined} warn={s.pending.drivers > 0} />
         </div>
       </section>
       <section>
         <h2 className="mb-2 text-sm font-semibold text-neutral-700">{t({ pt: "Plataforma", en: "Platform", fr: "Plateforme" })}</h2>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <Tile label={{ pt: "Utilizadores", en: "Users", fr: "Utilisateurs" }} value={s.users} href="/admin/utilizadores" />
+          <Tile label={{ pt: "Utilizadores", en: "Users", fr: "Utilisateurs" }} value={s.users} href={can("people") ? "/admin/utilizadores" : undefined} />
           <Tile label={{ pt: "Membros Plus", en: "Plus members", fr: "Membres Plus" }} value={s.plusMembers} />
         </div>
       </section>
+      {canAdmin(user, "finance") && <AdminCharts />}
+      <ChangePassword minLength={12} />
     </div>
   );
 }

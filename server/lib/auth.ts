@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { eq } from "drizzle-orm";
 import { db } from "../db";
-import { users, type User } from "@shared/schema";
+import { users, type AdminPerm, type User } from "@shared/schema";
 import { HttpError } from "./http";
 
 declare module "express-session" {
@@ -47,6 +47,21 @@ export function requireRole(...roles: User["userType"][]) {
   };
 }
 
+/** Dono = admin sem lista de permissões. */
+export const isOwner = (u: User) => u.userType === "admin" && !u.adminPerms;
+export function hasAdminPerm(u: User, perm: AdminPerm) {
+  return u.userType === "admin" && (!u.adminPerms || u.adminPerms.includes(perm));
+}
+/** Áreas do portal admin: cada pedido tem de caber nas permissões de quem o faz. */
+export function requireAdminPerm(perm: AdminPerm | "owner") {
+  return (req: Request, _res: Response, next: NextFunction) => {
+    const u = req.user!;
+    const ok = perm === "owner" ? isOwner(u) : hasAdminPerm(u, perm);
+    if (!ok) return next(new HttpError(403, "A sua conta da equipa não tem acesso a esta área.", "NO_ADMIN_PERM"));
+    next();
+  };
+}
+
 export function publicUser(u: User) {
   return {
     id: u.id,
@@ -61,5 +76,7 @@ export function publicUser(u: User) {
     preferredLanguage: u.preferredLanguage,
     dietaryPreferences: u.dietaryPreferences,
     vehicleType: u.vehicleType,
+    // admin: null = dono (acesso total); lista = membro da equipa
+    ...(u.userType === "admin" ? { adminPerms: u.adminPerms ?? null, isOwner: !u.adminPerms } : {}),
   };
 }

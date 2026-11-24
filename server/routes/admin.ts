@@ -2,9 +2,12 @@ import { Router } from "express";
 import { and, desc, eq, gte, ilike, inArray, ne, or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
-import { bannerInputSchema, banners, orders, promoCodes, promoInputSchema, stores, subscriptions, users, ORDER_STATUSES } from "@shared/schema";
-import { ah, badRequest, conflict, idParam, notFound, parse } from "../lib/http";
-import { publicUser, requireRole } from "../lib/auth";
+import { ADMIN_PERMS, bannerInputSchema, banners, orders, promoCodes, promoInputSchema, stores, subscriptions, users, ORDER_STATUSES } from "@shared/schema";
+import { ah, badRequest, conflict, HttpError, idParam, notFound, parse } from "../lib/http";
+import bcrypt from "bcryptjs";
+import { randomBytes } from "crypto";
+import type { AdminPerm } from "@shared/schema";
+import { hasAdminPerm, isOwner, publicUser, requireAdminPerm, requireRole } from "../lib/auth";
 import { changeStatus } from "../lib/orderFlow";
 import { STORE_THEME_IDS } from "@shared/themes";
 import { withoutSecrets } from "../lib/pos";
@@ -19,6 +22,26 @@ import { publishOffer, publishOrder } from "../lib/realtime";
 
 export const adminRouter = Router();
 adminRouter.use(requireRole("admin"));
+
+// Equipa: cada área do portal só para quem tem essa permissão (o dono tem todas)
+const AREAS: [RegExp, AdminPerm | "owner" | null][] = [
+  [/^\/stats$/, null], // resumo: toda a equipa
+  [/^\/charts/, "finance"],
+  [/^\/(orders|dispatch)(\/|$)/, "orders"],
+  [/^\/(finance|ledger|payouts)(\/|\.|$)/, "finance"],
+  [/^\/(stores|users|drivers)(\/|$)/, "people"],
+  [/^\/(promos|banners|ads)(\/|$)/, "marketing"],
+  [/^\/staff(\/|$)/, "owner"],
+];
+adminRouter.use((req, res, next) => {
+  const u = req.user!;
+  // a lista de lojas também serve ao marketing (oferecer destaques)
+  if (req.method === "GET" && req.path === "/stores" && hasAdminPerm(u, "marketing")) return next();
+  const area = AREAS.find(([re]) => re.test(req.path));
+  if (!area) return requireAdminPerm("owner")(req, res, next); // área nova: só o dono, até ser classificada
+  if (area[1] === null) return next();
+  return requireAdminPerm(area[1])(req, res, next);
+});
 
 adminRouter.get("/stats", ah(async (_req, res) => {
   const since = new Date(Date.now() - 86_400_000);
@@ -37,6 +60,63 @@ adminRouter.get("/stats", ah(async (_req, res) => {
   const [plus] = await db.select({ n: sql<number>`count(*)::int` }).from(subscriptions)
     .where(and(eq(subscriptions.status, "active"), gte(subscriptions.endsAt, new Date())));
   res.json({ last24h: o, pending, users: u.n, plusMembers: plus.n });
+}));
+
+// ---------------------------------------------------------------------------
+// Gráficos: vendas, receita PedeJá, encomendas, crescimento (dias de Luanda)
+// ---------------------------------------------------------------------------
+// receita PedeJá numa encomenda entregue: comissão + taxas do cliente − descontos − pagamento ao estafeta
+const REVENUE = sql`(coalesce(o.commission_amount,0) + o.service_fee + o.small_order_fee + o.priority_fee - o.discount
+  + case when o.fulfilment = 'delivery' then o.delivery_fee - (coalesce(o.rider_earning,0) - o.rider_tip) else 0 end)`;
+const LU = sql`interval '1 hour'`; // Luanda = UTC+1 (sem horário de verão)
+
+adminRouter.get("/charts", ah(async (req, res) => {
+  const days = [7, 30, 90].includes(Number(req.query.days)) ? Number(req.query.days) : 30;
+  const daily = await db.execute(sql`
+    with d as (select generate_series((now() + ${LU})::date - ${days - 1}::int, (now() + ${LU})::date, interval '1 day')::date as day)
+    select to_char(d.day, 'YYYY-MM-DD') as day,
+      coalesce(x.orders, 0)::int as orders, coalesce(x.delivered, 0)::int as delivered, coalesce(x.cancelled, 0)::int as cancelled,
+      coalesce(x.gmv, 0)::int as gmv, coalesce(x.revenue, 0)::int as revenue,
+      coalesce(c.n, 0)::int as "newCustomers", coalesce(r.n, 0)::int as "newRiders", coalesce(s.n, 0)::int as "newStores"
+    from d
+    left join (
+      select (o.created_at + ${LU})::date as day, count(*) as orders,
+        count(*) filter (where o.status = 'delivered') as delivered,
+        count(*) filter (where o.status in ('cancelled','rejected')) as cancelled,
+        sum(o.total) filter (where o.status = 'delivered') as gmv,
+        sum(${REVENUE}) filter (where o.status = 'delivered' and o.settled_at is not null) as revenue
+      from orders o where o.created_at >= now() - ${days} * interval '1 day' - interval '1 day' group by 1
+    ) x on x.day = d.day
+    left join (select (created_at + ${LU})::date as day, count(*) as n from users where user_type = 'customer' group by 1) c on c.day = d.day
+    left join (select (created_at + ${LU})::date as day, count(*) as n from users where user_type = 'driver' group by 1) r on r.day = d.day
+    left join (select (created_at + ${LU})::date as day, count(*) as n from stores group by 1) s on s.day = d.day
+    order by d.day`);
+  const period = (offset: number) => sql`o.created_at >= now() - ${days * (offset + 1)} * interval '1 day' and o.created_at < now() - ${days * offset} * interval '1 day'`;
+  const totalsQ = (offset: number) => db.execute(sql`
+    select count(*)::int as orders, count(*) filter (where o.status = 'delivered')::int as delivered,
+      coalesce(sum(o.total) filter (where o.status = 'delivered'), 0)::int as gmv,
+      coalesce(sum(${REVENUE}) filter (where o.status = 'delivered' and o.settled_at is not null), 0)::int as revenue,
+      coalesce(round(avg(o.subtotal) filter (where o.status = 'delivered')), 0)::int as "avgBasket"
+    from orders o where ${period(offset)}`);
+  const [cur, prev] = await Promise.all([totalsQ(0), totalsQ(1)]);
+  const topStores = await db.execute(sql`
+    select s.id, s.name, s.store_type as "storeType", count(*)::int as orders, coalesce(sum(o.total), 0)::int as gmv
+    from orders o join stores s on s.id = o.store_id
+    where o.status = 'delivered' and ${period(0)} group by s.id order by gmv desc limit 8`);
+  const byHour = await db.execute(sql`
+    select h as hour, coalesce(x.n, 0)::int as orders from generate_series(0, 23) h
+    left join (select extract(hour from o.created_at + ${LU})::int as hr, count(*) as n from orders o where ${period(0)} group by 1) x on x.hr = h
+    order by h`);
+  const split = await db.execute(sql`
+    select 'payment' as kind, o.payment_method as key, count(*)::int as n from orders o where ${period(0)} group by 2
+    union all
+    select 'fulfilment', o.fulfilment, count(*)::int from orders o where ${period(0)} group by 2`);
+  res.json({
+    days, daily: daily.rows, totals: cur.rows[0], previous: prev.rows[0],
+    topStores: topStores.rows, byHour: byHour.rows,
+    payment: (split.rows as any[]).filter((r) => r.kind === "payment").map((r) => ({ key: r.key, n: r.n })),
+    fulfilment: (split.rows as any[]).filter((r) => r.kind === "fulfilment").map((r) => ({ key: r.key, n: r.n })),
+  });
 }));
 
 // ---------------------------------------------------------------------------
@@ -190,6 +270,54 @@ adminRouter.post("/ads/:id/cancel", ah(async (req, res) => {
   res.json({ ad: await cancelAd(idParam(req), req.user!.id) });
 }));
 
+// ---------------------------------------------------------------------------
+// Equipa (só o dono): contas de admin com acesso limitado
+// ---------------------------------------------------------------------------
+const staffOut = (u: typeof users.$inferSelect) => ({ id: u.id, username: u.username, fullName: u.fullName, phone: u.phone, isActive: u.isActive, adminPerms: u.adminPerms, isOwner: !u.adminPerms, createdAt: u.createdAt });
+const permsSchema = z.array(z.enum(ADMIN_PERMS)).min(1, "Escolha pelo menos uma área.").max(ADMIN_PERMS.length);
+
+adminRouter.get("/staff", ah(async (_req, res) => {
+  const rows = await db.select().from(users).where(eq(users.userType, "admin")).orderBy(users.createdAt);
+  res.json({ staff: rows.map(staffOut), perms: ADMIN_PERMS });
+}));
+
+adminRouter.post("/staff", ah(async (req, res) => {
+  const b = parse(z.object({
+    fullName: z.string().trim().min(2).max(80),
+    username: z.string().trim().toLowerCase().regex(/^[a-z0-9._-]{3,30}$/, "Utilizador: 3–30 letras minúsculas, números, . _ -"),
+    phone: z.string().trim().regex(/^\+?\d{9,15}$/, "Telefone inválido"),
+    password: z.string().min(12, "A palavra-passe da equipa tem pelo menos 12 caracteres").max(128),
+    perms: permsSchema,
+  }), req.body);
+  const [exists] = await db.select({ id: users.id }).from(users).where(eq(users.username, b.username));
+  if (exists) throw conflict("Esse nome de utilizador já existe.", "USERNAME_TAKEN");
+  const [u] = await db.insert(users).values({
+    username: b.username, passwordHash: await bcrypt.hash(b.password, 12), fullName: b.fullName, phone: b.phone,
+    userType: "admin", adminPerms: [...new Set(b.perms)], referralCode: "STAFF" + randomBytes(4).toString("hex").toUpperCase(),
+  }).returning();
+  res.status(201).json({ member: staffOut(u) });
+}));
+
+adminRouter.patch("/staff/:id", ah(async (req, res) => {
+  const id = idParam(req);
+  if (id === req.user!.id) throw badRequest("Não pode alterar a sua própria conta aqui.");
+  const b = parse(z.object({
+    perms: permsSchema.optional(), isActive: z.boolean().optional(),
+    password: z.string().min(12, "A palavra-passe da equipa tem pelo menos 12 caracteres").max(128).optional(),
+  }), req.body);
+  const [t] = await db.select().from(users).where(eq(users.id, id));
+  if (!t || t.userType !== "admin") throw notFound("Membro da equipa não encontrado");
+  if (!t.adminPerms) throw badRequest("A conta do dono não pode ser alterada aqui.", "OWNER_ACCOUNT");
+  const [u] = await db.update(users).set({
+    ...(b.perms ? { adminPerms: [...new Set(b.perms)] } : {}),
+    ...(b.isActive !== undefined ? { isActive: b.isActive } : {}),
+    ...(b.password ? { passwordHash: await bcrypt.hash(b.password, 12) } : {}),
+  }).where(eq(users.id, id)).returning();
+  // desactivado ou palavra-passe nova: termina as sessões abertas dessa pessoa
+  if (b.isActive === false || b.password) await db.execute(sql`delete from sessions where (sess->>'userId')::int = ${id}`).catch(() => {});
+  res.json({ member: staffOut(u) });
+}));
+
 /** Centro de despacho: estafetas online, entregas à espera e últimas ofertas. */
 adminRouter.get("/dispatch", ah(async (_req, res) => {
   const riders = await db.execute(sql`
@@ -291,6 +419,8 @@ adminRouter.patch("/users/:id", ah(async (req, res) => {
   const id = idParam(req);
   if (id === req.user!.id) throw badRequest("Não pode alterar a sua própria conta aqui.");
   const input = parse(z.object({ isApproved: z.boolean().optional(), isActive: z.boolean().optional() }), req.body);
+  const [target] = await db.select({ t: users.userType }).from(users).where(eq(users.id, id));
+  if (target?.t === "admin" && !isOwner(req.user!)) throw new HttpError(403, "Só o dono pode alterar contas da equipa.", "OWNER_ONLY");
   const [u] = await db.update(users).set(input).where(eq(users.id, id)).returning();
   if (!u) throw notFound("Utilizador não encontrado");
   res.json({ user: { ...publicUser(u), isActive: u.isActive } });

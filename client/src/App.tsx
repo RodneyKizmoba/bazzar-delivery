@@ -44,6 +44,7 @@ const AdminDashboard = lazy(() => import("@/pages/admin/AdminDashboard"));
 const AdminOrders = lazy(() => import("@/pages/admin/AdminOrders"));
 const PartnerAds = lazy(() => import("@/pages/partner/PartnerAds"));
 const PartnerPayouts = lazy(() => import("@/pages/partner/PartnerPayouts"));
+const AdminTeam = lazy(() => import("@/pages/admin/AdminTeam"));
 const AdminFinance = lazy(() => import("@/pages/admin/AdminFinance"));
 const AdminDispatch = lazy(() => import("@/pages/admin/AdminDispatch"));
 const AdminStores = lazy(() => import("@/pages/admin/AdminStores"));
@@ -89,6 +90,7 @@ function Routes() {
         <Route path="/admin/encomendas" component={AdminOrders} />
         <Route path="/admin/despacho" component={AdminDispatch} />
         <Route path="/admin/financas" component={AdminFinance} />
+        <Route path="/admin/equipa" component={AdminTeam} />
         <Route path="/admin/lojas" component={AdminStores} />
         <Route path="/admin/utilizadores" component={AdminUsers} />
         <Route path="/admin/promocoes" component={AdminPromos} />

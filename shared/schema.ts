@@ -26,6 +26,9 @@ export const STORE_TYPES = ["restaurant", "bakery", "grocery", "pharmacy", "beau
 export const PAYOUT_METHODS = ["multicaixa_express", "unitel_money", "bank_transfer"] as const;
 // tipo de veículo do estafeta: muda a velocidade estimada, o valor por entrega e o mínimo por hora
 export const VEHICLE_TYPES = ["moto", "car", "ebike", "bike"] as const;
+// equipa do admin: o dono (sem lista) vê tudo; os outros só as áreas da lista
+export const ADMIN_PERMS = ["orders", "finance", "people", "marketing"] as const;
+export type AdminPerm = (typeof ADMIN_PERMS)[number];
 // como a encomenda chega ao cliente: estafeta PedeJá, recolha no balcão, ou estafetas da própria loja
 export const FULFILMENTS = ["delivery", "pickup", "store_delivery"] as const;
 export type Fulfilment = (typeof FULFILMENTS)[number];
@@ -47,6 +50,7 @@ export const users = pgTable("users", {
   referralCode: text("referral_code").notNull(),
   referredBy: integer("referred_by"),
   loyaltyPoints: integer("loyalty_points").notNull().default(0),
+  adminPerms: text("admin_perms").array().$type<AdminPerm[]>(), // só admins: null = dono (tudo)
   // estafetas: veículo e conta para receber os pagamentos semanais
   vehicleType: text("vehicle_type").$type<VehicleType>(),
   payoutMethod: text("payout_method"),

@@ -99,6 +99,19 @@ authRouter.post("/register", authLimiter, ah(async (req, res) => {
   res.status(201).json({ user: publicUser(user) });
 }));
 
+/** Mudar a própria palavra-passe (toda a gente; a equipa do admin recebe uma provisória). */
+authRouter.post("/password", authLimiter, ah(async (req, res) => {
+  if (!req.user) throw new HttpError(401, "Precisa de iniciar sessão.", "AUTH_REQUIRED");
+  const b = parse(z.object({ currentPassword: z.string().min(1).max(128), newPassword: z.string().min(req.user.userType === "admin" ? 12 : 8, req.user.userType === "admin" ? "Pelo menos 12 caracteres" : "Pelo menos 8 caracteres").max(128) }), req.body);
+  const [u] = await db.select().from(users).where(eq(users.id, req.user.id));
+  if (!u || !(await bcrypt.compare(b.currentPassword, u.passwordHash))) throw new HttpError(400, "A palavra-passe actual está errada.", "BAD_PASSWORD");
+  if (b.currentPassword === b.newPassword) throw new HttpError(400, "A nova palavra-passe tem de ser diferente.", "SAME_PASSWORD");
+  await db.update(users).set({ passwordHash: await bcrypt.hash(b.newPassword, 12) }).where(eq(users.id, u.id));
+  // termina as outras sessões; esta continua
+  await db.execute(sql`delete from sessions where (sess->>'userId')::int = ${u.id} and sid <> ${req.sessionID}`).catch(() => {});
+  res.json({ ok: true });
+}));
+
 authRouter.post("/login", authLimiter, ah(async (req, res) => {
   const { username, password } = parse(loginSchema, req.body);
   const [user] = await db.select().from(users).where(eq(users.username, username.toLowerCase()));

@@ -14,6 +14,16 @@ export interface User {
   loyaltyPoints: number;
   preferredLanguage: string | null;
   dietaryPreferences: string[];
+  // admin: null = dono (acesso total); lista = membro da equipa
+  adminPerms?: AdminPerm[] | null;
+  isOwner?: boolean;
+}
+export type AdminPerm = "orders" | "finance" | "people" | "marketing";
+/** O dono (sem lista) tem todas as áreas; a equipa só as suas. */
+export function canAdmin(u: User | null | undefined, perm: AdminPerm | "owner") {
+  if (!u || u.userType !== "admin") return false;
+  if (!u.adminPerms) return true;
+  return perm !== "owner" && u.adminPerms.includes(perm);
 }
 
 interface AuthCtx {

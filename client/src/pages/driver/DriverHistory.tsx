@@ -12,6 +12,7 @@ import { kz, dateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useDriverTabs, useDriverTitle, type DriverOrder } from "./DriverHome";
 import { BalanceLine, LedgerList, type Account } from "@/components/Money";
+import { ChangePassword } from "@/components/ChangePassword";
 
 export default function DriverHistory() {
   const tabs = useDriverTabs();
@@ -19,7 +20,7 @@ export default function DriverHistory() {
   return (
     <Guard roles={["driver"]}>
       <PanelShell title={title} tabs={tabs}>
-        <div className="mx-auto max-w-xl space-y-4"><Wallet /><HistoryContent /></div>
+        <div className="mx-auto max-w-xl space-y-4"><Wallet /><HistoryContent /><ChangePassword /></div>
       </PanelShell>
     </Guard>
   );

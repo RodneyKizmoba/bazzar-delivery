@@ -16,13 +16,15 @@ import { useLang, useT, T } from "@/lib/i18n";
 import { kz, dateTime, time, PAYMENT } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { poll } from "@/lib/live";
+import { useStoreVocab } from "@/lib/storeVocab";
 
 /** Separadores da área do parceiro (reutilizados nas outras páginas do parceiro). */
 export function usePartnerTabs() {
   const t = useT();
+  const v = useStoreVocab();
   return [
     { href: "/parceiro", label: t({ pt: "Encomendas", en: "Orders", fr: "Commandes" }) },
-    { href: "/parceiro/menu", label: t({ pt: "Menu", en: "Menu", fr: "Menu" }) },
+    { href: "/parceiro/menu", label: t(v.catalog) },
     { href: "/parceiro/loja", label: t({ pt: "Loja", en: "Store", fr: "Magasin" }) },
     { href: "/parceiro/avaliacoes", label: t({ pt: "Avaliações", en: "Reviews", fr: "Avis" }) },
     { href: "/parceiro/estatisticas", label: t({ pt: "Estatísticas", en: "Statistics", fr: "Statistiques" }) },
@@ -95,7 +97,7 @@ function StoreHeader() {
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <div>
             <p className="font-semibold">{t({ pt: "A sua loja aguarda aprovação", en: "Your store is awaiting approval", fr: "Votre magasin attend l'approbation" })}</p>
-            <p>{t({ pt: "Pode preparar o menu entretanto. A loja só aparece aos clientes depois de aprovada.", en: "You can set up your menu meanwhile. Customers will see the store once approved.", fr: "Vous pouvez préparer le menu. Le magasin sera visible après approbation." })}</p>
+            <p>{t({ pt: "Pode preparar os seus produtos entretanto. A loja só aparece aos clientes depois de aprovada.", en: "You can set up your menu meanwhile. Customers will see the store once approved.", fr: "Vous pouvez préparer le menu. Le magasin sera visible après approbation." })}</p>
           </div>
         </div>
       )}
@@ -229,6 +231,7 @@ function OrderCard({ order }: { order: PartnerOrder }) {
   const [rejectOpen, setRejectOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [prep, setPrep] = useState<number | null>(null);
+  const vocab = useStoreVocab();
   const [codeOpen, setCodeOpen] = useState(false);
   const [code, setCode] = useState("");
   const [codeErr, setCodeErr] = useState<string | null>(null);
@@ -299,7 +302,7 @@ function OrderCard({ order }: { order: PartnerOrder }) {
       <div className="mt-2 flex justify-end">
         <button type="button" onClick={() => printKitchenTicket(order, lang)}
           className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium text-neutral-700 hover:bg-neutral-50">
-          🖨 {t({ pt: "Imprimir talão da cozinha", en: "Print kitchen ticket", fr: "Imprimer le ticket cuisine" })}
+          🖨 {t(vocab.ticket)}
         </button>
       </div>
       <ul className="mt-2 space-y-1.5 border-t pt-2 text-sm">
@@ -454,7 +457,7 @@ function OrderCard({ order }: { order: PartnerOrder }) {
           <div className="space-y-2">
             <Label htmlFor={`reason-${order.id}`}>{t({ pt: "Motivo", en: "Reason", fr: "Motif" })}</Label>
             <Textarea id={`reason-${order.id}`} value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)}
-              placeholder={t({ pt: "Ex.: produto esgotado, cozinha cheia…", en: "E.g. out of stock, kitchen full…", fr: "Ex. : rupture de stock, cuisine pleine…" })} />
+              placeholder={t(vocab.busyExample)} />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRejectOpen(false)}>{t(T.cancel)}</Button>

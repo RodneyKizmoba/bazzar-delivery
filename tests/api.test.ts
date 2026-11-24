@@ -1248,6 +1248,8 @@ async function main() {
     check("cash-out without a payout account -> 400 NO_PAYOUT_ACCOUNT", r.status === 400 && r.body.code === "NO_PAYOUT_ACCOUNT", r.body);
     r = await rm.put("/api/driver/payout-account", { payoutMethod: "multicaixa_express", payoutReference: "+244 923 222 011" });
     check("rider saves Multicaixa Express number (normalised)", r.status === 200 && r.body.payoutReference === "+244923222011", r.body);
+    r = await rm.post("/api/driver/cashout");
+    check("cash-out below 2 000 Kz refused (balance still 0)", r.status === 400 && r.body.code === "CASHOUT_TOO_SMALL", r.body);
 
     // --- paid order, rider pay shown before accepting
     const storeBefore = (await loja.get("/api/partner/finance")).body;
@@ -1304,8 +1306,6 @@ async function main() {
     check("admin revenue = commission + customer fees − discounts − rider pay", fin.totals.platformNet === fin.totals.commission + fin.totals.deliveryFees + fin.totals.serviceFees + fin.totals.smallOrderFees + fin.totals.priorityFees - fin.totals.discounts - (fin.totals.riderPay - fin.totals.tips) && fin.totals.serviceFees > 0, fin.totals);
 
     // --- instant cash-out
-    r = await rm.post("/api/driver/cashout");
-    check("cash-out below 2 000 Kz refused", r.status === 400 && r.body.code === "CASHOUT_TOO_SMALL", r.body);
     await admin.post("/api/admin/ledger", { partyType: "driver", partyId: rid, kind: "adjustment", amount: 5000, note: "bónus teste" });
     const bal = (await rm.get("/api/driver/wallet")).body.balance;
     r = await rm.post("/api/driver/cashout");
@@ -1510,6 +1510,93 @@ async function main() {
     check("stores can't see the admin ads list (403)", r.status === 403, r.status);
     r = await admin.post(`/api/admin/ads/${gift.id}/cancel`);
     check("admin cancels (free: nothing to refund)", r.status === 200 && r.body.ad.refund === 0, r.body);
+  });
+
+  // =========================================================================
+  await section("Admin team (staff permissions), charts, password change", async () => {
+    let r = await admin.get("/api/auth/me");
+    check("seeded admin is the owner (full access)", r.body.user.isOwner === true && r.body.user.adminPerms === null, r.body.user);
+    r = await admin.get("/api/admin/charts?days=30");
+    check("charts: 30 days of daily data + totals + hours + top stores", r.status === 200 && r.body.daily.length === 30 && r.body.byHour.length === 24 && typeof r.body.totals.gmv === "number" && Array.isArray(r.body.topStores), { s: r.status, n: r.body.daily?.length });
+    const sumGmv = r.body.daily.reduce((a: number, d: any) => a + d.gmv, 0);
+    check("charts: daily sales add up to the period total (±1 day edge)", sumGmv >= r.body.totals.gmv * 0.9, { sumGmv, total: r.body.totals.gmv });
+    check("charts: revenue counted on delivered orders", r.body.totals.revenue > 0 && r.body.totals.revenue < r.body.totals.gmv, r.body.totals);
+    r = await admin.get("/api/admin/charts?days=999");
+    check("charts: odd range falls back to 30 days", r.body.days === 30, r.body.days);
+
+    r = await admin.post("/api/admin/staff", { fullName: "Ana Suporte", username: `ana_${uniq}`, phone: "+244923333001", password: "curta", perms: ["orders"] });
+    check("staff password must be 12+ chars (400)", r.status === 400, r.body);
+    r = await admin.post("/api/admin/staff", { fullName: "Ana Suporte", username: `ana_${uniq}`, phone: "+244923333001", password: "Suporte#2026!!", perms: [] });
+    check("staff needs at least one area (400)", r.status === 400, r.body);
+    r = await admin.post("/api/admin/staff", { fullName: "Ana Suporte", username: `ana_${uniq}`, phone: "+244923333001", password: "Suporte#2026!!", perms: ["orders"] });
+    check("owner creates a support staff account (orders only)", r.status === 201 && JSON.stringify(r.body.member.adminPerms) === '["orders"]', r.body);
+    const anaId = r.body.member.id;
+    r = await admin.post("/api/admin/staff", { fullName: "Ana 2", username: `ana_${uniq}`, phone: "+244923333002", password: "Suporte#2026!!", perms: ["orders"] });
+    check("duplicate username refused (409)", r.status === 409, r.status);
+    const ana = new Client("ana"); await ana.login(`ana_${uniq}`, "Suporte#2026!!");
+    r = await ana.get("/api/auth/me");
+    check("staff sees own areas, not owner", r.body.user.isOwner === false && JSON.stringify(r.body.user.adminPerms) === '["orders"]', r.body.user);
+    r = await ana.get("/api/admin/orders");
+    check("support staff: orders allowed", r.status === 200, r.status);
+    r = await ana.get("/api/admin/dispatch");
+    check("support staff: dispatch allowed", r.status === 200, r.status);
+    r = await ana.get("/api/admin/stats");
+    check("support staff: overview allowed", r.status === 200, r.status);
+    for (const [path, name] of [["/api/admin/finance", "finance"], ["/api/admin/payouts", "payouts"], ["/api/admin/charts", "charts"], ["/api/admin/users", "users"], ["/api/admin/stores", "stores"], ["/api/admin/promos", "promos"], ["/api/admin/ads", "ads"], ["/api/admin/staff", "team"]]) {
+      r = await ana.get(path);
+      check(`support staff blocked from ${name} (403 NO_ADMIN_PERM)`, r.status === 403 && r.body.code === "NO_ADMIN_PERM", r.status);
+    }
+    r = await ana.post("/api/admin/ledger", { partyType: "store", partyId: 1, kind: "adjustment", amount: 1000 });
+    check("support staff can't move money (403)", r.status === 403, r.status);
+    r = await ana.post("/api/admin/staff", { fullName: "X", username: `x_${uniq}`, phone: "+244923333009", password: "Suporte#2026!!", perms: ["finance"] });
+    check("staff can't create admins (403)", r.status === 403, r.status);
+
+    // marketing-only: can list stores for ads, but not edit them
+    r = await admin.patch(`/api/admin/staff/${anaId}`, { perms: ["marketing"] });
+    check("owner changes her areas to marketing", r.status === 200 && JSON.stringify(r.body.member.adminPerms) === '["marketing"]', r.body);
+    r = await ana.get("/api/admin/stores");
+    check("marketing can read the store list (to give boosts)", r.status === 200, r.status);
+    r = await ana.patch("/api/admin/stores/1", { isOpen: false });
+    check("...but can't edit stores (403)", r.status === 403, r.status);
+    r = await ana.get("/api/admin/orders");
+    check("orders now blocked for her (403)", r.status === 403, r.status);
+
+    // people perm can't touch other admins
+    await admin.patch(`/api/admin/staff/${anaId}`, { perms: ["people"] });
+    const ownerId = (await admin.get("/api/auth/me")).body.user.id;
+    r = await ana.patch(`/api/admin/users/${ownerId}`, { isActive: false });
+    check("staff with 'people' can't block the owner (403 OWNER_ONLY)", r.status === 403 && r.body.code === "OWNER_ONLY", r.body);
+    r = await ana.patch(`/api/admin/users/${anaId}`, { isActive: false });
+    check("staff can't change own account via users (400)", r.status === 400, r.status);
+    r = await admin.patch(`/api/admin/staff/${ownerId}`, { isActive: false });
+    check("owner account can't be changed via team (400)", r.status === 400, r.status);
+
+    // password change
+    r = await ana.post("/api/auth/password", { currentPassword: "errada", newPassword: "NovaSenha#2026!!" });
+    check("password change needs the current password", r.status === 400 && r.body.code === "BAD_PASSWORD", r.body);
+    r = await ana.post("/api/auth/password", { currentPassword: "Suporte#2026!!", newPassword: "curta" });
+    check("admins need 12+ chars for a new password", r.status === 400, r.status);
+    r = await ana.post("/api/auth/password", { currentPassword: "Suporte#2026!!", newPassword: "NovaSenha#2026!!" });
+    check("staff changes own password", r.status === 200, r.body);
+    const ana2 = new Client("ana2");
+    r = await ana2.post("/api/auth/login", { username: `ana_${uniq}`, password: "NovaSenha#2026!!" });
+    check("logs in with the new password", r.status === 200, r.status);
+
+    // deactivation ends sessions immediately
+    r = await admin.patch(`/api/admin/staff/${anaId}`, { isActive: false });
+    check("owner deactivates staff", r.status === 200 && r.body.member.isActive === false, r.body);
+    r = await ana2.get("/api/admin/stats");
+    check("deactivated staff is out at once (401)", r.status === 401, r.status);
+    r = await ana2.post("/api/auth/login", { username: `ana_${uniq}`, password: "NovaSenha#2026!!" });
+    check("deactivated staff can't log in (403)", r.status === 403, r.status);
+    r = await admin.get("/api/admin/staff");
+    check("team list shows owner + staff", r.status === 200 && r.body.staff.some((m: any) => m.isOwner) && r.body.staff.some((m: any) => m.id === anaId && !m.isActive), r.body.staff?.length);
+
+    // customers can change their password too
+    const c3 = new Client("pwcust");
+    await c3.post("/api/auth/register", { username: `pwc_${uniq}`, password: "Cliente#2026", fullName: "Pw Cliente", phone: "+244923333010", userType: "customer" });
+    r = await c3.post("/api/auth/password", { currentPassword: "Cliente#2026", newPassword: "Cliente#2027" });
+    check("customer changes password (8+ chars)", r.status === 200, r.body);
   });
 
   // =========================================================================
