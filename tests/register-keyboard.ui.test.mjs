@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import puppeteer from "puppeteer-core";
 
 // Every registration request is answered in the browser; all other writes are blocked.
-// No accounts are created, even on a regression.
+// No accounts are created or login requests reach the server, even on a regression.
 const BASE = process.env.BASE || `https://${process.env.REPLIT_DEV_DOMAIN}`;
 const CHROME = process.env.CHROME_BIN || [
   "/usr/bin/google-chrome", "/usr/bin/chromium", "/repl/tools/bin/chromium",
@@ -22,6 +22,7 @@ try {
   const unexpectedApiReads = [];
   const apiReads = [];
   const registrations = [];
+  const loginRequests = [];
   const translations = {
     pt: {
       account: "Tipo de conta", business: "Tipo de negócio",
@@ -113,6 +114,10 @@ try {
     const respond = (body, status = 200) => request.respond({
       status, contentType: "application/json", body: JSON.stringify(body),
     });
+    if (path === "/api/auth/login") {
+      loginRequests.push(request.method());
+      return respond({ message: "Unexpected login request intercepted by test." }, 400);
+    }
     if (path === "/api/auth/register" && request.method() === "POST") {
       registrations.push(JSON.parse(request.postData()));
       onRegistration?.();
@@ -141,6 +146,42 @@ try {
     }
     return request.continue();
   });
+
+  // Exercise Login's real submit handler, not registration validation or native constraints.
+  const loginMessages = {
+    en: "Enter your username and password.",
+    fr: "Saisissez votre identifiant et votre mot de passe.",
+  };
+  for (const width of [1280, 390]) {
+    await page.setViewport({ width, height: 900 });
+    for (const [lang, message] of Object.entries(loginMessages)) {
+      await page.goto(`${BASE}/entrar`, { waitUntil: "networkidle0" });
+      await page.waitForSelector("#username");
+      await switchLanguage(lang);
+      assert.equal(await page.$eval("#username", (el) => el.value), "");
+      assert.equal(await page.$eval("#password", (el) => el.value), "");
+      assert.equal(await page.$('[role="alert"]'), null);
+      await page.evaluate(() => {
+        window.loginSubmits = 0;
+        document.querySelector("form").addEventListener("submit", () => {
+          window.loginSubmits++;
+        });
+      });
+      const before = loginRequests.length;
+      await page.click('form button[type="submit"]');
+      await page.waitForSelector('form [role="alert"]');
+      await page.waitForNetworkIdle({ idleTime: 500 });
+      assert.equal(await page.evaluate(() => window.loginSubmits), 1, `${lang}: form submitted`);
+      assert.equal(
+        await page.$eval('form [role="alert"]', (el) => el.textContent.trim()),
+        message, `${lang}: exact empty-login message`,
+      );
+      assert.equal(loginRequests.length, before, `${lang}: empty login must not send a request`);
+      assert.equal(await page.$eval('form button[type="submit"]', (el) => el.disabled), false);
+      assert.equal(new URL(page.url()).pathname, "/entrar");
+      console.log(`PASS ${width}px ${lang}: empty login shows exact localized message without a login request`);
+    }
+  }
 
   // A separate page has no evaluateOnNewDocument hook that resets the saved language to PT.
   const persistencePage = await browser.newPage();
@@ -841,6 +882,7 @@ try {
     }
   }
   assert.deepEqual(unexpectedWrites, [], "no unhandled write requests may be attempted");
+  assert.deepEqual(loginRequests, [], "no login requests may be attempted");
   assert.deepEqual(unexpectedApiReads, [], "all API reads must be intercepted, including destination pages");
   assert.deepEqual(errors, []);
 } finally {
