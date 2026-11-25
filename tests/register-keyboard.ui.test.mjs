@@ -183,6 +183,54 @@ try {
     }
   }
 
+  // A fresh context isolates corrupt storage from the other pages and their PT reset hook.
+  const fallbackContext = await browser.createBrowserContext();
+  try {
+    const fallbackPage = await fallbackContext.newPage();
+    const fallbackErrors = [];
+    const fallbackWrites = [];
+    fallbackPage.on("pageerror", (error) => fallbackErrors.push(error.message));
+    await fallbackPage.evaluateOnNewDocument(() => {
+      localStorage.setItem("lang", "unsupported-language");
+      window.registrationSubmits = 0;
+      document.addEventListener("submit", (event) => {
+        window.registrationSubmits++;
+        event.preventDefault();
+      }, true);
+    });
+    await fallbackPage.setRequestInterception(true);
+    fallbackPage.on("request", (request) => {
+      const path = new URL(request.url()).pathname;
+      if (!["GET", "HEAD", "OPTIONS"].includes(request.method())) {
+        fallbackWrites.push(`${request.method()} ${path}`);
+        return request.abort();
+      }
+      if (!path.startsWith("/api/")) return request.continue();
+      const body = path === "/api/auth/me" ? { user: null }
+        : path === "/api/meta" ? {
+          zones: ["Talatona", "Maianga"], welcomeBonusPoints: 100,
+          storeTypes: ["restaurant", "bakery"], dietaryTags: [], cuisines: [],
+          plus: { monthlyPrice: 3000, freeDeliveryMinOrder: 5000 },
+          points: { pointValueKz: 1, kzPerPointEarned: 100, maxDiscountPct: 20 },
+        } : {};
+      return request.respond({
+        status: 200, contentType: "application/json", body: JSON.stringify(body),
+      });
+    });
+    await fallbackPage.goto(`${BASE}/registar`, { waitUntil: "networkidle0" });
+    await fallbackPage.waitForSelector("#fullName");
+    await fallbackPage.waitForFunction(() => document.documentElement.lang === "pt-AO");
+    assert.equal(await fallbackPage.$eval('select[aria-label="Idioma / Language"]', (el) => el.value), "pt");
+    await accessibleGroups("pt", false, fallbackPage);
+    assert.equal(await fallbackPage.evaluate(() => window.registrationSubmits), 0,
+      "unsupported saved language must not submit registration");
+    assert.deepEqual(fallbackWrites, [], "fallback must not attempt any write requests");
+    assert.deepEqual(fallbackErrors, [], "unsupported saved language must not cause page errors");
+    console.log("PASS unsupported saved language: Portuguese document, selector and accessible account group without submitting");
+  } finally {
+    await fallbackContext.close();
+  }
+
   // A separate page has no evaluateOnNewDocument hook that resets the saved language to PT.
   const persistencePage = await browser.newPage();
   const persistenceErrors = [];
