@@ -412,7 +412,7 @@ adminRouter.get("/stores", ah(async (req, res) => {
   const pendingOnly = req.query.pending === "1";
   const rows = await db.select({ s: stores, ownerName: users.fullName, ownerPhone: users.phone }).from(stores)
     .leftJoin(users, eq(users.id, stores.ownerId))
-    .where(pendingOnly ? eq(stores.isApproved, false) : undefined).orderBy(desc(stores.createdAt)).limit(500);
+    .where(and(eq(stores.isSystem, false), pendingOnly ? eq(stores.isApproved, false) : undefined)).orderBy(desc(stores.createdAt)).limit(500);
   res.json({ stores: rows.map((r) => ({ ...withoutSecrets(r.s), ownerName: r.ownerName, ownerPhone: r.ownerPhone })) });
 }));
 

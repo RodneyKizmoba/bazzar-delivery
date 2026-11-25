@@ -36,6 +36,32 @@ interface OrderFull {
   paymentMethod: string; paymentStatus: string; cancelReason: string | null; estimatedDeliveryAt: string | null;
   createdAt: string; deliveredAt: string | null;
   canCancel: boolean; canModify: boolean; canReview: boolean; deliveryCode?: string | null; pinRequired?: boolean;
+  // Envios
+  kind?: "food" | "parcel";
+  pickupAddress?: { label: string; street: string; zone: string; reference?: string | null; contactName: string; contactPhone: string } | null;
+  parcel?: { size: "small" | "medium" | "large"; description: string; recipientName: string; recipientPhone: string; fragile: boolean; sizeFee: number } | null;
+}
+
+const PARCEL_STEPS = ["ready", "picked_up", "delivered"] as const;
+const PARCEL_STEP_LABEL: Record<string, Tr> = {
+  ready: { pt: "Envio criado", en: "Parcel booked", fr: "Envoi créé" },
+  picked_up: { pt: "Pacote recolhido", en: "Parcel collected", fr: "Colis récupéré" },
+  delivered: { pt: "Entregue", en: "Delivered", fr: "Livré" },
+};
+const PARCEL_SIZE_LABEL: Record<string, Tr> = {
+  small: { pt: "Pequeno (até 5 kg)", en: "Small (up to 5 kg)", fr: "Petit (jusqu'à 5 kg)" },
+  medium: { pt: "Médio (até 15 kg)", en: "Medium (up to 15 kg)", fr: "Moyen (jusqu'à 15 kg)" },
+  large: { pt: "Grande (até 30 kg)", en: "Large (up to 30 kg)", fr: "Grand (jusqu'à 30 kg)" },
+};
+function parcelHeadline(o: { status: string; driverId: number | null; parcel?: { recipientName: string } | null }, tr?: { driverAtStoreAt?: string | null; driverAtCustomerAt?: string | null }): Tr | null {
+  if (!o.parcel) return null;
+  const who = o.parcel.recipientName.split(" ")[0];
+  if (o.status === "ready" && !o.driverId) return { pt: "À procura de um estafeta perto da recolha…", en: "Finding a rider near the pickup…", fr: "Recherche d'un livreur près du départ…" };
+  if (o.status === "ready" && tr?.driverAtStoreAt) return { pt: "O estafeta chegou à recolha 📦", en: "Your rider is at the pickup 📦", fr: "Le livreur est au point de départ 📦" };
+  if (o.status === "ready") return { pt: "Estafeta a caminho da recolha", en: "Rider on the way to the pickup", fr: "Livreur en route vers le départ" };
+  if (o.status === "picked_up" && tr?.driverAtCustomerAt) return { pt: `O estafeta chegou a ${who}`, en: `Your rider is with ${who}`, fr: `Le livreur est chez ${who}` };
+  if (o.status === "picked_up") return { pt: `Pacote a caminho de ${who} 🛵`, en: `Parcel on its way to ${who} 🛵`, fr: `Colis en route vers ${who} 🛵` };
+  return null;
 }
 interface OrderItemRow { id: number; menuItemId: number; name: string; unitPrice: number; quantity: number; selectedOptions: SelectedOption[]; specialInstructions: string | null; addedBy: string | null }
 interface OrderEvent { id: number; status: string; note: string | null; createdAt: string }
@@ -109,6 +135,7 @@ function paymentStatusLabel(o: OrderFull): { text: Tr; cls: string } {
   if (o.paymentStatus === "refunded") return { text: { pt: "Reembolsado", en: "Refunded", fr: "Remboursé" }, cls: "bg-sky-100 text-sky-800" };
   if (o.paymentStatus === "failed") return { text: { pt: "Pagamento falhou", en: "Payment failed", fr: "Paiement échoué" }, cls: "bg-red-100 text-red-800" };
   if (o.status === "cancelled" || o.status === "rejected") return { text: { pt: "Sem cobrança", en: "Not charged", fr: "Non débité" }, cls: "bg-neutral-100 text-neutral-700" };
+  if (o.paymentMethod === "cash" && o.parcel) return { text: { pt: "A pagar na recolha", en: "Pay at pickup", fr: "À payer au départ" }, cls: "bg-amber-100 text-amber-800" };
   if (o.paymentMethod === "cash") return { text: { pt: "A pagar na entrega", en: "Pay on delivery", fr: "À payer à la livraison" }, cls: "bg-amber-100 text-amber-800" };
   return { text: { pt: "Pagamento pendente", en: "Payment pending", fr: "Paiement en attente" }, cls: "bg-amber-100 text-amber-800" };
 }
@@ -346,7 +373,9 @@ function OrderDetailInner({ id }: { id: string }) {
   const tr = trackQ.data;
   const eta = tr?.estimatedDeliveryAt ?? order.estimatedDeliveryAt;
   const isOwner = user?.id === order.customerId;
-  const currentIdx = STEPS.indexOf(order.status as (typeof STEPS)[number]);
+  const isParcel = !!order.parcel;
+  const steps: readonly string[] = isParcel ? PARCEL_STEPS : STEPS;
+  const currentIdx = steps.indexOf(order.status);
   const showMap = !isFinal;
   const storePt = tr?.storeLocation ?? (store.latitude != null && store.longitude != null ? { latitude: store.latitude, longitude: store.longitude } : null);
   const destPt = tr?.destination ?? (order.deliveryAddress.latitude != null && order.deliveryAddress.longitude != null ? { latitude: order.deliveryAddress.latitude, longitude: order.deliveryAddress.longitude } : null);
@@ -359,7 +388,8 @@ function OrderDetailInner({ id }: { id: string }) {
       {showMap && (storePt || destPt || tr?.driverLocation) && (
         <div className="-mx-4 -mt-4">
           <OrderMap store={storePt} destination={destPt} driver={tr?.driverLocation ?? null} className="h-60 w-full overflow-hidden"
-            labels={{ store: store.name, destination: t({ pt: "A sua morada", en: "Your address", fr: "Votre adresse" }), driver: driver?.fullName.split(" ")[0] ?? t({ pt: "Estafeta", en: "Rider", fr: "Livreur" }) }} />
+            ride={isParcel ? "moto" : undefined} lineTo={isParcel && order.status === "ready" ? "store" : "destination"}
+            labels={{ store: isParcel ? t({ pt: "Recolha", en: "Pickup", fr: "Départ" }) : store.name, destination: isParcel ? order.parcel!.recipientName : t({ pt: "A sua morada", en: "Your address", fr: "Votre adresse" }), driver: driver?.fullName.split(" ")[0] ?? t({ pt: "Estafeta", en: "Rider", fr: "Livreur" }) }} />
         </div>
       )}
       {!isFinal && order.status !== "scheduled" ? (
@@ -384,7 +414,7 @@ function OrderDetailInner({ id }: { id: string }) {
               );
             })}
           </div>
-          <h2 className="mt-3 text-lg font-bold leading-tight">{t(fulfilmentHeadline(order.status, order.fulfilment) ?? liveHeadline(order.status, tr) ?? HEADLINE[order.status] ?? ORDER_STATUS[order.status] ?? { pt: order.status, en: order.status, fr: order.status })}</h2>
+          <h2 className="mt-3 text-lg font-bold leading-tight">{t(parcelHeadline(order, tr) ?? fulfilmentHeadline(order.status, order.fulfilment) ?? liveHeadline(order.status, tr) ?? HEADLINE[order.status] ?? ORDER_STATUS[order.status] ?? { pt: order.status, en: order.status, fr: order.status })}</h2>
           {!!order.priorityFee && <p className="mt-1 text-xs font-semibold text-primary">⚡ {t({ pt: "Entrega prioritária", en: "Priority delivery", fr: "Livraison prioritaire" })}</p>}
         </div>
       ) : (
@@ -407,7 +437,23 @@ function OrderDetailInner({ id }: { id: string }) {
       </div>
       )}
 
-      {order.deliveryCode && (
+      {order.deliveryCode && isParcel && (
+        <div className="space-y-2 rounded-2xl border-2 border-primary bg-brand-50 p-4" aria-live="polite">
+          <div className="flex items-center gap-4">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold">🔒 {t({ pt: "Código de entrega", en: "Delivery code", fr: "Code de livraison" })}</p>
+              <p className="text-xs text-neutral-600">{t({ pt: `Envie este código a ${order.parcel!.recipientName}. O estafeta só entrega o pacote com ele.`, en: `Send this code to ${order.parcel!.recipientName}. The rider only hands over the parcel with it.`, fr: `Envoyez ce code à ${order.parcel!.recipientName}. Le livreur ne remet le colis qu'avec ce code.` })}</p>
+            </div>
+            <p className="font-mono text-3xl font-extrabold tracking-[0.25em] text-brand-900">{order.deliveryCode}</p>
+          </div>
+          <a className="flex h-11 items-center justify-center gap-2 rounded-md bg-[#25D366] text-sm font-bold text-white"
+            href={`https://wa.me/${order.parcel!.recipientPhone.replace(/\D/g, "").replace(/^(?!244)/, "244")}?text=${encodeURIComponent(t({ pt: `Olá ${order.parcel!.recipientName.split(" ")[0]}! Vai receber um pacote PedeJá (${order.orderNumber}). Diga este código ao estafeta na entrega: ${order.deliveryCode}`, en: `Hi ${order.parcel!.recipientName.split(" ")[0]}! A PedeJá parcel (${order.orderNumber}) is on its way to you. Give the rider this code: ${order.deliveryCode}`, fr: `Bonjour ${order.parcel!.recipientName.split(" ")[0]} ! Un colis PedeJá (${order.orderNumber}) arrive. Donnez ce code au livreur : ${order.deliveryCode}` }))}`}
+            target="_blank" rel="noreferrer">
+            {t({ pt: "Enviar o código por WhatsApp", en: "Send the code on WhatsApp", fr: "Envoyer le code par WhatsApp" })}
+          </a>
+        </div>
+      )}
+      {order.deliveryCode && !isParcel && (
         <div className="flex items-center gap-4 rounded-2xl border-2 border-primary bg-brand-50 p-4" aria-live="polite">
           <div className="min-w-0 flex-1">
             <p className="text-sm font-bold">🔒 {order.fulfilment === "pickup" ? t({ pt: "Código de recolha", en: "Pickup code", fr: "Code de retrait" }) : t({ pt: "Código de entrega", en: "Delivery code", fr: "Code de livraison" })}</p>
@@ -422,18 +468,18 @@ function OrderDetailInner({ id }: { id: string }) {
       {/* Stepper */}
       {order.status !== "cancelled" && order.status !== "rejected" && (
         <ol className="rounded-2xl border bg-white p-4 shadow-sm">
-          {STEPS.map((s, i) => {
+          {steps.map((s, i) => {
             const done = currentIdx >= i;
             const current = currentIdx === i;
             return (
               <li key={s} className="relative flex gap-3 pb-4 last:pb-0">
-                {i < STEPS.length - 1 && <span className={cn("absolute left-[11px] top-6 h-[calc(100%-16px)] w-0.5", currentIdx > i ? "bg-primary" : "bg-neutral-200")} aria-hidden />}
+                {i < steps.length - 1 && <span className={cn("absolute left-[11px] top-6 h-[calc(100%-16px)] w-0.5", currentIdx > i ? "bg-primary" : "bg-neutral-200")} aria-hidden />}
                 <span className={cn("relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2",
                   done ? "border-primary bg-primary text-on-brand" : "border-neutral-300 bg-white", current && !isFinal && "ring-4 ring-brand-100")}>
                   {done && <Check className="h-3.5 w-3.5" />}
                 </span>
                 <div className="flex flex-1 items-baseline justify-between gap-2">
-                  <span className={cn("text-sm", done ? "font-semibold text-neutral-900" : "text-neutral-400")}>{t(ORDER_STATUS[s])}</span>
+                  <span className={cn("text-sm", done ? "font-semibold text-neutral-900" : "text-neutral-400")}>{t(isParcel ? PARCEL_STEP_LABEL[s] : ORDER_STATUS[s])}</span>
                   {stepTimes[s] && <span className="text-xs text-neutral-500">{time(stepTimes[s], lang)}</span>}
                 </div>
               </li>
@@ -472,7 +518,7 @@ function OrderDetailInner({ id }: { id: string }) {
       )}
 
       {/* Avaliação */}
-      {isOwner && order.status === "delivered" && (
+      {isOwner && order.status === "delivered" && !isParcel && (
         <div ref={reviewRef} id="avaliar">
           <Section title={review ? t({ pt: "A sua avaliação", en: "Your review", fr: "Votre avis" }) : t({ pt: "Avalie a sua encomenda", en: "Rate your order", fr: "Notez votre commande" })} icon={<Star className="h-4 w-4 text-amber-500" />}>
             {review ? (
@@ -494,7 +540,29 @@ function OrderDetailInner({ id }: { id: string }) {
         </div>
       )}
 
+      {/* Envios: recolha → entrega e o pacote */}
+      {isParcel && (
+        <Section title={t({ pt: "O seu envio", en: "Your parcel", fr: "Votre envoi" })} icon={<span aria-hidden>📦</span>}>
+          <div className="space-y-3 text-sm">
+            <div><p className="text-xs font-semibold uppercase text-neutral-500">{t({ pt: "Recolha", en: "Pickup", fr: "Départ" })}</p>
+              <p className="font-semibold">{order.pickupAddress?.contactName} · {order.pickupAddress?.contactPhone}</p>
+              <p className="text-neutral-600">{order.pickupAddress?.street}{order.pickupAddress?.zone ? `, ${order.pickupAddress.zone}` : ""}</p></div>
+            <div><p className="text-xs font-semibold uppercase text-neutral-500">{t({ pt: "Entrega", en: "Drop-off", fr: "Livraison" })}</p>
+              <p className="font-semibold">{order.parcel!.recipientName} · {order.parcel!.recipientPhone}</p>
+              <p className="text-neutral-600">{order.deliveryAddress.street}{order.deliveryAddress.zone ? `, ${order.deliveryAddress.zone}` : ""}</p></div>
+            <p>{t(PARCEL_SIZE_LABEL[order.parcel!.size])}{order.parcel!.fragile && <> · ⚠️ {t({ pt: "Frágil", en: "Fragile", fr: "Fragile" })}</>} · {order.parcel!.description}</p>
+          </div>
+          <div className="mt-4 space-y-2 border-t pt-3">
+            <PriceRow label={<>{t({ pt: "Envio", en: "Delivery", fr: "Livraison" })}{order.deliveryKm != null && <span className="ml-1 text-xs text-neutral-500">({order.deliveryKm.toFixed(1).replace(".", ",")} km)</span>}</>} value={kz(order.deliveryFee)} />
+            {!!order.serviceFee && <PriceRow label={t({ pt: "Extra de tamanho", en: "Size extra", fr: "Supplément taille" })} value={kz(order.serviceFee)} />}
+            {!!order.riderTip && <PriceRow label={t({ pt: "Gorjeta para o estafeta", en: "Rider tip", fr: "Pourboire livreur" })} value={kz(order.riderTip)} />}
+            <div className="border-t pt-2"><PriceRow strong label={t(T.total)} value={kz(order.total)} /></div>
+          </div>
+        </Section>
+      )}
+
       {/* Loja */}
+      {!isParcel && <>
       <div className="flex items-center gap-3 rounded-2xl border bg-white p-4 shadow-sm">
         <StoreImage name={store.name} url={store.logoUrl} className="h-11 w-11 text-sm" rounded="rounded-xl" />
         <Link href={`/loja/${store.id}`} className="min-w-0 flex-1">
@@ -538,17 +606,18 @@ function OrderDetailInner({ id }: { id: string }) {
           <div className="border-t pt-2"><PriceRow strong label={t(T.total)} value={kz(order.total)} /></div>
         </div>
       </Section>
+      </>}
 
       {/* Entrega e pagamento */}
       <div className="grid gap-3">
-        <div className="flex gap-3 rounded-2xl border bg-white p-4 shadow-sm">
+        {!isParcel && <div className="flex gap-3 rounded-2xl border bg-white p-4 shadow-sm">
           <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
           <div className="min-w-0 text-sm">
             <p className="font-semibold">{order.deliveryAddress.label}</p>
             <p className="text-neutral-600">{order.deliveryAddress.street}, {order.deliveryAddress.zone}, {order.deliveryAddress.city}</p>
             {order.deliveryAddress.reference && <p className="text-xs text-neutral-500">{order.deliveryAddress.reference}</p>}
           </div>
-        </div>
+        </div>}
         <div className="flex items-center gap-3 rounded-2xl border bg-white p-4 shadow-sm">
           <Wallet className="h-5 w-5 shrink-0 text-primary" />
           <p className="flex-1 text-sm font-medium"><span aria-hidden className="mr-1">{PAYMENT_ICON[order.paymentMethod]}</span>{PAYMENT[order.paymentMethod] ? t(PAYMENT[order.paymentMethod]) : order.paymentMethod}</p>

@@ -45,13 +45,16 @@ export async function riderPayQuote(tx: any, order: Order, driverId: number, bus
   const [row] = await tx.select({ v: users.vehicleType, lat: driverPresence.latitude, lng: driverPresence.longitude, sl: stores.latitude, sg: stores.longitude })
     .from(users).leftJoin(driverPresence, eq(driverPresence.userId, users.id)).innerJoin(stores, eq(stores.id, order.storeId))
     .where(eq(users.id, driverId));
-  const store = row ? { latitude: row.sl, longitude: row.sg } : null;
+  const store = row ? pickupPointOf(order, { latitude: row.sl, longitude: row.sg }) : null;
   const me = row ? { latitude: row.lat, longitude: row.lng } : null;
-  return riderPayFor({
+  const pay = riderPayFor({
     pickupKm: hasLL(me) && hasLL(store) ? roadKm(me, store) : null,
     dropKm: order.deliveryKm ?? (hasLL(store) && hasLL(order.deliveryAddress) ? roadKm(store, order.deliveryAddress) : null),
     vehicle: (row?.v as VehicleType | null) ?? "moto", at: new Date(), busy: busy ?? await currentBusyLevel(tx),
   });
+  // Envios: o estafeta recebe parte do extra de tamanho (pacote médio/grande)
+  const parcelBonus = order.parcel ? Math.round((order.parcel.sizeFee * config.parcelRiderSharePct) / 100) : 0;
+  return parcelBonus ? { ...pay, parcelBonus, total: pay.total + parcelBonus } : pay;
 }
 
 /** Quando começar a procurar estafeta, a partir da hora em que a comida fica pronta. */
@@ -63,7 +66,19 @@ export function dispatchTimes(now: Date, readyAt: Date, priority: boolean) {
 
 type Candidate = { id: number; km: number | null; idleMin: number };
 
-async function candidatesFor(orderId: number, store: { latitude: number | null; longitude: number | null }, isCash: boolean): Promise<Candidate[]> {
+/** Onde o estafeta recolhe: a loja, ou (Envios) a morada de quem envia. */
+export function pickupPointOf(o: Pick<Order, "pickupAddress">, store: { latitude: number | null; longitude: number | null } | null | undefined) {
+  return o.pickupAddress ? { latitude: o.pickupAddress.latitude, longitude: o.pickupAddress.longitude } : store ?? { latitude: null, longitude: null };
+}
+/** Envios: pacote grande só de carro; médio não vai de bicicleta. */
+export function vehiclesFor(o: Pick<Order, "parcel">): string[] | null {
+  if (!o.parcel) return null;
+  if (o.parcel.size === "large") return ["car"];
+  if (o.parcel.size === "medium") return ["moto", "car"];
+  return null;
+}
+
+async function candidatesFor(orderId: number, store: { latitude: number | null; longitude: number | null }, isCash: boolean, vehicles: string[] | null = null): Promise<Candidate[]> {
   const staleMin = config.presenceStaleMin;
   const rows = await db.execute(sql`
     select u.id, p.latitude, p.longitude,
@@ -79,6 +94,7 @@ async function candidatesFor(orderId: number, store: { latitude: number | null; 
       and not exists (select 1 from dispatch_offers d where d.driver_id = u.id and d.order_id = ${orderId})
       and (${!isCash} or coalesce((select -sum(l.amount) from ledger_entries l where l.party_type = 'driver' and l.party_id = u.id
              and l.kind in ('cash_collected','cash_deposit')), 0) < ${config.riderCashLimit})
+      ${vehicles ? sql`and coalesce(u.vehicle_type::text, 'moto') in (${sql.join(vehicles.map((v) => sql`${v}`), sql`, `)})` : sql``}
   `);
   const list: Candidate[] = (rows.rows as any[]).map((r) => {
     const km = r.latitude != null && r.longitude != null && store.latitude != null && store.longitude != null
@@ -119,7 +135,7 @@ export async function advanceOrder(orderId: number, now = new Date()): Promise<O
     if (o.dispatchRound >= config.dispatchMaxRounds) return giveUp();
 
     const [store] = await tx.select({ latitude: stores.latitude, longitude: stores.longitude }).from(stores).where(eq(stores.id, o.storeId));
-    const cands = await candidatesFor(orderId, store ?? { latitude: null, longitude: null }, o.paymentMethod === "cash");
+    const cands = await candidatesFor(orderId, pickupPointOf(o, store), o.paymentMethod === "cash", vehiclesFor(o));
     const best = cands[0];
     if (!best) {
       const since = (o.dispatchAt ?? o.updatedAt).getTime();

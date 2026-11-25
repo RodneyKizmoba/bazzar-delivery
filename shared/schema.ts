@@ -36,6 +36,14 @@ export type AdminPerm = (typeof ADMIN_PERMS)[number];
 export const FULFILMENTS = ["delivery", "pickup", "store_delivery"] as const;
 export type Fulfilment = (typeof FULFILMENTS)[number];
 export type VehicleType = (typeof VEHICLE_TYPES)[number];
+// Envios: o cliente manda um pacote de A para B (os mesmos estafetas das encomendas)
+export const PARCEL_SIZES = ["small", "medium", "large"] as const;
+export type ParcelSize = (typeof PARCEL_SIZES)[number];
+export type ParcelPickup = {
+  label: string; street: string; zone: string; reference?: string | null;
+  latitude: number; longitude: number; contactName: string; contactPhone: string;
+};
+export type ParcelInfo = { size: ParcelSize; description: string; recipientName: string; recipientPhone: string; fragile: boolean; sizeFee: number };
 // Táxi (estilo DiDi): categorias de viagem e estados
 export const RIDE_CATEGORIES = ["moto", "economy", "comfort", "xl"] as const;
 export type RideCategory = (typeof RIDE_CATEGORIES)[number];
@@ -131,6 +139,7 @@ export const stores = pgTable("stores", {
   closingTime: text("closing_time").notNull().default("22:00"),
   isOpen: boolean("is_open").notNull().default(true),
   isApproved: boolean("is_approved").notNull().default(false),
+  isSystem: boolean("is_system").notNull().default(false), // loja interna (ex.: "PedeJá Envios"): nunca aparece aos clientes
   deliveryFee: integer("delivery_fee").notNull().default(1000),
   minOrder: integer("min_order").notNull().default(0),
   prepTimeMin: integer("prep_time_min").notNull().default(20),
@@ -199,6 +208,10 @@ export const orders = pgTable("orders", {
   groupOrderId: integer("group_order_id"),
   status: text("status").$type<OrderStatus>().notNull(),
   fulfilment: text("fulfilment").$type<Fulfilment>().notNull().default("delivery"),
+  // "parcel" = Envio: recolha na morada de quem envia (pickupAddress), entrega em deliveryAddress
+  kind: text("kind").$type<"food" | "parcel">().notNull().default("food"),
+  pickupAddress: jsonb("pickup_address").$type<ParcelPickup>(),
+  parcel: jsonb("parcel").$type<ParcelInfo>(),
   scheduledFor: timestamp("scheduled_for"),
   // morada copiada no momento da encomenda (histórico estável)
   deliveryAddress: jsonb("delivery_address").$type<{
@@ -364,6 +377,7 @@ export type Sponsorship = typeof sponsorships.$inferSelect;
 export interface RiderPayDetail {
   vehicle: VehicleType; pickupKm: number; dropKm: number; estMinutes: number;
   base: number; distance: number; timeBonus: number; busyBonus: number; floorTopUp: number; total: number;
+  parcelBonus?: number; // Envios: parte do extra de tamanho (pacote médio/grande)
   band: "night" | "peak" | "normal"; busyLevel: number;
 }
 
@@ -856,5 +870,34 @@ export const rideQuoteSchema = z.object({
 });
 export const rideRequestSchema = rideQuoteSchema.extend({
   category: z.enum(RIDE_CATEGORIES),
+  paymentMethod: z.enum(PAYMENT_METHODS),
+});
+
+// ---------------------------------------------------------------------------
+// Envios
+// ---------------------------------------------------------------------------
+const parcelPointSchema = z.object({
+  label: z.string().trim().min(1).max(160),
+  street: z.string().trim().max(200).default(""),
+  zone: z.string().trim().max(60).default(""),
+  reference: z.string().trim().max(200).optional().nullable(),
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+});
+const phoneSchema = z.string().trim().regex(/^(\+?244)?\s?9\d{2}\s?\d{3}\s?\d{3}$/, "Telefone inválido (9 dígitos, começa por 9).");
+export const parcelQuoteSchema = z.object({
+  pickup: parcelPointSchema,
+  dropoff: parcelPointSchema,
+  size: z.enum(PARCEL_SIZES),
+});
+export const parcelCreateSchema = parcelQuoteSchema.extend({
+  senderName: z.string().trim().min(2).max(80),
+  senderPhone: phoneSchema,
+  recipientName: z.string().trim().min(2).max(80),
+  recipientPhone: phoneSchema,
+  description: z.string().trim().min(2, "Diga o que vai no pacote.").max(200),
+  fragile: z.boolean().default(false),
+  notes: z.string().trim().max(300).optional().nullable(),
+  riderTip: z.number().int().min(0).max(20000).default(0),
   paymentMethod: z.enum(PAYMENT_METHODS),
 });

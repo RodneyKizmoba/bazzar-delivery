@@ -15,7 +15,7 @@ import { sendPosWebhook } from "./pos";
 import { publishOffer, publishOrder } from "./realtime";
 import { cashHeld, settleDeliveredOrder } from "./settlement";
 import { hasLL, roadKm, waitFeeFor } from "./fees";
-import { riderPayQuote, assertNotReservedForOther, closeOffersOnClaim, dispatchTimes } from "./dispatchEngine";
+import { riderPayQuote, assertNotReservedForOther, closeOffersOnClaim, dispatchTimes, pickupPointOf, vehiclesFor } from "./dispatchEngine";
 
 export type Actor = { kind: "customer" | "store" | "driver" | "admin" | "system"; userId?: number };
 
@@ -185,7 +185,8 @@ export async function changeStatus(orderId: number, to: OrderStatus, actor: Acto
     }
     if (actor.kind === "driver" && to === "picked_up" && !order.driverId) throw conflict("Aceite a entrega primeiro.");
 
-    if (!canTransition(actor.kind, order.status, to, order.fulfilment)) {
+    const parcelCancel = order.kind === "parcel" && actor.kind === "customer" && to === "cancelled" && order.status === "ready" && !order.driverId;
+    if (!parcelCancel && !canTransition(actor.kind, order.status, to, order.fulfilment)) {
       if (actor.kind === "customer" && to === "cancelled") {
         throw conflict("A loja já começou a preparar a encomenda; já não é possível cancelar. Contacte o suporte.", "NOT_CANCELLABLE");
       }
@@ -307,6 +308,11 @@ export async function claimDelivery(orderId: number, driverId: number): Promise<
     if (target?.paymentMethod === "cash" && (await cashHeld(tx, driverId)) >= config.riderCashLimit) {
       throw conflict(`Tem demasiado numerário em mão (limite ${config.riderCashLimit} Kz). Entregue-o à PedeJá para voltar a levar encomendas pagas em dinheiro.`, "CASH_LIMIT");
     }
+    const allowed = target ? vehiclesFor(target) : null;
+    if (allowed) {
+      const [me] = await tx.select({ v: users.vehicleType }).from(users).where(eq(users.id, driverId));
+      if (!allowed.includes(String(me?.v ?? "moto"))) throw conflict("Este pacote é grande demais para o seu veículo.", "VEHICLE_TOO_SMALL");
+    }
     // o valor mostrado na oferta é o que fica; vindo da lista aberta calcula-se agora
     const [myOffer] = target ? await tx.select({ d: dispatchOffers.payDetail }).from(dispatchOffers)
       .where(and(eq(dispatchOffers.orderId, orderId), eq(dispatchOffers.driverId, driverId), eq(dispatchOffers.status, "pending"))) : [];
@@ -336,10 +342,11 @@ export async function markArrived(orderId: number, driverId: number, at: "store"
     if (at === "store" && !o.driverAtStoreAt) {
       // a espera conta a partir daqui: confirmar pelo GPS (se recente) que está mesmo na loja
       const [p] = await tx.select().from(driverPresence).where(eq(driverPresence.userId, driverId));
-      const [s] = await tx.select({ latitude: stores.latitude, longitude: stores.longitude }).from(stores).where(eq(stores.id, o.storeId));
+      const [st] = await tx.select({ latitude: stores.latitude, longitude: stores.longitude }).from(stores).where(eq(stores.id, o.storeId));
+      const s = pickupPointOf(o, st);
       if (p?.locationAt && now.getTime() - p.locationAt.getTime() < 3 * 60_000 && hasLL(p) && hasLL(s)) {
         const km = roadKm(p, s) / 1.3;
-        if (km > 0.4) throw conflict(`O GPS mostra que ainda está a ${km.toFixed(1)} km da loja.`, "NOT_AT_STORE");
+        if (km > 0.4) throw conflict(`O GPS mostra que ainda está a ${km.toFixed(1)} km ${o.parcel ? "do ponto de recolha" : "da loja"}.`, "NOT_AT_STORE");
       }
     }
     const patch = at === "store" ? { driverAtStoreAt: o.driverAtStoreAt ?? now } : { driverAtCustomerAt: o.driverAtCustomerAt ?? now };

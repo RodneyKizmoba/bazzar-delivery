@@ -15,7 +15,8 @@
     "test:api": "tsx tests/api.test.ts",
     "test:fees": "tsx tests/fees.unit.test.ts",
     "test:taxi": "tsx tests/taxi.unit.test.ts",
-    "test:taxi-api": "tsx tests/taxi.api.test.ts"
+    "test:taxi-api": "tsx tests/taxi.api.test.ts",
+    "test:parcels-api": "tsx tests/parcels.api.test.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

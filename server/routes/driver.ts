@@ -7,7 +7,7 @@ import { ah, badRequest, idParam, notFound, parse } from "../lib/http";
 import { requireRole } from "../lib/auth";
 import { changeStatus, claimDelivery, markArrived } from "../lib/orderFlow";
 import { publishLocation } from "../lib/realtime";
-import { acceptOffer, declineOffer, distanceKm, riderPayQuote, setPresence, touchPresence } from "../lib/dispatchEngine";
+import { acceptOffer, declineOffer, distanceKm, riderPayQuote, setPresence, touchPresence, vehiclesFor } from "../lib/dispatchEngine";
 import { config } from "../config";
 import { account } from "../lib/settlement";
 import { available, instantCashout, payoutsOf } from "../lib/payouts";
@@ -41,11 +41,17 @@ function summary(o: typeof orders.$inferSelect, s: typeof stores.$inferSelect) {
     payout: o.riderPay != null ? o.riderPay + o.riderWaitFee + o.riderTip : null,
     riderPayDetail: o.riderPayDetail,
     riderWaitFee: o.riderWaitFee,
-    tripKm: s.latitude != null && s.longitude != null && o.deliveryAddress.latitude != null && o.deliveryAddress.longitude != null
+    tripKm: o.deliveryKm ?? (s.latitude != null && s.longitude != null && o.deliveryAddress.latitude != null && o.deliveryAddress.longitude != null
       ? Math.round(distanceKm({ latitude: s.latitude, longitude: s.longitude }, { latitude: o.deliveryAddress.latitude, longitude: o.deliveryAddress.longitude! }) * 10) / 10
-      : null,
+      : null),
     createdAt: o.createdAt,
-    store: { id: s.id, name: s.name, street: s.street, zone: s.zone, phone: s.phone, latitude: s.latitude, longitude: s.longitude },
+    // Envios: "loja" = ponto de recolha (quem envia); o pacote e quem recebe vêm em "parcel"
+    kind: o.kind,
+    parcel: o.parcel,
+    store: o.pickupAddress
+      ? { id: s.id, name: `📦 ${o.pickupAddress.contactName}`, street: [o.pickupAddress.street, o.pickupAddress.reference].filter(Boolean).join(" · "), zone: o.pickupAddress.zone,
+          phone: o.pickupAddress.contactPhone, latitude: o.pickupAddress.latitude, longitude: o.pickupAddress.longitude }
+      : { id: s.id, name: s.name, street: s.street, zone: s.zone, phone: s.phone, latitude: s.latitude, longitude: s.longitude },
   };
 }
 
@@ -57,8 +63,11 @@ driverRouter.get("/available", ah(async (req, res) => {
     .orderBy(desc(orders.priorityFee), asc(orders.createdAt)).limit(50);
   // quanto cada entrega me pagaria (a partir da minha posição e do meu veículo), antes de aceitar
   const busy = await currentBusyLevel(db);
+  const [me] = await db.select({ v: users.vehicleType }).from(users).where(eq(users.id, req.user!.id));
   const list = [];
   for (const r of rows) {
+    const allowed = vehiclesFor(r.o); // Envios grandes só de carro
+    if (allowed && !allowed.includes(String(me?.v ?? "moto"))) continue;
     const pay = await riderPayQuote(db, r.o, req.user!.id, busy);
     list.push({ ...summary(r.o, r.s), payout: pay.total + r.o.riderTip, riderPayDetail: pay });
   }
@@ -71,7 +80,9 @@ driverRouter.get("/current", ah(async (req, res) => {
     .where(and(eq(orders.driverId, req.user!.id), inArray(orders.status, [...ACTIVE]))).limit(1);
   if (!row) return res.json({ order: null });
   const items = await db.select().from(orderItems).where(eq(orderItems.orderId, row.o.id));
-  res.json({ order: { ...summary(row.o, row.s), customer: { name: row.customerName, phone: row.customerPhone }, items } });
+  // Envios: entrega-se a quem recebe (não a quem pediu)
+  const to = row.o.parcel ? { name: row.o.parcel.recipientName, phone: row.o.parcel.recipientPhone } : { name: row.customerName, phone: row.customerPhone };
+  res.json({ order: { ...summary(row.o, row.s), customer: to, items } });
 }));
 
 // ---- Online / offline e ofertas (despacho automático) ----

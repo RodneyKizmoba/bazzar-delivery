@@ -68,7 +68,7 @@ const DISMISS_KEY = "pedeja.taxi.dismissed";
 // ---------------------------------------------------------------------------
 // Pedir uma viagem
 // ---------------------------------------------------------------------------
-type Field = "pickup" | "dropoff";
+export type Field = "pickup" | "dropoff";
 
 function RequestForm() {
   const t = useT();
@@ -218,7 +218,7 @@ function RequestForm() {
   );
 }
 
-function PlaceRow({ icon, label, value, placeholder, active, onClick, action }: {
+export function PlaceRow({ icon, label, value, placeholder, active, onClick, action }: {
   icon: React.ReactNode; label: string; value?: string; placeholder: string; active: boolean; onClick: () => void; action?: React.ReactNode;
 }) {
   return (
@@ -234,7 +234,7 @@ function PlaceRow({ icon, label, value, placeholder, active, onClick, action }: 
 }
 
 /** Procurar um sítio pelo nome (OpenStreetMap / Nominatim, grátis; só quando o cliente carrega em Procurar). */
-function PlaceSearch({ onPick, field }: { onPick: (p: Place) => void; field: Field }) {
+export function PlaceSearch({ onPick, field }: { onPick: (p: Place) => void; field: Field }) {
   const t = useT();
   const [q, setQ] = useState("");
   const [results, setResults] = useState<{ label: string; latitude: number; longitude: number; zone?: string }[] | null>(null);

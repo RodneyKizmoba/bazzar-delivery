@@ -28,6 +28,7 @@ const Login = lazy(() => import("@/pages/customer/Login"));
 const Register = lazy(() => import("@/pages/customer/Register"));
 const Info = lazy(() => import("@/pages/info/Info"));
 const Taxi = lazy(() => import("@/pages/customer/Taxi"));
+const Envios = lazy(() => import("@/pages/customer/Envios"));
 const RideShare = lazy(() => import("@/pages/customer/RideShare"));
 // Motorista de táxi
 const TaxiHome = lazy(() => import("@/pages/taxi/TaxiHome"));
@@ -82,6 +83,7 @@ function Routes() {
         <Route path="/registar" component={Register} />
         <Route path="/info/:page" component={Info} />
         <Route path="/taxi" component={Taxi} />
+        <Route path="/envios" component={Envios} />
         <Route path="/viagem/:token" component={RideShare} />
         <Route path="/taxista" component={TaxiHome} />
         <Route path="/taxista/carteira" component={TaxiWallet} />

@@ -311,7 +311,7 @@ export default function Home() {
         </form>
       </div>
 
-      {/* Serviços: Restaurantes, Mercado, Farmácia, Táxi… (Envios em breve) */}
+      {/* Serviços: Restaurantes, Mercado, Farmácia, Envios, Táxi… */}
       <ServiceGrid zq={zq} />
 
       {/* Publicidade */}
@@ -428,7 +428,7 @@ function ServiceRow({ zq }: { zq: string }) {
     { key: "vintage", art: "vintage", label: "Desapega", href: `/pesquisa?type=vintage${zq}` },
     { key: "jewelry", art: "jewelry", label: t({ pt: "Bijuteria", en: "Jewellery", fr: "Bijoux" }), href: `/pesquisa?type=jewelry${zq}` },
     { key: "other", art: "other", label: t({ pt: "Mais lojas", en: "More shops", fr: "Plus de boutiques" }), href: `/pesquisa?type=other${zq}` },
-    { key: "parcel", art: "parcel", label: t({ pt: "Envios", en: "Send", fr: "Envois" }) },
+    { key: "parcel", art: "parcel", label: t({ pt: "Envios", en: "Send", fr: "Envois" }), href: "/envios" },
     { key: "taxi", art: "taxi", label: t({ pt: "Táxi", en: "Taxi", fr: "Taxi" }), href: "/taxi" },
   ];
   return (
@@ -466,7 +466,7 @@ function ServiceGrid({ zq }: { zq: string }) {
     { key: "vintage", art: "vintage", label: "Desapega", sub: t({ pt: "Roupa nova, vintage e em segunda mão", en: "New, vintage & second-hand clothes", fr: "Vêtements neufs, vintage et seconde main" }), href: `/pesquisa?type=vintage${zq}` },
     { key: "jewelry", art: "jewelry", label: t({ pt: "Bijuteria", en: "Jewellery", fr: "Bijoux" }), sub: t({ pt: "Colares, brincos e acessórios", en: "Necklaces, earrings & accessories", fr: "Colliers, boucles et accessoires" }), href: `/pesquisa?type=jewelry${zq}` },
     { key: "other", art: "other", label: t({ pt: "Mais lojas", en: "More shops", fr: "Plus de boutiques" }), sub: t({ pt: "Todos os outros negócios", en: "Every other business", fr: "Tous les autres commerces" }), href: `/pesquisa?type=other${zq}` },
-    { key: "parcel", art: "parcel", image: "parcel.jpg", label: t({ pt: "Envios", en: "Send", fr: "Envois" }) },
+    { key: "parcel", art: "parcel", image: "parcel.jpg", label: t({ pt: "Envios", en: "Send", fr: "Envois" }), sub: t({ pt: "Mande um pacote de A para B", en: "Send a parcel from A to B", fr: "Envoyez un colis de A à B" }), href: "/envios" },
     { key: "taxi", art: "taxi", image: "taxi.jpg", label: t({ pt: "Táxi", en: "Taxi", fr: "Taxi" }), sub: t({ pt: "Mota, carro e XL", en: "Moto, car & XL", fr: "Moto, voiture et XL" }), href: "/taxi" },
   ];
   const Tile = ({ tile }: { tile: (typeof tiles)[number] }) => {

@@ -173,7 +173,8 @@ customerRouter.get("/orders/:id", requireAuth, ah(async (req, res) => {
   res.json({
     order: {
       ...order,
-      canCancel: (config.cancellableStatuses as readonly string[]).includes(order.status),
+      // Envios: pode cancelar enquanto nenhum estafeta aceitou
+      canCancel: order.kind === "parcel" ? order.status === "ready" && !order.driverId : (config.cancellableStatuses as readonly string[]).includes(order.status),
       canModify: (config.modifiableStatuses as readonly string[]).includes(order.status),
       canReview: order.status === "delivered" && !review && order.customerId === req.user!.id,
       // código de entrega: só para o cliente (e admin), enquanto a encomenda está a caminho
@@ -186,7 +187,9 @@ customerRouter.get("/orders/:id", requireAuth, ah(async (req, res) => {
     review: review ?? null,
     driver,
     customer: req.user!.id === order.customerId ? null : customer,
-    store: { id: store.id, name: store.name, phone: store.phone, street: store.street, zone: store.zone, latitude: store.latitude, longitude: store.longitude, logoUrl: store.logoUrl },
+    store: order.pickupAddress
+      ? { id: store.id, name: store.name, phone: order.pickupAddress.contactPhone, street: order.pickupAddress.street, zone: order.pickupAddress.zone, latitude: order.pickupAddress.latitude, longitude: order.pickupAddress.longitude, logoUrl: null }
+      : { id: store.id, name: store.name, phone: store.phone, street: store.street, zone: store.zone, latitude: store.latitude, longitude: store.longitude, logoUrl: store.logoUrl },
   });
 }));
 
@@ -204,7 +207,8 @@ customerRouter.get("/orders/:id/tracking", requireAuth, ah(async (req, res) => {
     driverLocation: order.driverLatitude != null && order.driverLongitude != null
       ? { latitude: order.driverLatitude, longitude: order.driverLongitude, at: order.driverLocationAt }
       : null,
-    storeLocation: store.latitude != null ? { latitude: store.latitude, longitude: store.longitude } : null,
+    storeLocation: order.pickupAddress ? { latitude: order.pickupAddress.latitude, longitude: order.pickupAddress.longitude }
+      : store.latitude != null ? { latitude: store.latitude, longitude: store.longitude } : null,
     destination: order.deliveryAddress.latitude != null
       ? { latitude: order.deliveryAddress.latitude, longitude: order.deliveryAddress.longitude }
       : null,

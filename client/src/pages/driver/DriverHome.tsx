@@ -41,6 +41,29 @@ export interface DriverOrder {
   readyEstimateAt?: string | null; payout?: number | null; tripKm?: number | null; pinRequired?: boolean;
   riderPayDetail?: PayDetail | null; riderWaitFee?: number;
   store: DStore;
+  // Envios: "store" é o ponto de recolha (quem envia)
+  kind?: "food" | "parcel";
+  parcel?: { size: "small" | "medium" | "large"; description: string; recipientName: string; recipientPhone: string; fragile: boolean } | null;
+}
+
+const PARCEL_SIZE = {
+  small: { pt: "Pequeno", en: "Small", fr: "Petit" },
+  medium: { pt: "Médio", en: "Medium", fr: "Moyen" },
+  large: { pt: "Grande", en: "Large", fr: "Grand" },
+} as const;
+
+/** Envios: o que vai no pacote; o numerário paga-o quem envia, na recolha. */
+function ParcelBox({ o }: { o: DriverOrder }) {
+  const t = useT();
+  if (!o.parcel) return null;
+  return (
+    <div className="rounded-lg border-2 border-dashed border-amber-400 bg-amber-50 p-3 text-sm text-amber-950">
+      <p className="font-bold">📦 {t({ pt: "Envio", en: "Parcel", fr: "Colis" })} · {t(PARCEL_SIZE[o.parcel.size])}{o.parcel.fragile && <> · ⚠️ {t({ pt: "Frágil", en: "Fragile", fr: "Fragile" })}</>}</p>
+      <p>{o.parcel.description}</p>
+      {o.collectCash > 0 && <p className="mt-1 font-semibold">💵 {t({ pt: `Cobre ${kz(o.collectCash)} a quem envia, na recolha.`, en: `Collect ${kz(o.collectCash)} from the sender at pickup.`, fr: `Encaissez ${kz(o.collectCash)} auprès de l'expéditeur.` })}</p>}
+      <p className="mt-1 text-xs">{t({ pt: "Na entrega, peça o código a quem recebe.", en: "At drop-off, ask the recipient for the code.", fr: "À la livraison, demandez le code au destinataire." })}</p>
+    </div>
+  );
 }
 interface CurrentOrder extends DriverOrder {
   customer: { name: string; phone: string };
@@ -315,10 +338,11 @@ function OfferCard({ myPos }: { myPos: LL | null }) {
         </div>
         <div className="space-y-1 text-sm">
           <p className="flex items-center gap-1.5"><StoreIcon className="h-4 w-4 text-primary" /><strong>{o.store.name}</strong>
-            {toStore != null && <span className="text-neutral-600">· {fmtKm(toStore)} {t({ pt: "até à loja", en: "to store", fr: "jusqu'au magasin" })}</span>}</p>
+            {toStore != null && <span className="text-neutral-600">· {fmtKm(toStore)} {o.parcel ? t({ pt: "até à recolha", en: "to pickup", fr: "jusqu'au départ" }) : t({ pt: "até à loja", en: "to store", fr: "jusqu'au magasin" })}</span>}</p>
           <p className="flex items-center gap-1.5"><MapPin className="h-4 w-4 text-green-700" />{o.deliveryAddress.zone}
             {o.tripKm != null && <span className="text-neutral-600">· {fmtKm(o.tripKm)} {t({ pt: "de entrega", en: "delivery leg", fr: "de livraison" })}</span>}</p>
-          {o.readyEstimateAt && <p className="flex items-center gap-1.5 text-neutral-600"><Clock className="h-4 w-4" />{t({ pt: "Comida pronta às", en: "Food ready at", fr: "Repas prêt à" })} {time(o.readyEstimateAt, lang)}</p>}
+          {o.parcel && <p className="font-semibold text-amber-800">📦 {t({ pt: "Envio", en: "Parcel", fr: "Colis" })} · {t(PARCEL_SIZE[o.parcel.size])}{o.parcel.fragile ? ` · ${t({ pt: "Frágil", en: "Fragile", fr: "Fragile" })}` : ""}</p>}
+          {o.readyEstimateAt && !o.parcel && <p className="flex items-center gap-1.5 text-neutral-600"><Clock className="h-4 w-4" />{t({ pt: "Comida pronta às", en: "Food ready at", fr: "Repas prêt à" })} {time(o.readyEstimateAt, lang)}</p>}
           {o.collectCash > 0 && <p className="flex items-center gap-1.5 font-semibold text-brand-800"><Banknote className="h-4 w-4" />{t({ pt: "Cobrar", en: "Collect", fr: "Encaisser" })} {kz(o.collectCash)}</p>}
           {o.priority && <p className="font-semibold text-primary">⚡ {t({ pt: "Prioritária", en: "Priority", fr: "Prioritaire" })}</p>}
         </div>
@@ -345,6 +369,7 @@ function CurrentDelivery({ order, myPos }: { order: CurrentOrder; myPos: { latit
   const a = order.deliveryAddress;
   const dest = pt(a.latitude, a.longitude);
   const storePt = pt(order.store.latitude, order.store.longitude);
+  const isParcel = !!order.parcel;
   const navTarget = order.status === "picked_up" ? dest : storePt ?? dest;
   // Rota completa no Google Maps (escolhe o caminho mais rápido com trânsito): até à loja e depois ao cliente
   const ll = (p: { latitude: number; longitude: number }) => `${p.latitude},${p.longitude}`;
@@ -353,8 +378,8 @@ function CurrentDelivery({ order, myPos }: { order: CurrentOrder; myPos: { latit
       ? `https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=${ll(dest)}&waypoints=${ll(storePt)}${myPos ? `&origin=${ll(myPos)}` : ""}`
       : `https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=${ll(navTarget)}${myPos ? `&origin=${ll(myPos)}` : ""}`;
   const legs = [
-    myPos && storePt && order.status !== "picked_up" ? { label: t({ pt: "Até à loja", en: "To store", fr: "Jusqu'au magasin" }), km: km(myPos, storePt) } : null,
-    storePt && dest ? { label: t({ pt: "Loja → cliente", en: "Store → customer", fr: "Magasin → client" }), km: km(storePt, dest) } : null,
+    myPos && storePt && order.status !== "picked_up" ? { label: isParcel ? t({ pt: "Até à recolha", en: "To pickup", fr: "Jusqu'au départ" }) : t({ pt: "Até à loja", en: "To store", fr: "Jusqu'au magasin" }), km: km(myPos, storePt) } : null,
+    storePt && dest ? { label: isParcel ? t({ pt: "Recolha → entrega", en: "Pickup → drop-off", fr: "Départ → livraison" }) : t({ pt: "Loja → cliente", en: "Store → customer", fr: "Magasin → client" }), km: km(storePt, dest) } : null,
   ].filter(Boolean) as { label: string; km: number }[];
 
   const setStatus = useMutation({
@@ -413,9 +438,9 @@ function CurrentDelivery({ order, myPos }: { order: CurrentOrder; myPos: { latit
       <div className={cn("rounded-lg border p-3", order.status !== "picked_up" && "border-primary/40 bg-primary/5")}>
         <p className="flex items-center gap-1 text-xs font-semibold uppercase text-neutral-500"><StoreIcon className="h-3 w-3" />{t({ pt: "Recolha", en: "Pickup", fr: "Retrait" })}</p>
         <p className="font-semibold">{order.store.name}</p>
-        <p className="text-sm text-neutral-600">{order.store.street}, {order.store.zone}</p>
+        <p className="text-sm text-neutral-600">{[order.store.street, order.store.zone].filter(Boolean).join(", ")}</p>
         <a href={`tel:${order.store.phone}`} className="mt-2 inline-flex min-h-10 items-center gap-1 rounded-md border px-3 text-sm font-medium">
-          <Phone className="h-4 w-4" />{t({ pt: "Ligar à loja", en: "Call store", fr: "Appeler le magasin" })}
+          <Phone className="h-4 w-4" />{isParcel ? t({ pt: "Ligar a quem envia", en: "Call sender", fr: "Appeler l'expéditeur" }) : t({ pt: "Ligar à loja", en: "Call store", fr: "Appeler le magasin" })}
         </a>
       </div>
 
@@ -426,12 +451,13 @@ function CurrentDelivery({ order, myPos }: { order: CurrentOrder; myPos: { latit
         <p className="text-sm text-neutral-600">{a.zone}, {a.city}</p>
         {a.reference && <p className="mt-1 rounded bg-yellow-50 px-2 py-1 text-sm text-yellow-900">{t({ pt: "Referência:", en: "Landmark:", fr: "Repère :" })} {a.reference}</p>}
         <a href={`tel:${order.customer.phone}`} className="mt-2 inline-flex min-h-10 items-center gap-1 rounded-md border px-3 text-sm font-medium">
-          <Phone className="h-4 w-4" />{t({ pt: "Ligar ao cliente", en: "Call customer", fr: "Appeler le client" })}
+          <Phone className="h-4 w-4" />{isParcel ? t({ pt: "Ligar a quem recebe", en: "Call recipient", fr: "Appeler le destinataire" }) : t({ pt: "Ligar ao cliente", en: "Call customer", fr: "Appeler le client" })}
         </a>
       </div>
 
+      <ParcelBox o={order} />
       <div>
-        <p className="mb-1 text-sm font-semibold">{t({ pt: "Artigos", en: "Items", fr: "Articles" })}</p>
+        {!order.parcel && <p className="mb-1 text-sm font-semibold">{t({ pt: "Artigos", en: "Items", fr: "Articles" })}</p>}
         <ul className="space-y-0.5 text-sm">
           {order.items.map((i) => (
             <li key={i.id}>
@@ -461,6 +487,7 @@ function CurrentDelivery({ order, myPos }: { order: CurrentOrder; myPos: { latit
           <Navigation className="h-4 w-4" />
           {order.status === "picked_up"
             ? t({ pt: "Navegar até ao cliente (Google Maps)", en: "Navigate to customer (Google Maps)", fr: "Itinéraire vers le client (Google Maps)" })
+            : isParcel ? t({ pt: "Rota completa: recolha → entrega (Google Maps)", en: "Full route: pickup → drop-off (Google Maps)", fr: "Itinéraire complet : départ → livraison (Google Maps)" })
             : t({ pt: "Rota completa: loja → cliente (Google Maps)", en: "Full route: store → customer (Google Maps)", fr: "Itinéraire complet : magasin → client (Google Maps)" })}
         </a>
       )}
@@ -472,7 +499,7 @@ function CurrentDelivery({ order, myPos }: { order: CurrentOrder; myPos: { latit
 
       {order.status !== "picked_up" && !order.driverAtStoreAt && (
         <Button size="lg" variant="outline" className="h-12 w-full border-2 border-primary text-base font-bold" disabled={arrived.isPending} onClick={() => arrived.mutate("store")}>
-          📍 {t({ pt: "Cheguei à loja", en: "I'm at the store", fr: "Je suis au magasin" })}
+          📍 {isParcel ? t({ pt: "Cheguei à recolha", en: "I'm at the pickup", fr: "Je suis au départ" }) : t({ pt: "Cheguei à loja", en: "I'm at the store", fr: "Je suis au magasin" })}
         </Button>
       )}
       {order.status === "picked_up" && !order.driverAtCustomerAt && (
@@ -485,7 +512,7 @@ function CurrentDelivery({ order, myPos }: { order: CurrentOrder; myPos: { latit
       )}
       {order.status === "ready" && (
         <Button size="lg" className="h-14 w-full text-base" disabled={setStatus.isPending} onClick={() => setStatus.mutate("picked_up")}>
-          {t({ pt: "Recolhi a encomenda", en: "I've picked up the order", fr: "J'ai récupéré la commande" })}
+          {isParcel ? t({ pt: "Recolhi o pacote", en: "I've picked up the parcel", fr: "J'ai récupéré le colis" }) : t({ pt: "Recolhi a encomenda", en: "I've picked up the order", fr: "J'ai récupéré la commande" })}
         </Button>
       )}
       {order.status === "picked_up" && (
@@ -499,7 +526,9 @@ function CurrentDelivery({ order, myPos }: { order: CurrentOrder; myPos: { latit
           <AlertDialogHeader>
             <AlertDialogTitle>{t({ pt: "Confirmar entrega?", en: "Confirm delivery?", fr: "Confirmer la livraison ?" })}</AlertDialogTitle>
             <AlertDialogDescription>
-              {order.collectCash > 0
+              {order.collectCash > 0 && order.parcel
+                ? t({ pt: `Confirme que recebeu ${kz(order.collectCash)} em numerário de quem enviou e que entregou o pacote.`, en: `Confirm you got ${kz(order.collectCash)} in cash from the sender and handed over the parcel.`, fr: `Confirmez avoir reçu ${kz(order.collectCash)} de l'expéditeur et remis le colis.` })
+                : order.collectCash > 0
                 ? t({ pt: `Confirme que recebeu ${kz(order.collectCash)} em numerário do cliente.`, en: `Confirm you received ${kz(order.collectCash)} in cash from the customer.`, fr: `Confirmez avoir reçu ${kz(order.collectCash)} en espèces du client.` })
                 : t({ pt: "Confirme que entregou a encomenda ao cliente.", en: "Confirm you handed the order to the customer.", fr: "Confirmez avoir remis la commande au client." })}
             </AlertDialogDescription>

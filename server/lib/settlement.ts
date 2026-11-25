@@ -55,7 +55,7 @@ export async function settleDeliveredOrder(tx: DbOrTx, order: Order) {
     commissionPct: pct, commissionAmount: s.commission, storeEarning: s.storeEarning,
     riderEarning: s.riderEarning, settledAt: new Date(),
   }).where(eq(orders.id, order.id));
-  const rows: (typeof ledgerEntries.$inferInsert)[] = [
+  const rows: (typeof ledgerEntries.$inferInsert)[] = order.kind === "parcel" ? [] : [
     { partyType: "store", partyId: order.storeId, orderId: order.id, kind: "order_earning", amount: s.storeEarning,
       note: `${order.orderNumber}: comida ${order.subtotal} Kz − comissão ${pct}% (${s.commission} Kz)${order.fulfilment === "store_delivery" ? ` + entrega ${order.deliveryFee} Kz${order.riderTip ? ` + gorjeta ${order.riderTip} Kz` : ""}` : order.fulfilment === "pickup" ? " · recolha" : ""}` },
   ];
@@ -71,7 +71,7 @@ export async function settleDeliveredOrder(tx: DbOrTx, order: Order) {
         note: `${order.orderNumber}: numerário recebido do cliente` });
     }
   }
-  await tx.insert(ledgerEntries).values(rows).onConflictDoNothing();
+  if (rows.length) await tx.insert(ledgerEntries).values(rows).onConflictDoNothing();
 }
 
 /** Numerário que o estafeta tem em mão (recebeu e ainda não entregou à PedeJá). */

@@ -127,6 +127,13 @@ export const config = {
   taxiSearchMaxMin: num("TAXI_SEARCH_MAX_MIN", 5), // sem motorista ao fim de 5 min: avisa o cliente
   sosPhone: process.env.SOS_PHONE || "113", // Polícia Nacional de Angola
 
+  // Envios: taxa de entrega normal (distância) + extra por tamanho; parte do extra vai para o estafeta
+  parcelMediumFee: num("PARCEL_MEDIUM_FEE", 500), // até ~15 kg
+  parcelLargeFee: num("PARCEL_LARGE_FEE", 1500), // até ~30 kg, só carro
+  parcelRiderSharePct: num("PARCEL_RIDER_SHARE_PCT", 50),
+  // sem comida não há comissão: o envio nunca custa menos do que o estafeta ganha + esta margem
+  parcelMinMarginPct: num("PARCEL_MIN_MARGIN_PCT", 15),
+
   // Portal externo de estafetas (opcional)
   driverPortalUrl: process.env.DRIVER_PORTAL_URL || "",
   driverPortalApiKey: process.env.DRIVER_PORTAL_API_KEY || "",
