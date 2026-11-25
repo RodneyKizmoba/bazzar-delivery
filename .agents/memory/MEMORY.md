@@ -1,2 +1,3 @@
 - [Browser radio tests](browser-radio-tests.md) — wait for focus and selection after Radix arrow navigation to avoid timing-dependent failures.
 - [Photo relevance](photo-relevance.md) — inspect actual subjects; every service and category photo must match its label.
+- [Delayed browser responses](delayed-browser-responses.md) — observe arrival inside a gated Puppeteer interceptor to avoid queued-listener deadlocks.
