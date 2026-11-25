@@ -19,6 +19,7 @@ import { useLang, useT, T, type Tr } from "@/lib/i18n";
 import { kz, time, PAYMENT } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { PinPicker } from "@/components/OrderMap";
+import { handleRadioArrowKey } from "@/lib/radio-keyboard";
 
 // ---------------------------------------------------------------------------
 // Tipos
@@ -289,15 +290,23 @@ export function PaymentPicker({ value, onChange, excludeCash }: { value: string;
   // numerário só aparece se estiver ligado (por defeito a PedeJá só aceita pagamentos por banco)
   const methods = (meta.data?.paymentMethods ?? []).filter((m) => m.id !== "cash" || (!excludeCash && m.available));
   return (
-    <RadioGroup value={value} onValueChange={onChange} className="gap-2">
+    // setas tratadas por nós (seleccionam e focam o seguinte, saltando os indisponíveis) — igual às outras opções do checkout
+    <RadioGroup value={value} onValueChange={onChange}
+      onKeyDownCapture={(e) => { handleRadioArrowKey(e); if (e.defaultPrevented) e.stopPropagation(); }} aria-label={t({ pt: "Pagamento", en: "Payment", fr: "Paiement" })} className="gap-2">
       {methods.map((m) => {
         const id = `pm-${m.id}`;
         return (
           <label key={m.id} htmlFor={id}
-            className={cn("flex min-h-[52px] items-center gap-3 rounded-xl border-2 px-3 py-2.5",
+            className={cn("flex min-h-[52px] items-center gap-3 rounded-xl border-2 px-3 py-2.5 has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-primary",
               value === m.id ? "border-primary bg-brand-50" : "border-neutral-200",
               m.available ? "cursor-pointer" : "cursor-not-allowed opacity-55")}>
-            <RadioGroupItem id={id} value={m.id} disabled={!m.available} />
+            <RadioGroupItem id={id} value={m.id} disabled={!m.available}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  event.currentTarget.click();
+                }
+              }} />
             <span className="text-lg" aria-hidden>{PAYMENT_ICON[m.id] ?? "💳"}</span>
             <span className="flex-1 text-sm font-medium">{PAYMENT[m.id] ? t(PAYMENT[m.id]) : m.id}</span>
             {!m.available && <span className="text-xs text-neutral-500">{t({ pt: "Brevemente", en: "Coming soon", fr: "Bientôt" })}</span>}

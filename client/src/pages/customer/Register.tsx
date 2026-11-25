@@ -46,7 +46,8 @@ function Field({ id, label, error, hint, children }: { id: string; label: string
     <div className="space-y-1.5">
       <Label htmlFor={id}>{label}</Label>
       {children}
-      {error ? <p id={`${id}-err`} className="text-xs text-red-600">{error}</p> : hint ? <p className="text-xs text-neutral-500">{hint}</p> : null}
+      {hint && <p id={`${id}-hint`} className="text-xs text-neutral-500">{hint}</p>}
+      {error && <p id={`${id}-err`} className="text-xs text-red-600">{error}</p>}
     </div>
   );
 }
@@ -70,8 +71,21 @@ export default function Register() {
   const [apiError, setApiError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const upd = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [k]: e.target.value }));
-  const updB = (k: keyof typeof biz) => (e: { target: { value: string } }) => setBiz((b) => ({ ...b, [k]: e.target.value }));
+  const clearError = (key: string) => setErrors((current) => {
+    if (!current[key]) return current;
+    const next = { ...current };
+    delete next[key];
+    return next;
+  });
+  const upd = (k: keyof typeof form) => (e: { target: { value: string } }) => {
+    setForm((f) => ({ ...f, [k]: e.target.value }));
+    clearError(k);
+  };
+  const updateBusiness = <K extends keyof typeof biz>(key: K, value: (typeof biz)[K]) => {
+    setBiz((b) => ({ ...b, [key]: value }));
+    clearError(`business.${key}`);
+  };
+  const updB = (k: keyof typeof biz) => (e: { target: { value: string } }) => updateBusiness(k, e.target.value);
 
   const welcomePoints = meta.data?.welcomeBonusPoints ?? WELCOME_POINTS_FALLBACK;
 
@@ -154,6 +168,10 @@ export default function Register() {
 
   const err = (k: string) => errors[k];
   const inputCls = (k: string) => cn("h-11 rounded-xl", err(k) && "border-red-400 focus-visible:ring-red-400");
+  const fieldA11y = (id: string, key = id, hasHint = false) => ({
+    "aria-invalid": !!err(key),
+    "aria-describedby": [hasHint && `${id}-hint`, err(key) && `${id}-err`].filter(Boolean).join(" ") || undefined,
+  });
 
   return (
     <CustomerShell hideNav hideHeader>
@@ -212,20 +230,20 @@ export default function Register() {
           )}
 
           <Field id="fullName" label={t({ pt: "Nome completo", en: "Full name", fr: "Nom complet" })} error={err("fullName")}>
-            <Input id="fullName" autoComplete="name" value={form.fullName} onChange={upd("fullName")} className={inputCls("fullName")} aria-invalid={!!err("fullName")} />
+            <Input id="fullName" autoComplete="name" value={form.fullName} onChange={upd("fullName")} className={inputCls("fullName")} {...fieldA11y("fullName")} />
           </Field>
           <Field id="username" label={t({ pt: "Nome de utilizador", en: "Username", fr: "Nom d'utilisateur" })} error={err("username")}>
-            <Input id="username" autoComplete="username" autoCapitalize="none" value={form.username} onChange={upd("username")} className={inputCls("username")} aria-invalid={!!err("username")} />
+            <Input id="username" autoComplete="username" autoCapitalize="none" value={form.username} onChange={upd("username")} className={inputCls("username")} {...fieldA11y("username")} />
           </Field>
           <Field id="phone" label={t({ pt: "Telemóvel", en: "Phone", fr: "Téléphone" })} error={err("phone")} hint={t({ pt: "Ex.: +244 923 456 789", en: "E.g. +244 923 456 789", fr: "Ex. : +244 923 456 789" })}>
-            <Input id="phone" type="tel" inputMode="tel" autoComplete="tel" placeholder="+244 9XX XXX XXX" value={form.phone} onChange={upd("phone")} className={inputCls("phone")} aria-invalid={!!err("phone")} />
+            <Input id="phone" type="tel" inputMode="tel" autoComplete="tel" placeholder="+244 9XX XXX XXX" value={form.phone} onChange={upd("phone")} className={inputCls("phone")} {...fieldA11y("phone", "phone", true)} />
           </Field>
           <Field id="email" label={`${t({ pt: "Email", en: "Email", fr: "Email" })} (${t({ pt: "opcional", en: "optional", fr: "facultatif" })})`} error={err("email")}>
-            <Input id="email" type="email" autoComplete="email" value={form.email} onChange={upd("email")} className={inputCls("email")} aria-invalid={!!err("email")} />
+            <Input id="email" type="email" autoComplete="email" value={form.email} onChange={upd("email")} className={inputCls("email")} {...fieldA11y("email")} />
           </Field>
           <Field id="password" label={t({ pt: "Palavra-passe", en: "Password", fr: "Mot de passe" })} error={err("password")} hint={t(msg.password)}>
             <div className="relative">
-              <Input id="password" type={show ? "text" : "password"} autoComplete="new-password" value={form.password} onChange={upd("password")} className={cn(inputCls("password"), "pr-12")} aria-invalid={!!err("password")} />
+              <Input id="password" type={show ? "text" : "password"} autoComplete="new-password" value={form.password} onChange={upd("password")} className={cn(inputCls("password"), "pr-12")} {...fieldA11y("password", "password", true)} />
               <button type="button" onClick={() => setShow((s) => !s)}
                 aria-label={show ? t({ pt: "Ocultar palavra-passe", en: "Hide password", fr: "Masquer" }) : t({ pt: "Mostrar palavra-passe", en: "Show password", fr: "Afficher" })}
                 className="absolute right-1 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-lg text-neutral-500 hover:bg-neutral-100">
@@ -234,12 +252,12 @@ export default function Register() {
             </div>
           </Field>
           <Field id="confirm" label={t({ pt: "Confirmar palavra-passe", en: "Confirm password", fr: "Confirmer le mot de passe" })} error={err("confirm")}>
-            <Input id="confirm" type={show ? "text" : "password"} autoComplete="new-password" value={form.confirm} onChange={upd("confirm")} className={inputCls("confirm")} aria-invalid={!!err("confirm")} />
+            <Input id="confirm" type={show ? "text" : "password"} autoComplete="new-password" value={form.confirm} onChange={upd("confirm")} className={inputCls("confirm")} {...fieldA11y("confirm")} />
           </Field>
 
           {type === "customer" && (
             <Field id="referralCode" label={`${t({ pt: "Código de convite", en: "Referral code", fr: "Code de parrainage" })} (${t({ pt: "opcional", en: "optional", fr: "facultatif" })})`} error={err("referralCode")}>
-              <Input id="referralCode" autoCapitalize="characters" value={form.referralCode} onChange={upd("referralCode")} className={cn(inputCls("referralCode"), "uppercase")} />
+              <Input id="referralCode" autoCapitalize="characters" value={form.referralCode} onChange={upd("referralCode")} className={cn(inputCls("referralCode"), "uppercase")} {...fieldA11y("referralCode")} />
               {form.referralCode.trim() && !err("referralCode") && (
                 <p className="flex items-center gap-1.5 text-xs font-medium text-green-700">
                   <Gift className="h-3.5 w-3.5" aria-hidden />
@@ -274,9 +292,9 @@ export default function Register() {
                     en: "You don't need premises or a tax number to start. Our team will contact you to check your kitchen and explain hygiene rules.",
                     fr: "Pas besoin de local ni de NIF pour commencer. Notre équipe vous contactera pour vérifier la cuisine et expliquer les règles d'hygiène.",
                   })}</p>
-                  <Field id="b-notice" label={t({ pt: "Com quanta antecedência precisa das encomendas?", en: "How much notice do you need?", fr: "Délai de commande nécessaire ?" })}>
-                    <Select value={String(biz.minNoticeHours)} onValueChange={(v) => setBiz((b) => ({ ...b, minNoticeHours: Number(v) }))}>
-                      <SelectTrigger id="b-notice" className="h-11 rounded-xl bg-white"><SelectValue /></SelectTrigger>
+                  <Field id="b-notice" label={t({ pt: "Com quanta antecedência precisa das encomendas?", en: "How much notice do you need?", fr: "Délai de commande nécessaire ?" })} error={err("business.minNoticeHours")}>
+                    <Select value={String(biz.minNoticeHours)} onValueChange={(v) => updateBusiness("minNoticeHours", Number(v))}>
+                      <SelectTrigger id="b-notice" className="h-11 rounded-xl bg-white" {...fieldA11y("b-notice", "business.minNoticeHours")}><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="0">{t({ pt: "Aceito encomendas para já", en: "I accept orders right away", fr: "Commandes immédiates" })}</SelectItem>
                         <SelectItem value="2">2 h</SelectItem>
@@ -290,25 +308,25 @@ export default function Register() {
                 </div>
               )}
               <Field id="b-name" label={biz.isHomeBusiness ? t({ pt: "Nome do seu negócio (ex.: Bolos da Tia Rosa)", en: "Business name (e.g. Aunt Rosa's Cakes)", fr: "Nom de l'activité" }) : t({ pt: "Nome da loja", en: "Store name", fr: "Nom du magasin" })} error={err("business.name")}>
-                <Input id="b-name" value={biz.name} onChange={updB("name")} className={inputCls("business.name")} />
+                <Input id="b-name" value={biz.name} onChange={updB("name")} className={inputCls("business.name")} {...fieldA11y("b-name", "business.name")} />
               </Field>
               <Field id="b-type" label={t({ pt: "Tipo de loja", en: "Store type", fr: "Type de magasin" })} error={err("business.storeType")}>
-                <Select value={biz.storeType} onValueChange={(v) => setBiz((b) => ({ ...b, storeType: v }))}>
-                  <SelectTrigger id="b-type" className="h-11 rounded-xl"><SelectValue /></SelectTrigger>
+                <Select value={biz.storeType} onValueChange={(v) => updateBusiness("storeType", v)}>
+                  <SelectTrigger id="b-type" className="h-11 rounded-xl" {...fieldA11y("b-type", "business.storeType")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {Object.entries(STORE_TYPE).map(([k, v]) => <SelectItem key={k} value={k}>{v.icon} {t(v)}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </Field>
               <Field id="b-phone" label={biz.isHomeBusiness ? t({ pt: "Telefone / WhatsApp", en: "Phone / WhatsApp", fr: "Téléphone / WhatsApp" }) : t({ pt: "Telefone da loja", en: "Store phone", fr: "Téléphone du magasin" })} error={err("business.phone")}>
-                <Input id="b-phone" type="tel" inputMode="tel" placeholder="+244 2XX XXX XXX" value={biz.phone} onChange={updB("phone")} className={inputCls("business.phone")} />
+                <Input id="b-phone" type="tel" inputMode="tel" placeholder="+244 2XX XXX XXX" value={biz.phone} onChange={updB("phone")} className={inputCls("business.phone")} {...fieldA11y("b-phone", "business.phone")} />
               </Field>
               <Field id="b-street" label={biz.isHomeBusiness ? t({ pt: "Morada de recolha (onde o estafeta vai buscar)", en: "Pickup address (where riders collect)", fr: "Adresse de retrait" }) : t({ pt: "Morada (rua e número)", en: "Address (street)", fr: "Adresse (rue)" })} error={err("business.street")}>
-                <Input id="b-street" autoComplete="street-address" value={biz.street} onChange={updB("street")} className={inputCls("business.street")} />
+                <Input id="b-street" autoComplete="street-address" value={biz.street} onChange={updB("street")} className={inputCls("business.street")} {...fieldA11y("b-street", "business.street")} />
               </Field>
               <Field id="b-zone" label={t({ pt: "Zona / bairro", en: "Area / neighbourhood", fr: "Quartier" })} error={err("business.zone")}>
-                <Select value={biz.zone} onValueChange={(v) => setBiz((b) => ({ ...b, zone: v }))}>
-                  <SelectTrigger id="b-zone" className={cn("h-11 rounded-xl", err("business.zone") && "border-red-400")}>
+                <Select value={biz.zone} onValueChange={(v) => updateBusiness("zone", v)}>
+                  <SelectTrigger id="b-zone" className={cn("h-11 rounded-xl", err("business.zone") && "border-red-400")} {...fieldA11y("b-zone", "business.zone")}>
                     <SelectValue placeholder={t({ pt: "Escolha a zona", en: "Choose area", fr: "Choisir le quartier" })} />
                   </SelectTrigger>
                   <SelectContent className="max-h-72">
@@ -317,17 +335,17 @@ export default function Register() {
                 </Select>
               </Field>
               <Field id="b-nif" label={`NIF (${t({ pt: "opcional", en: "optional", fr: "facultatif" })})`} error={err("business.nif")}>
-                <Input id="b-nif" inputMode="numeric" value={biz.nif} onChange={updB("nif")} className={inputCls("business.nif")} />
+                <Input id="b-nif" inputMode="numeric" value={biz.nif} onChange={updB("nif")} className={inputCls("business.nif")} {...fieldA11y("b-nif", "business.nif")} />
               </Field>
               <Field id="b-desc" label={`${t({ pt: "Descrição", en: "Description", fr: "Description" })} (${t({ pt: "opcional", en: "optional", fr: "facultatif" })})`} error={err("business.description")}>
-                <Textarea id="b-desc" rows={3} maxLength={500} value={biz.description} onChange={updB("description")} className="rounded-xl" />
+                <Textarea id="b-desc" rows={3} maxLength={500} value={biz.description} onChange={updB("description")} className="rounded-xl" {...fieldA11y("b-desc", "business.description")} />
               </Field>
             </fieldset>
           )}
 
           <div className="space-y-1">
             <div className="flex items-start gap-3">
-              <Checkbox id="terms" checked={terms} onCheckedChange={(v) => setTerms(v === true)} className="mt-0.5" aria-invalid={!!err("terms")} />
+              <Checkbox id="terms" checked={terms} onCheckedChange={(v) => { setTerms(v === true); if (v === true) clearError("terms"); }} className="mt-0.5" {...fieldA11y("terms")} />
               <Label htmlFor="terms" className="text-sm font-normal leading-snug text-neutral-700">
                 {t({ pt: "Li e aceito os", en: "I have read and accept the", fr: "J'ai lu et j'accepte les" })}{" "}
                 <Link href="/info/termos" className="font-medium text-primary underline">{t({ pt: "Termos e Condições", en: "Terms and Conditions", fr: "Conditions générales" })}</Link>{" "}
@@ -335,7 +353,7 @@ export default function Register() {
                 <Link href="/info/privacidade" className="font-medium text-primary underline">{t({ pt: "Política de Privacidade", en: "Privacy Policy", fr: "Politique de confidentialité" })}</Link>.
               </Label>
             </div>
-            {err("terms") && <p className="pl-7 text-xs text-red-600">{err("terms")}</p>}
+            {err("terms") && <p id="terms-err" className="pl-7 text-xs text-red-600">{err("terms")}</p>}
           </div>
 
           <Button type="submit" className="h-12 w-full rounded-full text-base" disabled={busy}>
