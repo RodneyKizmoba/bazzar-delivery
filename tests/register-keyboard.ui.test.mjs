@@ -26,19 +26,19 @@ try {
   const translations = {
     pt: {
       account: "Tipo de conta", business: "Tipo de negócio",
-      accounts: ["Cliente Encomendar", "Loja/Restaurante Vender", "Estafeta Entregar"],
+      accounts: ["Cliente Encomendar", "Loja/Restaurante Vender", "Estafeta Entregar", "Motorista Táxi"],
       businesses: ["Loja ou restaurante Com espaço físico", "Negócio caseiro Bolos, salgados, comida feita em casa"],
       bakery: "Pastelaria e bolos",
     },
     en: {
       account: "Account type", business: "Business kind",
-      accounts: ["Customer Order", "Store/Restaurant Sell", "Rider Deliver"],
+      accounts: ["Customer Order", "Store/Restaurant Sell", "Rider Deliver", "Driver Taxi"],
       businesses: ["Shop or restaurant With premises", "Home business Cakes, snacks, home cooking"],
       bakery: "Bakery & cakes",
     },
     fr: {
       account: "Type de compte", business: "Type d'activité",
-      accounts: ["Client Commander", "Magasin/Restaurant Vendre", "Livreur Livrer"],
+      accounts: ["Client Commander", "Magasin/Restaurant Vendre", "Livreur Livrer", "Chauffeur Taxi"],
       businesses: ["Magasin ou restaurant Avec local", "Activité à domicile Gâteaux, snacks, cuisine maison"],
       bakery: "Pâtisserie",
     },
@@ -297,9 +297,9 @@ try {
     await tabStop(account, 0);
     await accessibleGroups(lang);
     await fields({ customer: true });
-    // All four arrows, including wrapping in both directions.
+    // All four arrows, including wrapping in both directions (4 account types: the last is taxi driver).
     for (const [key, expected] of [
-      ["ArrowLeft", 2], ["ArrowRight", 0], ["ArrowUp", 2],
+      ["ArrowLeft", 3], ["ArrowRight", 0], ["ArrowUp", 3],
       ["ArrowDown", 0], ["ArrowRight", 1],
     ]) {
       await page.keyboard.press(key);
@@ -553,7 +553,7 @@ try {
         await accessibleGroups(lang, supplier);
         const selected = (selector) => page.$$eval(`${selector} > [role="radio"]`,
           (radios) => radios.map((radio) => radio.getAttribute("aria-checked") === "true"));
-        assert.deepEqual(await selected(accountGroup), [0, 1, 2].map((i) => i === accountIndex));
+        assert.deepEqual(await selected(accountGroup), [0, 1, 2, 3].map((i) => i === accountIndex));
         await assertValues(role === "customer" ? values : preservedCommon);
         assert.equal(!!await page.$("#referralCode"), role === "customer");
         assert.equal(!!await page.$("#b-name"), supplier);

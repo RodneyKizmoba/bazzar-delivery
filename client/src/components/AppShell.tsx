@@ -84,10 +84,11 @@ export function CustomerShell({ children, hideHeader, hideNav, bare }: { childre
           </Link>
           <div className="flex items-center gap-2">
             {user && user.userType !== "customer" && (
-              <Link href={user.userType === "supplier" ? "/parceiro" : user.userType === "driver" ? "/estafeta" : "/admin"}
+              <Link href={user.userType === "supplier" ? "/parceiro" : user.userType === "driver" ? "/estafeta" : user.userType === "taxi" ? "/taxista" : "/admin"}
                 className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-neutral-900">
                 {user.userType === "supplier" ? t({ pt: "Portal da loja", en: "Store portal", fr: "Portail" })
-                  : user.userType === "driver" ? t({ pt: "App estafeta", en: "Rider app", fr: "Livreur" }) : "Admin"}
+                  : user.userType === "driver" ? t({ pt: "App estafeta", en: "Rider app", fr: "Livreur" })
+                  : user.userType === "taxi" ? t({ pt: "App motorista", en: "Driver app", fr: "Chauffeur" }) : "Admin"}
               </Link>
             )}
             <LanguageSwitch onColor />

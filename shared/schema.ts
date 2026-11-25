@@ -7,7 +7,8 @@ import { STORE_THEME_IDS } from "./themes";
 // ---------------------------------------------------------------------------
 // Enums
 // ---------------------------------------------------------------------------
-export const userTypeEnum = pgEnum("user_type", ["customer", "supplier", "driver", "admin"]);
+// "taxi" = motorista de táxi: conta separada da do estafeta (quem leva passageiros não faz entregas)
+export const userTypeEnum = pgEnum("user_type", ["customer", "supplier", "driver", "admin", "taxi"]);
 export const storeTypeEnum = pgEnum("store_type", [
   "restaurant", "grocery", "pharmacy", "beauty", "flowers", "retail", "bakery", "vintage", "jewelry", "other",
 ]);
@@ -35,6 +36,12 @@ export type AdminPerm = (typeof ADMIN_PERMS)[number];
 export const FULFILMENTS = ["delivery", "pickup", "store_delivery"] as const;
 export type Fulfilment = (typeof FULFILMENTS)[number];
 export type VehicleType = (typeof VEHICLE_TYPES)[number];
+// Táxi (estilo DiDi): categorias de viagem e estados
+export const RIDE_CATEGORIES = ["moto", "economy", "comfort", "xl"] as const;
+export type RideCategory = (typeof RIDE_CATEGORIES)[number];
+export const RIDE_STATUSES = ["searching", "accepted", "arrived", "in_progress", "completed", "cancelled", "no_driver"] as const;
+export type RideStatus = (typeof RIDE_STATUSES)[number];
+export const RIDE_ACTIVE = ["searching", "accepted", "arrived", "in_progress"] as const;
 
 // ---------------------------------------------------------------------------
 // Users
@@ -291,6 +298,7 @@ export const ledgerEntries = pgTable("ledger_entries", {
   partyType: text("party_type").$type<"store" | "driver">().notNull(),
   partyId: integer("party_id").notNull(), // stores.id ou users.id
   orderId: integer("order_id").references(() => orders.id),
+  rideId: integer("ride_id"), // viagem de táxi (em vez de encomenda)
   kind: text("kind").$type<LedgerKind>().notNull(),
   amount: integer("amount").notNull(), // Kz; + a PedeJá deve, − deve à PedeJá
   note: text("note"),
@@ -300,6 +308,7 @@ export const ledgerEntries = pgTable("ledger_entries", {
 }, (t) => [
   index("ledger_party_idx").on(t.partyType, t.partyId),
   uniqueIndex("ledger_order_once_idx").on(t.partyType, t.partyId, t.orderId, t.kind),
+  uniqueIndex("ledger_ride_once_idx").on(t.partyType, t.partyId, t.rideId, t.kind),
 ]);
 export type LedgerEntry = typeof ledgerEntries.$inferSelect;
 
@@ -400,6 +409,7 @@ export type DispatchOffer = typeof dispatchOffers.$inferSelect;
 export const payments = pgTable("payments", {
   id: serial("id").primaryKey(),
   orderId: integer("order_id").references(() => orders.id),
+  rideId: integer("ride_id"),
   subscriptionId: integer("subscription_id"),
   userId: integer("user_id").notNull().references(() => users.id),
   amount: integer("amount").notNull(),
@@ -521,6 +531,102 @@ export const pointsLedger = pgTable("points_ledger", {
 });
 
 // ---------------------------------------------------------------------------
+// Táxi (estilo DiDi): motoristas, viagens e ofertas
+// ---------------------------------------------------------------------------
+export const taxiDrivers = pgTable("taxi_drivers", {
+  userId: integer("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  category: text("category").$type<RideCategory>().notNull(), // que viagens recebe
+  make: text("make").notNull(), // marca (ex.: Toyota)
+  model: text("model").notNull(),
+  colour: text("colour").notNull(),
+  plate: text("plate").notNull(), // matrícula
+  year: integer("year"),
+  licenceNumber: text("licence_number").notNull(), // carta de condução
+  ratingAvg: real("rating_avg").notNull().default(0),
+  ratingCount: integer("rating_count").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+export type TaxiDriver = typeof taxiDrivers.$inferSelect;
+
+export type RidePlace = { label: string; latitude: number; longitude: number; zone?: string | null };
+export interface FareDetail {
+  category: RideCategory; km: number; minutes: number;
+  minFare: number; includedKm: number; includedMin: number; perKm: number; perMin: number;
+  distance: number; time: number; surge: number; surgeAmount: number; pickupFee: number; stops: number; stopFee: number;
+  rounding: number; total: number;
+}
+
+export const rides = pgTable("rides", {
+  id: serial("id").primaryKey(),
+  rideNumber: text("ride_number").notNull(),
+  customerId: integer("customer_id").notNull().references(() => users.id),
+  driverId: integer("driver_id").references(() => users.id),
+  category: text("category").$type<RideCategory>().notNull(),
+  status: text("status").$type<RideStatus>().notNull().default("searching"),
+  pickup: jsonb("pickup").$type<RidePlace>().notNull(),
+  dropoff: jsonb("dropoff").$type<RidePlace>().notNull(),
+  stops: jsonb("stops").$type<RidePlace[]>().notNull().default([]),
+  estKm: real("est_km").notNull(),
+  estMin: real("est_min").notNull(),
+  fare: integer("fare").notNull(), // preço combinado antes da viagem (já com tarifa dinâmica e arredondado)
+  fareDetail: jsonb("fare_detail").$type<FareDetail>().notNull(),
+  waitFee: integer("wait_fee").notNull().default(0), // espera na recolha depois dos minutos grátis
+  cancelFee: integer("cancel_fee").notNull().default(0),
+  tip: integer("tip").notNull().default(0),
+  total: integer("total").notNull(), // o que o cliente paga
+  paymentMethod: text("payment_method").$type<PaymentMethod>().notNull(),
+  paymentStatus: text("payment_status").notNull().default("pending"),
+  pin: text("pin").notNull(), // o cliente diz o código ao entrar; só então a viagem começa
+  pinAttempts: integer("pin_attempts").notNull().default(0),
+  shareToken: text("share_token").notNull(), // link para família/amigos acompanharem a viagem
+  dispatchRound: integer("dispatch_round").notNull().default(0),
+  searchStartedAt: timestamp("search_started_at").notNull().defaultNow(),
+  driverLatitude: real("driver_latitude"),
+  driverLongitude: real("driver_longitude"),
+  driverLocationAt: timestamp("driver_location_at"),
+  commissionPct: real("commission_pct"),
+  commissionAmount: integer("commission_amount"),
+  driverEarning: integer("driver_earning"),
+  settledAt: timestamp("settled_at"),
+  rating: integer("rating"),
+  ratingComment: text("rating_comment"),
+  cancelReason: text("cancel_reason"),
+  cancelledBy: text("cancelled_by"), // customer | driver | admin | system
+  sosAt: timestamp("sos_at"),
+  sosBy: text("sos_by"),
+  acceptedAt: timestamp("accepted_at"),
+  arrivedAt: timestamp("arrived_at"),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  cancelledAt: timestamp("cancelled_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("rides_number_idx").on(t.rideNumber),
+  uniqueIndex("rides_share_idx").on(t.shareToken),
+  index("rides_customer_idx").on(t.customerId),
+  index("rides_driver_idx").on(t.driverId),
+  index("rides_status_idx").on(t.status),
+]);
+export type Ride = typeof rides.$inferSelect;
+
+export const rideOffers = pgTable("ride_offers", {
+  id: serial("id").primaryKey(),
+  rideId: integer("ride_id").notNull().references(() => rides.id, { onDelete: "cascade" }),
+  driverId: integer("driver_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  status: text("status").$type<(typeof OFFER_STATUSES)[number]>().notNull().default("pending"),
+  round: integer("round").notNull(),
+  pickupKm: real("pickup_km"),
+  offeredAt: timestamp("offered_at").notNull().defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(),
+  respondedAt: timestamp("responded_at"),
+}, (t) => [
+  index("ride_offers_ride_idx").on(t.rideId),
+  index("ride_offers_driver_idx").on(t.driverId, t.status),
+]);
+export type RideOffer = typeof rideOffers.$inferSelect;
+
+// ---------------------------------------------------------------------------
 // Validation schemas (API input)
 // ---------------------------------------------------------------------------
 const usernameRe = /^[a-zA-Z0-9_.]+$/;
@@ -531,9 +637,19 @@ export const registerSchema = z.object({
   fullName: z.string().trim().min(3).max(100),
   email: z.string().trim().email().max(120).optional().nullable().or(z.literal("")),
   phone: z.string().trim().regex(/^\+?[0-9 ]{9,15}$/, "Número de telefone inválido"),
-  userType: z.enum(["customer", "supplier", "driver"]).default("customer"),
+  userType: z.enum(["customer", "supplier", "driver", "taxi"]).default("customer"),
   referralCode: z.string().trim().max(20).optional().nullable().or(z.literal("")),
   vehicleType: z.enum(VEHICLE_TYPES).optional().nullable(), // estafeta
+  // motorista de táxi: viatura e carta (verificadas pela equipa antes de aprovar)
+  taxi: z.object({
+    category: z.enum(RIDE_CATEGORIES),
+    make: z.string().trim().min(2).max(40),
+    model: z.string().trim().min(1).max(40),
+    colour: z.string().trim().min(2).max(30),
+    plate: z.string().trim().toUpperCase().min(5).max(15),
+    year: z.number().int().min(1980).max(2100).optional().nullable(),
+    licenceNumber: z.string().trim().min(4).max(30),
+  }).optional(),
   // fornecedor
   business: z.object({
     name: z.string().trim().min(2).max(100),
@@ -722,4 +838,23 @@ export const bannerInputSchema = z.object({
   bgColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).default("#00CCBC"),
   sortOrder: z.number().int().min(0).max(1000).default(0),
   isActive: z.boolean().default(true),
+});
+
+// ---------------------------------------------------------------------------
+// Táxi: pedidos do cliente
+// ---------------------------------------------------------------------------
+export const ridePlaceSchema = z.object({
+  label: z.string().trim().min(1).max(160),
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  zone: z.string().trim().max(60).optional().nullable(),
+});
+export const rideQuoteSchema = z.object({
+  pickup: ridePlaceSchema,
+  dropoff: ridePlaceSchema,
+  stops: z.array(ridePlaceSchema).max(2).default([]),
+});
+export const rideRequestSchema = rideQuoteSchema.extend({
+  category: z.enum(RIDE_CATEGORIES),
+  paymentMethod: z.enum(PAYMENT_METHODS),
 });

@@ -282,7 +282,7 @@ export function SandboxBadge() {
   return <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-800">{t({ pt: "modo de teste", en: "test mode", fr: "mode test" })}</span>;
 }
 
-export function PaymentPicker({ value, onChange, excludeCash }: { value: string; onChange: (v: string) => void; excludeCash?: boolean }) {
+export function PaymentPicker({ value, onChange, excludeCash, cashLabel }: { value: string; onChange: (v: string) => void; excludeCash?: boolean; cashLabel?: Tr }) {
   const t = useT();
   const meta = useMeta();
   if (meta.isLoading) return <Loading />;
@@ -308,7 +308,7 @@ export function PaymentPicker({ value, onChange, excludeCash }: { value: string;
                 }
               }} />
             <span className="text-lg" aria-hidden>{PAYMENT_ICON[m.id] ?? "💳"}</span>
-            <span className="flex-1 text-sm font-medium">{PAYMENT[m.id] ? t(PAYMENT[m.id]) : m.id}</span>
+            <span className="flex-1 text-sm font-medium">{m.id === "cash" && cashLabel ? t(cashLabel) : PAYMENT[m.id] ? t(PAYMENT[m.id]) : m.id}</span>
             {!m.available && <span className="text-xs text-neutral-500">{t({ pt: "Brevemente", en: "Coming soon", fr: "Bientôt" })}</span>}
             {m.available && m.sandbox && <SandboxBadge />}
           </label>

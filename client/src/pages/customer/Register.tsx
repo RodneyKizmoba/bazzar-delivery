@@ -1,7 +1,7 @@
 import { useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Eye, EyeOff, AlertCircle, User as UserIcon, Store as StoreIcon, Bike, Gift, Info } from "lucide-react";
+import { Eye, EyeOff, AlertCircle, User as UserIcon, Store as StoreIcon, Bike, CarTaxiFront, Gift, Info } from "lucide-react";
 import logo from "@/assets/pedeja-logo.png";
 import { CustomerShell, LanguageSwitch } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,7 @@ import { STORE_TYPE } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Meta } from "@/pages/customer/Home";
 
-type AccountType = "customer" | "supplier" | "driver";
+type AccountType = "customer" | "supplier" | "driver" | "taxi";
 
 /**
  * Pontos de boas-vindas para quem se regista com código de convite.
@@ -65,6 +65,8 @@ export default function Register() {
   });
   const [biz, setBiz] = useState({ name: "", storeType: "restaurant", phone: "", street: "", zone: "", nif: "", description: "", isHomeBusiness: false, minNoticeHours: 0 });
   const [vehicle, setVehicle] = useState("moto");
+  const [car, setCar] = useState({ category: "economy", make: "", model: "", colour: "", plate: "", year: "", licenceNumber: "" });
+  const updCar = (k: keyof typeof car) => (e: { target: { value: string } }) => { setCar((c) => ({ ...c, [k]: e.target.value })); clearError(`taxi.${k}`); };
   const [terms, setTerms] = useState(false);
   const [show, setShow] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -115,6 +117,14 @@ export default function Register() {
       if (biz.street.trim().length < 3) e["business.street"] = t(msg.required);
       if (!biz.zone) e["business.zone"] = t(msg.required);
     }
+    if (type === "taxi") {
+      if (car.make.trim().length < 2) e["taxi.make"] = t(msg.required);
+      if (!car.model.trim()) e["taxi.model"] = t(msg.required);
+      if (car.colour.trim().length < 2) e["taxi.colour"] = t(msg.required);
+      if (car.plate.trim().length < 5) e["taxi.plate"] = t({ pt: "Matrícula inválida", en: "Invalid plate", fr: "Plaque invalide" });
+      if (car.licenceNumber.trim().length < 4) e["taxi.licenceNumber"] = t(msg.required);
+      if (car.year && !/^(19[89]\d|20\d\d)$/.test(car.year.trim())) e["taxi.year"] = t({ pt: "Ano inválido", en: "Invalid year", fr: "Année invalide" });
+    }
     if (!terms) e.terms = t(msg.terms);
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -134,6 +144,7 @@ export default function Register() {
         phone: form.phone.trim(),
         userType: type,
         ...(type === "driver" ? { vehicleType: vehicle } : {}),
+        ...(type === "taxi" ? { taxi: { category: car.category, make: car.make.trim(), model: car.model.trim(), colour: car.colour.trim(), plate: car.plate.trim().toUpperCase(), year: car.year.trim() ? Number(car.year) : null, licenceNumber: car.licenceNumber.trim() } } : {}),
         referralCode: type === "customer" && form.referralCode.trim() ? form.referralCode.trim() : null,
         business: type === "supplier" ? {
           name: biz.name.trim(), storeType: biz.storeType, phone: biz.phone.trim(), street: biz.street.trim(), zone: biz.zone,
@@ -164,6 +175,7 @@ export default function Register() {
     { id: "customer", icon: UserIcon, label: { pt: "Cliente", en: "Customer", fr: "Client" }, sub: { pt: "Encomendar", en: "Order", fr: "Commander" } },
     { id: "supplier", icon: StoreIcon, label: { pt: "Loja/Restaurante", en: "Store/Restaurant", fr: "Magasin/Restaurant" }, sub: { pt: "Vender", en: "Sell", fr: "Vendre" } },
     { id: "driver", icon: Bike, label: { pt: "Estafeta", en: "Rider", fr: "Livreur" }, sub: { pt: "Entregar", en: "Deliver", fr: "Livrer" } },
+    { id: "taxi", icon: CarTaxiFront, label: { pt: "Motorista", en: "Driver", fr: "Chauffeur" }, sub: { pt: "Táxi", en: "Taxi", fr: "Taxi" } },
   ];
 
   const err = (k: string) => errors[k];
@@ -187,7 +199,7 @@ export default function Register() {
         <form onSubmit={submit} noValidate className="mt-6 space-y-5">
           <fieldset>
             <legend id="account-type-label" className="mb-2 text-sm font-medium">{t({ pt: "Tipo de conta", en: "Account type", fr: "Type de compte" })}</legend>
-            <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-labelledby="account-type-label" onKeyDown={handleRadioArrowKey}>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup" aria-labelledby="account-type-label" onKeyDown={handleRadioArrowKey}>
               {types.map(({ id, icon: Icon, label, sub }) => (
                 <button key={id} type="button" role="radio" aria-checked={type === id} onClick={() => setType(id)}
                   tabIndex={type === id ? 0 : -1}
@@ -204,7 +216,9 @@ export default function Register() {
           {type !== "customer" && (
             <div className="flex items-start gap-2 rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">
               <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-              {type === "driver"
+              {type === "taxi"
+                ? t({ pt: "As contas de motorista de táxi são separadas das de estafeta e precisam de aprovação: a equipa verifica a carta de condução, a viatura e o seguro antes de activar.", en: "Taxi driver accounts are separate from rider accounts and need approval: our team checks your licence, vehicle and insurance before activating.", fr: "Les comptes chauffeur sont séparés des comptes livreur et doivent être approuvés : nous vérifions permis, véhicule et assurance." })
+                : type === "driver"
                 ? t({ pt: "As contas de estafeta precisam de aprovação. A nossa equipa vai verificar os seus dados e contactá-lo.", en: "Rider accounts need approval. Our team will review your details and contact you.", fr: "Les comptes livreur doivent être approuvés. Notre équipe vérifiera vos informations et vous contactera." })
                 : t({ pt: "A sua loja precisa de aprovação antes de aparecer na app. Pode preparar o menu entretanto.", en: "Your store needs approval before it appears in the app. You can set up your menu meanwhile.", fr: "Votre magasin doit être approuvé avant d'apparaître dans l'app. Vous pouvez préparer le menu en attendant." })}
             </div>
@@ -221,6 +235,41 @@ export default function Register() {
               </select>
               <p className="text-xs text-neutral-500">{t({ pt: "Conta para o valor de cada entrega e para o mínimo garantido por hora.", en: "Used for each delivery's pay and your guaranteed hourly minimum.", fr: "Sert au calcul de chaque livraison et du minimum horaire garanti." })}</p>
             </div>
+          )}
+
+          {type === "taxi" && (
+            <fieldset className="space-y-3 rounded-xl border p-3">
+              <legend className="px-1 text-sm font-medium">{t({ pt: "Viatura e carta de condução", en: "Vehicle and driving licence", fr: "Véhicule et permis" })}</legend>
+              <div className="space-y-1">
+                <Label htmlFor="taxi-category">{t({ pt: "Tipo de viagens", en: "Trip type", fr: "Type de courses" })}</Label>
+                <select id="taxi-category" value={car.category} onChange={updCar("category")} className="h-11 w-full rounded-xl border bg-white px-3 text-sm">
+                  <option value="moto">🏍️ {t({ pt: "Mota (moto-táxi)", en: "Moto (moto-taxi)", fr: "Moto (moto-taxi)" })}</option>
+                  <option value="economy">🚕 {t({ pt: "Económica (carro)", en: "Economy (car)", fr: "Économique (voiture)" })}</option>
+                  <option value="comfort">🚘 {t({ pt: "Conforto (carro mais novo)", en: "Comfort (newer car)", fr: "Confort (voiture récente)" })}</option>
+                  <option value="xl">🚐 {t({ pt: "XL (até 6 pessoas)", en: "XL (up to 6 people)", fr: "XL (jusqu'à 6 personnes)" })}</option>
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Field id="taxi-make" label={t({ pt: "Marca", en: "Make", fr: "Marque" })} error={err("taxi.make")}>
+                  <Input id="taxi-make" value={car.make} onChange={updCar("make")} placeholder="Toyota" className={inputCls("taxi.make")} {...fieldA11y("taxi-make", "taxi.make")} />
+                </Field>
+                <Field id="taxi-model" label={t({ pt: "Modelo", en: "Model", fr: "Modèle" })} error={err("taxi.model")}>
+                  <Input id="taxi-model" value={car.model} onChange={updCar("model")} placeholder="Corolla" className={inputCls("taxi.model")} {...fieldA11y("taxi-model", "taxi.model")} />
+                </Field>
+                <Field id="taxi-colour" label={t({ pt: "Cor", en: "Colour", fr: "Couleur" })} error={err("taxi.colour")}>
+                  <Input id="taxi-colour" value={car.colour} onChange={updCar("colour")} className={inputCls("taxi.colour")} {...fieldA11y("taxi-colour", "taxi.colour")} />
+                </Field>
+                <Field id="taxi-year" label={t({ pt: "Ano (opcional)", en: "Year (optional)", fr: "Année (facultatif)" })} error={err("taxi.year")}>
+                  <Input id="taxi-year" inputMode="numeric" value={car.year} onChange={updCar("year")} className={inputCls("taxi.year")} {...fieldA11y("taxi-year", "taxi.year")} />
+                </Field>
+              </div>
+              <Field id="taxi-plate" label={t({ pt: "Matrícula", en: "Number plate", fr: "Plaque" })} error={err("taxi.plate")}>
+                <Input id="taxi-plate" value={car.plate} onChange={updCar("plate")} placeholder="LD-00-00-AA" autoCapitalize="characters" className={inputCls("taxi.plate")} {...fieldA11y("taxi-plate", "taxi.plate")} />
+              </Field>
+              <Field id="taxi-licence" label={t({ pt: "N.º da carta de condução", en: "Driving licence number", fr: "N° de permis" })} error={err("taxi.licenceNumber")}>
+                <Input id="taxi-licence" value={car.licenceNumber} onChange={updCar("licenceNumber")} className={inputCls("taxi.licenceNumber")} {...fieldA11y("taxi-licence", "taxi.licenceNumber")} />
+              </Field>
+            </fieldset>
           )}
 
           {apiError && (

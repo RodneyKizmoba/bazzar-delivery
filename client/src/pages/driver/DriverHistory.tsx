@@ -34,16 +34,19 @@ interface WalletData extends Account {
 }
 const METHOD: Record<string, string> = { multicaixa_express: "Multicaixa Express", unitel_money: "Unitel Money", bank_transfer: "IBAN" };
 
-/** Carteira: saldo, pagamento semanal (terça), levantamento imediato com taxa, conta para receber e veículo. */
-function Wallet() {
+/**
+ * Carteira: saldo, pagamento semanal (terça), levantamento imediato com taxa, conta para receber e veículo.
+ * Também usada pelos motoristas de táxi (base="/api/taxi/driver", sem escolha de veículo).
+ */
+export function Wallet({ base = "/api/driver", taxi = false }: { base?: string; taxi?: boolean }) {
   const t = useT();
   const { lang } = useLang();
   const { toast } = useToast();
-  const { data } = useQuery<WalletData>({ queryKey: ["/api/driver/wallet"] });
+  const { data } = useQuery<WalletData>({ queryKey: [`${base}/wallet`] });
   const [editing, setEditing] = useState(false);
   const cashout = useMutation({
-    mutationFn: () => post("/api/driver/cashout"),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/driver/wallet"] }); toast({ title: t({ pt: "Pedido de levantamento enviado", en: "Cash-out requested", fr: "Retrait demandé" }) }); },
+    mutationFn: () => post(`${base}/cashout`),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: [`${base}/wallet`] }); toast({ title: t({ pt: "Pedido de levantamento enviado", en: "Cash-out requested", fr: "Retrait demandé" }) }); },
     onError: (e: Error) => toast({ variant: "destructive", title: t(T.error), description: e.message }),
   });
   if (!data) return null;
@@ -57,7 +60,7 @@ function Wallet() {
       {data.cashHeld > 0 && (
         <div className={cn("rounded-lg p-3 text-sm", data.cashHeld >= data.cashLimit * 0.8 ? "bg-red-50 text-red-800" : "bg-amber-50 text-amber-900")} role={data.cashHeld >= data.cashLimit * 0.8 ? "alert" : undefined}>
           <p className="font-semibold">💵 {t({ pt: `Numerário em mão: ${kz(data.cashHeld)}`, en: `Cash in hand: ${kz(data.cashHeld)}`, fr: `Espèces en main : ${kz(data.cashHeld)}` })}</p>
-          <p className="text-xs">{t({ pt: `Dinheiro dos clientes que tem de entregar à PedeJá (é descontado do seu pagamento). Acima de ${kz(data.cashLimit)} deixa de receber encomendas em numerário.`, en: `Customers' cash you must hand to PedeJá (it's taken off your payout). Above ${kz(data.cashLimit)} you stop getting cash orders.`, fr: `Espèces des clients à remettre à PedeJá (déduites de votre paiement). Au-delà de ${kz(data.cashLimit)}, plus de commandes en espèces.` })}</p>
+          <p className="text-xs">{taxi ? t({ pt: `Dinheiro dos passageiros: a comissão da PedeJá é descontada do seu pagamento. Acima de ${kz(data.cashLimit)} deixa de receber viagens em numerário até acertar contas.`, en: `Passengers' cash: PedeJá's commission is taken off your payout. Above ${kz(data.cashLimit)} you stop getting cash trips until you settle up.`, fr: `Espèces des passagers : la commission PedeJá est déduite de votre paiement. Au-delà de ${kz(data.cashLimit)}, plus de courses en espèces.` }) : t({ pt: `Dinheiro dos clientes que tem de entregar à PedeJá (é descontado do seu pagamento). Acima de ${kz(data.cashLimit)} deixa de receber encomendas em numerário.`, en: `Customers' cash you must hand to PedeJá (it's taken off your payout). Above ${kz(data.cashLimit)} you stop getting cash orders.`, fr: `Espèces des clients à remettre à PedeJá (déduites de votre paiement). Au-delà de ${kz(data.cashLimit)}, plus de commandes en espèces.` })}</p>
         </div>
       )}
       <p className="text-sm text-neutral-700">
@@ -78,10 +81,10 @@ function Wallet() {
       </div>
 
       {editing || !data.payoutMethod ? (
-        <PayoutAccountForm current={data} onDone={() => setEditing(false)} />
+        <PayoutAccountForm current={data} onDone={() => setEditing(false)} base={base} taxi={taxi} />
       ) : (
         <p className="flex items-center justify-between gap-2 text-sm">
-          <span>🏦 {METHOD[data.payoutMethod] ?? data.payoutMethod}: <b>{data.payoutReference}</b> · {t(VEHICLE[data.vehicleType] ?? VEHICLE.moto)}</span>
+          <span>🏦 {METHOD[data.payoutMethod] ?? data.payoutMethod}: <b>{data.payoutReference}</b>{!taxi && <> · {t(VEHICLE[data.vehicleType] ?? VEHICLE.moto)}</>}</span>
           <button type="button" className="text-xs font-semibold text-brand-800 underline" onClick={() => setEditing(true)}>{t({ pt: "Alterar", en: "Change", fr: "Modifier" })}</button>
         </p>
       )}
@@ -115,7 +118,7 @@ const VEHICLE: Record<string, Tr> = {
   ebike: { pt: "Bicicleta eléctrica", en: "E-bike", fr: "Vélo électrique" }, bike: { pt: "Bicicleta", en: "Bicycle", fr: "Vélo" },
 };
 
-function PayoutAccountForm({ current, onDone }: { current: WalletData; onDone: () => void }) {
+function PayoutAccountForm({ current, onDone, base, taxi }: { current: WalletData; onDone: () => void; base: string; taxi: boolean }) {
   const t = useT();
   const { toast } = useToast();
   const [method, setMethod] = useState(current.payoutMethod ?? "multicaixa_express");
@@ -123,8 +126,8 @@ function PayoutAccountForm({ current, onDone }: { current: WalletData; onDone: (
   const [vehicle, setVehicle] = useState(current.vehicleType ?? "moto");
   const [err, setErr] = useState<string | null>(null);
   const save = useMutation({
-    mutationFn: () => put("/api/driver/payout-account", { payoutMethod: method, payoutReference: ref, vehicleType: vehicle }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/driver/wallet"] }); toast({ title: t({ pt: "Guardado", en: "Saved", fr: "Enregistré" }) }); onDone(); },
+    mutationFn: () => put(`${base}/payout-account`, { payoutMethod: method, payoutReference: ref, ...(taxi ? {} : { vehicleType: vehicle }) }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: [`${base}/wallet`] }); toast({ title: t({ pt: "Guardado", en: "Saved", fr: "Enregistré" }) }); onDone(); },
     onError: (e: Error) => setErr(e.message),
   });
   return (
@@ -137,12 +140,12 @@ function PayoutAccountForm({ current, onDone }: { current: WalletData; onDone: (
             {Object.entries(METHOD).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
         </div>
-        <div>
+        {!taxi && <div>
           <Label htmlFor="po-vehicle" className="text-xs">{t({ pt: "Veículo", en: "Vehicle", fr: "Véhicule" })}</Label>
           <select id="po-vehicle" value={vehicle} onChange={(e) => setVehicle(e.target.value)} className="h-10 w-full rounded-md border bg-white px-2 text-sm">
             {Object.entries(VEHICLE).map(([k, v]) => <option key={k} value={k}>{t(v)}</option>)}
           </select>
-        </div>
+        </div>}
       </div>
       <div>
         <Label htmlFor="po-ref" className="text-xs">{method === "bank_transfer" ? "IBAN" : t({ pt: "Número de telefone", en: "Phone number", fr: "Numéro de téléphone" })}</Label>

@@ -16,6 +16,7 @@ export const ADMIN_AREAS: { href: string; perm: AdminPerm | "owner" | null; labe
   { href: "/admin", perm: null, label: { pt: "Resumo", en: "Overview", fr: "Résumé" } },
   { href: "/admin/encomendas", perm: "orders", label: { pt: "Encomendas", en: "Orders", fr: "Commandes" } },
   { href: "/admin/despacho", perm: "orders", label: { pt: "Despacho", en: "Dispatch", fr: "Dispatch" } },
+  { href: "/admin/viagens", perm: "orders", label: { pt: "Táxi", en: "Taxi", fr: "Taxi" } },
   { href: "/admin/financas", perm: "finance", label: { pt: "Finanças", en: "Finance", fr: "Finances" } },
   { href: "/admin/lojas", perm: "people", label: { pt: "Lojas", en: "Stores", fr: "Magasins" } },
   { href: "/admin/utilizadores", perm: "people", label: { pt: "Utilizadores", en: "Users", fr: "Utilisateurs" } },

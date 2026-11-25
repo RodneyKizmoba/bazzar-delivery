@@ -2,7 +2,7 @@ import { Router } from "express";
 import { and, desc, eq, gte, ilike, inArray, ne, or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
-import { ADMIN_PERMS, bannerInputSchema, banners, orders, promoCodes, promoInputSchema, stores, subscriptions, users, ORDER_STATUSES } from "@shared/schema";
+import { ADMIN_PERMS, bannerInputSchema, banners, orders, promoCodes, promoInputSchema, rides, stores, subscriptions, taxiDrivers, users, ORDER_STATUSES, RIDE_STATUSES } from "@shared/schema";
 import { ah, badRequest, conflict, HttpError, idParam, notFound, parse } from "../lib/http";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "crypto";
@@ -33,7 +33,7 @@ adminRouter.use(auditAdminWrites);
 const AREAS: [RegExp, AdminPerm | "owner" | null][] = [
   [/^\/stats$/, null], // resumo: toda a equipa
   [/^\/charts/, "finance"],
-  [/^\/(orders|dispatch)(\/|$)/, "orders"],
+  [/^\/(orders|dispatch|rides)(\/|$)/, "orders"],
   [/^\/(finance|ledger|payouts)(\/|\.|$)/, "finance"],
   [/^\/(stores|users|drivers)(\/|$)/, "people"],
   [/^\/(promos|banners|ads)(\/|$)/, "marketing"],
@@ -431,10 +431,14 @@ adminRouter.get("/users", ah(async (req, res) => {
   const type = typeof req.query.type === "string" ? req.query.type : "";
   const conds: SQL[] = [];
   if (q) conds.push(or(ilike(users.username, `%${q}%`), ilike(users.fullName, `%${q}%`), ilike(users.phone, `%${q}%`))!);
-  if (["customer", "supplier", "driver", "admin"].includes(type)) conds.push(eq(users.userType, type as any));
+  if (["customer", "supplier", "driver", "admin", "taxi"].includes(type)) conds.push(eq(users.userType, type as any));
   if (req.query.pending === "1") conds.push(eq(users.isApproved, false));
   const rows = await db.select().from(users).where(conds.length ? and(...conds) : undefined).orderBy(desc(users.createdAt)).limit(300);
-  res.json({ users: rows.map((u) => ({ ...publicUser(u), isActive: u.isActive, createdAt: u.createdAt })) });
+  // motoristas de táxi: viatura e carta, para verificar antes de aprovar
+  const taxiIds = rows.filter((u) => u.userType === "taxi").map((u) => u.id);
+  const cars = taxiIds.length ? await db.select().from(taxiDrivers).where(inArray(taxiDrivers.userId, taxiIds)) : [];
+  const carOf = new Map(cars.map((c) => [c.userId, c]));
+  res.json({ users: rows.map((u) => ({ ...publicUser(u), isActive: u.isActive, createdAt: u.createdAt, taxi: carOf.get(u.id) ?? null })) });
 }));
 
 adminRouter.patch("/users/:id", ah(async (req, res) => {
@@ -446,6 +450,47 @@ adminRouter.patch("/users/:id", ah(async (req, res) => {
   const [u] = await db.update(users).set(input).where(eq(users.id, id)).returning();
   if (!u) throw notFound("Utilizador não encontrado");
   res.json({ user: { ...publicUser(u), isActive: u.isActive } });
+}));
+
+// ---------------------------------------------------------------------------
+// Táxi: viagens (área "orders")
+// ---------------------------------------------------------------------------
+adminRouter.get("/rides", ah(async (req, res) => {
+  const status = typeof req.query.status === "string" ? req.query.status : "";
+  const conds: SQL[] = [];
+  if ((RIDE_STATUSES as readonly string[]).includes(status)) conds.push(eq(rides.status, status as any));
+  if (req.query.sos === "1") conds.push(sql`${rides.sosAt} is not null`);
+  const rows = await db.select().from(rides).where(conds.length ? and(...conds) : undefined).orderBy(desc(rides.id)).limit(200);
+  const ids = Array.from(new Set(rows.flatMap((r) => [r.customerId, r.driverId]).filter((x): x is number => !!x)));
+  const people = ids.length ? await db.select({ id: users.id, name: users.fullName, phone: users.phone }).from(users).where(inArray(users.id, ids)) : [];
+  const who = new Map(people.map((p) => [p.id, p]));
+  const [sum] = await db.select({
+    rides: sql<number>`count(*) filter (where ${rides.status} = 'completed')::int`,
+    gross: sql<number>`coalesce(sum(${rides.total}) filter (where ${rides.status} = 'completed'), 0)::int`,
+    commission: sql<number>`coalesce(sum(${rides.commissionAmount}), 0)::int`,
+    active: sql<number>`count(*) filter (where ${rides.status} in ('searching','accepted','arrived','in_progress'))::int`,
+    noDriver: sql<number>`count(*) filter (where ${rides.status} = 'no_driver')::int`,
+    sos: sql<number>`count(*) filter (where ${rides.sosAt} is not null and ${rides.status} in ('searching','accepted','arrived','in_progress'))::int`,
+  }).from(rides).where(gte(rides.createdAt, new Date(Date.now() - 30 * 86_400_000)));
+  res.json({
+    summary: sum, commissionPct: config.taxiCommissionPct,
+    rides: rows.map((r) => ({
+      id: r.id, rideNumber: r.rideNumber, status: r.status, category: r.category, pickup: r.pickup, dropoff: r.dropoff,
+      fare: r.fare, waitFee: r.waitFee, total: r.total, paymentMethod: r.paymentMethod, commissionAmount: r.commissionAmount,
+      driverEarning: r.driverEarning, rating: r.rating, sosAt: r.sosAt, sosBy: r.sosBy, createdAt: r.createdAt, completedAt: r.completedAt,
+      customer: who.get(r.customerId) ?? null, driver: r.driverId ? who.get(r.driverId) ?? null : null,
+    })),
+  });
+}));
+
+adminRouter.post("/rides/:id/cancel", ah(async (req, res) => {
+  const { reason } = parse(z.object({ reason: z.string().trim().max(200).optional().nullable() }), req.body ?? {});
+  const now = new Date();
+  const [r] = await db.update(rides).set({ status: "cancelled", cancelledAt: now, cancelledBy: "admin", cancelReason: reason ?? "Cancelada pela PedeJá", total: 0, updatedAt: now })
+    .where(and(eq(rides.id, idParam(req)), inArray(rides.status, ["searching", "accepted", "arrived", "no_driver"]))).returning();
+  if (!r) throw conflict("Esta viagem já não pode ser cancelada.", "RIDE_NOT_CANCELLABLE");
+  await db.execute(sql`update ride_offers set status = 'cancelled', responded_at = now() where ride_id = ${r.id} and status = 'pending'`);
+  res.json({ ride: { id: r.id, status: r.status } });
 }));
 
 adminRouter.get("/drivers", ah(async (_req, res) => {

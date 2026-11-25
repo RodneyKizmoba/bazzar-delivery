@@ -27,6 +27,12 @@ const Rewards = lazy(() => import("@/pages/customer/Rewards"));
 const Login = lazy(() => import("@/pages/customer/Login"));
 const Register = lazy(() => import("@/pages/customer/Register"));
 const Info = lazy(() => import("@/pages/info/Info"));
+const Taxi = lazy(() => import("@/pages/customer/Taxi"));
+const RideShare = lazy(() => import("@/pages/customer/RideShare"));
+// Motorista de táxi
+const TaxiHome = lazy(() => import("@/pages/taxi/TaxiHome"));
+const TaxiWallet = lazy(() => import("@/pages/taxi/TaxiHome").then((m) => ({ default: m.TaxiWalletPage })));
+const AdminRides = lazy(() => import("@/pages/admin/AdminRides"));
 
 // Parceiro (loja)
 const PartnerOrders = lazy(() => import("@/pages/partner/PartnerOrders"));
@@ -75,6 +81,10 @@ function Routes() {
         <Route path="/entrar" component={Login} />
         <Route path="/registar" component={Register} />
         <Route path="/info/:page" component={Info} />
+        <Route path="/taxi" component={Taxi} />
+        <Route path="/viagem/:token" component={RideShare} />
+        <Route path="/taxista" component={TaxiHome} />
+        <Route path="/taxista/carteira" component={TaxiWallet} />
 
         <Route path="/parceiro" component={PartnerOrders} />
         <Route path="/parceiro/menu" component={PartnerMenu} />
@@ -90,6 +100,7 @@ function Routes() {
         <Route path="/admin" component={AdminDashboard} />
         <Route path="/admin/encomendas" component={AdminOrders} />
         <Route path="/admin/despacho" component={AdminDispatch} />
+        <Route path="/admin/viagens" component={AdminRides} />
         <Route path="/admin/financas" component={AdminFinance} />
         <Route path="/admin/equipa" component={AdminTeam} />
         <Route path="/admin/registo" component={AdminAudit} />

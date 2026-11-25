@@ -46,7 +46,7 @@ export async function currentBusyLevel(db: DbOrTx): Promise<0 | 1 | 2> {
       (select count(*) from orders where driver_id is null and fulfilment = 'delivery' and status in ('accepted','preparing','ready')
          and updated_at > now() - interval '2 hours')::int as waiting,
       (select count(*) from driver_presence p join users u on u.id = p.user_id
-         where p.is_online and u.is_active and u.is_approved
+         where p.is_online and u.is_active and u.is_approved and u.user_type = 'driver'
            and (p.location_at is null or p.location_at > now() - make_interval(mins => ${config.presenceStaleMin}))
            and not exists (select 1 from orders o where o.driver_id = u.id and o.status in ('accepted','preparing','ready','picked_up')))::int as free`);
   const row = r.rows[0] as { waiting: number; free: number };

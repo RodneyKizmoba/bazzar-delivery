@@ -5,7 +5,7 @@ import { randomBytes } from "crypto";
 import { eq, sql } from "drizzle-orm";
 import { db } from "./db";
 import {
-  addresses, banners, menuItems, menuSections, optionGroups, options, promoCodes, stores, users,
+  addresses, banners, menuItems, menuSections, optionGroups, options, promoCodes, stores, taxiDrivers, users,
 } from "@shared/schema";
 
 function code() { return randomBytes(4).toString("hex").toUpperCase().slice(0, 7); }
@@ -315,7 +315,16 @@ const DEMO_USERS = [
   { username: "estafeta", password: "Estafeta#2026", fullName: "Carlos Estafeta", phone: "+244923000006", userType: "driver" as const },
   { username: "estafeta2", password: "Estafeta#2026", fullName: "Rui Novo", phone: "+244923000007", userType: "driver" as const, pending: true },
   { username: "mariato", password: "Loja#2026demo", fullName: "Gerência Mariato", phone: "+244927671480", userType: "supplier" as const },
+  // táxi (no fim, para não mudar os IDs usados nos testes)
+  { username: "taxista", password: "Taxista#2026", fullName: "Domingos Taxista", phone: "+244923000009", userType: "taxi" as const },
+  { username: "taxista2", password: "Taxista#2026", fullName: "Nelson Moto", phone: "+244923000010", userType: "taxi" as const },
+  { username: "taxista3", password: "Taxista#2026", fullName: "Paula Novata", phone: "+244923000011", userType: "taxi" as const, pending: true },
 ];
+const DEMO_TAXIS: Record<string, Omit<typeof taxiDrivers.$inferInsert, "userId">> = {
+  taxista: { category: "economy", make: "Toyota", model: "Corolla", colour: "Branco", plate: "LD-12-34-AB", year: 2016, licenceNumber: "LDA-123456" },
+  taxista2: { category: "moto", make: "Haojue", model: "HJ125", colour: "Vermelha", plate: "LD-98-76-MT", year: 2021, licenceNumber: "LDA-654321" },
+  taxista3: { category: "comfort", make: "Hyundai", model: "Elantra", colour: "Cinzento", plate: "LD-55-21-CF", year: 2019, licenceNumber: "LDA-777888" },
+};
 
 // Publicidade: fotos livres da Wikimedia Commons (licença em imageCredit) + autocolante de comida desenhado
 const BANNERS: (typeof banners.$inferInsert)[] = [
@@ -393,6 +402,7 @@ export async function seedDemoData() {
       }).returning();
       ids[u.username] = row.id;
     }
+    for (const [username, car] of Object.entries(DEMO_TAXIS)) await tx.insert(taxiDrivers).values({ userId: ids[username], ...car });
 
     await tx.insert(addresses).values([
       { userId: ids.cliente, label: "Casa", street: "Rua 5, Condomínio Belas Business Park, casa 12", zone: "Talatona", reference: "Perto do Belas Shopping", latitude: -8.9220, longitude: 13.1870, isDefault: true },

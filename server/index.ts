@@ -11,6 +11,8 @@ import { loadUser } from "./lib/auth";
 import { errorHandler } from "./lib/http";
 import { releaseScheduledOrders } from "./lib/orderFlow";
 import { startDispatcher } from "./lib/dispatchEngine";
+import { startRideDispatcher } from "./lib/taxi";
+import { taxiRouter } from "./routes/taxi";
 import { startPayoutScheduler } from "./lib/payouts";
 import { emergencyReset2fa } from "./lib/adminSecurity";
 import { authRouter } from "./routes/auth";
@@ -120,6 +122,7 @@ app.use("/api", customerRouter);
 app.use("/api/groups", groupRouter);
 app.use("/api/partner", partnerRouter);
 app.use("/api/driver", driverRouter);
+app.use("/api/taxi", taxiRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/webhooks", webhookRouter);
 app.use("/api/pos", posRouter);
@@ -148,6 +151,7 @@ app.use(errorHandler);
   // libertar encomendas agendadas a cada minuto
   setInterval(() => { releaseScheduledOrders().catch((e) => console.error("[scheduler]", e)); }, 60_000);
   startDispatcher();
+  startRideDispatcher();
   startPayoutScheduler();
 })().catch((e) => {
   console.error("Falha ao arrancar:", e);

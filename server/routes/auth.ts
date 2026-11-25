@@ -8,7 +8,7 @@ import { randomBytes } from "crypto";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
-import { pointsLedger, registerSchema, loginSchema, stores, users, DIETARY_TAGS } from "@shared/schema";
+import { pointsLedger, registerSchema, loginSchema, stores, taxiDrivers, users, DIETARY_TAGS } from "@shared/schema";
 import { ah, badRequest, conflict, HttpError, parse } from "../lib/http";
 import { publicUser, requireAuth } from "../lib/auth";
 
@@ -42,6 +42,7 @@ function regenerate(req: any): Promise<void> {
 authRouter.post("/register", authLimiter, ah(async (req, res) => {
   const input = parse(registerSchema, req.body);
   if (input.userType === "supplier" && !input.business) throw badRequest("Indique os dados do negócio.", "BUSINESS_REQUIRED");
+  if (input.userType === "taxi" && !input.taxi) throw badRequest("Indique os dados da viatura e da carta de condução.", "TAXI_REQUIRED");
 
   const username = input.username.toLowerCase();
   const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.username, username));
@@ -65,7 +66,7 @@ authRouter.post("/register", authLimiter, ah(async (req, res) => {
       email: input.email || null,
       phone: input.phone,
       userType: input.userType,
-      isApproved: input.userType === "customer" || input.userType === "supplier", // estafetas aguardam aprovação
+      isApproved: input.userType === "customer" || input.userType === "supplier", // estafetas e motoristas aguardam aprovação
       vehicleType: input.userType === "driver" ? input.vehicleType ?? "moto" : null,
       referralCode,
       referredBy: referrerId,
@@ -73,6 +74,9 @@ authRouter.post("/register", authLimiter, ah(async (req, res) => {
     }).returning();
     if (referrerId && input.userType === "customer") {
       await tx.insert(pointsLedger).values({ userId: u.id, delta: config.welcomeBonusPoints, reason: "welcome_bonus" });
+    }
+    if (input.userType === "taxi" && input.taxi) {
+      await tx.insert(taxiDrivers).values({ userId: u.id, ...input.taxi, year: input.taxi.year ?? null });
     }
     if (input.userType === "supplier" && input.business) {
       await tx.insert(stores).values({

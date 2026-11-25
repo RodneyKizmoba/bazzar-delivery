@@ -8,7 +8,7 @@ export interface User {
   fullName: string;
   email: string | null;
   phone: string;
-  userType: "customer" | "supplier" | "driver" | "admin";
+  userType: "customer" | "supplier" | "driver" | "admin" | "taxi";
   isApproved: boolean;
   referralCode: string;
   loyaltyPoints: number;
@@ -104,6 +104,7 @@ export function homeFor(u: User | null): string {
   if (!u) return "/";
   if (u.userType === "supplier") return "/parceiro";
   if (u.userType === "driver") return "/estafeta";
+  if (u.userType === "taxi") return "/taxista";
   if (u.userType === "admin") return "/admin";
   return "/";
 }

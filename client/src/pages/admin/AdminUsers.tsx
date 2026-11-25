@@ -19,16 +19,19 @@ import { useLang, useT, T, type Tr } from "@/lib/i18n";
 import { dateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { AdminPage } from "./AdminDashboard";
+import { CATEGORY } from "@/lib/taxi";
 
 interface AdminUser {
   id: number; username: string; fullName: string; email: string | null; phone: string;
-  userType: "customer" | "supplier" | "driver" | "admin"; isApproved: boolean; isActive: boolean; createdAt: string;
+  userType: "customer" | "supplier" | "driver" | "admin" | "taxi"; isApproved: boolean; isActive: boolean; createdAt: string;
+  taxi?: { category: string; make: string; model: string; colour: string; plate: string; year: number | null; licenceNumber: string; ratingAvg: number; ratingCount: number } | null;
 }
 
 const TYPE_LABEL: Record<AdminUser["userType"], Tr> = {
   customer: { pt: "Cliente", en: "Customer", fr: "Client" },
   supplier: { pt: "Loja", en: "Store", fr: "Magasin" },
   driver: { pt: "Estafeta", en: "Rider", fr: "Livreur" },
+  taxi: { pt: "Motorista de táxi", en: "Taxi driver", fr: "Chauffeur de taxi" },
   admin: { pt: "Admin", en: "Admin", fr: "Admin" },
 };
 
@@ -128,7 +131,15 @@ function UserRow({ user, onPlus }: { user: AdminUser; onPlus: () => void }) {
     <tr className={cn("border-t", !user.isActive && "bg-neutral-50 text-neutral-500")}>
       <td className="p-2"><p className="font-medium">{user.fullName}</p><p className="text-xs text-neutral-500">@{user.username}</p></td>
       <td className="p-2 text-xs">{user.phone}{user.email && <p>{user.email}</p>}</td>
-      <td className="p-2">{t(TYPE_LABEL[user.userType])}</td>
+      <td className="p-2">{t(TYPE_LABEL[user.userType])}
+        {user.taxi && (
+          <p className="mt-1 text-xs text-neutral-600">
+            {user.taxi.make} {user.taxi.model}{user.taxi.year ? ` (${user.taxi.year})` : ""} · {user.taxi.colour}<br />
+            {t({ pt: "Matrícula", en: "Plate", fr: "Plaque" })} <b className="font-mono">{user.taxi.plate}</b> · {t({ pt: "Carta", en: "Licence", fr: "Permis" })} {user.taxi.licenceNumber}
+            <br />{t({ pt: "Categoria", en: "Category", fr: "Catégorie" })}: {CATEGORY[user.taxi.category as keyof typeof CATEGORY] ? t(CATEGORY[user.taxi.category as keyof typeof CATEGORY]) : user.taxi.category}{user.taxi.ratingCount ? ` · ★ ${user.taxi.ratingAvg.toFixed(1)}` : ""}
+          </p>
+        )}
+      </td>
       <td className="p-2">
         <div className="flex flex-wrap gap-1">
           {!user.isApproved && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">{t({ pt: "Por aprovar", en: "Pending", fr: "En attente" })}</span>}

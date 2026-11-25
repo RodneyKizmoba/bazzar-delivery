@@ -311,7 +311,7 @@ export default function Home() {
         </form>
       </div>
 
-      {/* Serviços: Restaurantes, Mercado, Farmácia… (Envios e Táxi em breve) */}
+      {/* Serviços: Restaurantes, Mercado, Farmácia, Táxi… (Envios em breve) */}
       <ServiceGrid zq={zq} />
 
       {/* Publicidade */}
@@ -429,7 +429,7 @@ function ServiceRow({ zq }: { zq: string }) {
     { key: "jewelry", art: "jewelry", label: t({ pt: "Bijuteria", en: "Jewellery", fr: "Bijoux" }), href: `/pesquisa?type=jewelry${zq}` },
     { key: "other", art: "other", label: t({ pt: "Mais lojas", en: "More shops", fr: "Plus de boutiques" }), href: `/pesquisa?type=other${zq}` },
     { key: "parcel", art: "parcel", label: t({ pt: "Envios", en: "Send", fr: "Envois" }) },
-    { key: "taxi", art: "taxi", label: t({ pt: "Táxi", en: "Taxi", fr: "Taxi" }) },
+    { key: "taxi", art: "taxi", label: t({ pt: "Táxi", en: "Taxi", fr: "Taxi" }), href: "/taxi" },
   ];
   return (
     <HScroll className="mt-4 flex gap-2 px-4 pb-1" arrowSize="sm" label={t({ pt: "Serviços", en: "Services", fr: "Services" })}>
@@ -467,7 +467,7 @@ function ServiceGrid({ zq }: { zq: string }) {
     { key: "jewelry", art: "jewelry", label: t({ pt: "Bijuteria", en: "Jewellery", fr: "Bijoux" }), sub: t({ pt: "Colares, brincos e acessórios", en: "Necklaces, earrings & accessories", fr: "Colliers, boucles et accessoires" }), href: `/pesquisa?type=jewelry${zq}` },
     { key: "other", art: "other", label: t({ pt: "Mais lojas", en: "More shops", fr: "Plus de boutiques" }), sub: t({ pt: "Todos os outros negócios", en: "Every other business", fr: "Tous les autres commerces" }), href: `/pesquisa?type=other${zq}` },
     { key: "parcel", art: "parcel", image: "parcel.jpg", label: t({ pt: "Envios", en: "Send", fr: "Envois" }) },
-    { key: "taxi", art: "taxi", image: "taxi.jpg", label: t({ pt: "Táxi", en: "Taxi", fr: "Taxi" }) },
+    { key: "taxi", art: "taxi", image: "taxi.jpg", label: t({ pt: "Táxi", en: "Taxi", fr: "Taxi" }), sub: t({ pt: "Mota, carro e XL", en: "Moto, car & XL", fr: "Moto, voiture et XL" }), href: "/taxi" },
   ];
   const Tile = ({ tile }: { tile: (typeof tiles)[number] }) => {
     const body = (

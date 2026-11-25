@@ -21,6 +21,10 @@ const icon = (emoji: string, bg: string) => L.divIcon({
 const STORE = icon("🏪", "#00A99C");
 const HOME = icon("🏠", "#15803D");
 const RIDER = icon("🛵", "#1D4ED8");
+const PICKUP = icon("📍", "#00A99C");
+const FLAG = icon("🏁", "#15803D");
+const CAR = icon("🚕", "#1D4ED8");
+const MOTO = icon("🏍️", "#1D4ED8");
 
 /** Enquadra os pontos ao abrir; depois só volta a enquadrar se o estafeta sair do mapa (não salta a cada posição). */
 function Fit({ points }: { points: [number, number][] }) {
@@ -37,11 +41,16 @@ function Fit({ points }: { points: [number, number][] }) {
 }
 
 /** Mapa de acompanhamento: loja, destino e posição do estafeta (OpenStreetMap). */
-export function OrderMap({ store, destination, driver, labels, className }: {
+export function OrderMap({ store, destination, driver, labels, className, ride, lineTo = "destination" }: {
   store?: Pt; destination?: Pt; driver?: Pt;
   labels?: { store?: string; destination?: string; driver?: string };
   className?: string;
+  /** viagem de táxi: partida (📍), destino (🏁) e carro/mota */
+  ride?: "car" | "moto";
+  /** linha tracejada do estafeta/motorista até: destino (por defeito) ou ponto de recolha */
+  lineTo?: "destination" | "store";
 }) {
+  const [S, D, R] = ride ? [PICKUP, FLAG, ride === "moto" ? MOTO : CAR] : [STORE, HOME, RIDER];
   const pts: [number, number][] = [store, driver, destination]
     .filter((p): p is { latitude: number; longitude: number } => !!p && p.latitude != null && p.longitude != null)
     .map((p) => [p.latitude, p.longitude]);
@@ -50,10 +59,16 @@ export function OrderMap({ store, destination, driver, labels, className }: {
     <div className={className ?? "h-64 w-full overflow-hidden rounded-xl border"}>
       <MapContainer center={pts[0]} zoom={14} scrollWheelZoom={false} style={{ height: "100%", width: "100%" }} attributionControl>
         <TileLayer url={TILE_URL} attribution={TILE_ATTR} />
-        {store && <Marker position={[store.latitude, store.longitude]} icon={STORE}>{labels?.store && <Tooltip>{labels.store}</Tooltip>}</Marker>}
-        {destination && <Marker position={[destination.latitude, destination.longitude]} icon={HOME}>{labels?.destination && <Tooltip>{labels.destination}</Tooltip>}</Marker>}
-        {driver && <Marker position={[driver.latitude, driver.longitude]} icon={RIDER}>{labels?.driver && <Tooltip permanent>{labels.driver}</Tooltip>}</Marker>}
-        {driver && destination && <Polyline positions={[[driver.latitude, driver.longitude], [destination.latitude, destination.longitude]]} pathOptions={{ color: "#1D4ED8", dashArray: "6 8" }} />}
+        {store && <Marker position={[store.latitude, store.longitude]} icon={S}>{labels?.store && <Tooltip>{labels.store}</Tooltip>}</Marker>}
+        {destination && <Marker position={[destination.latitude, destination.longitude]} icon={D}>{labels?.destination && <Tooltip>{labels.destination}</Tooltip>}</Marker>}
+        {driver && <Marker position={[driver.latitude, driver.longitude]} icon={R}>{labels?.driver && <Tooltip permanent>{labels.driver}</Tooltip>}</Marker>}
+        {(() => {
+          const to = lineTo === "store" ? store : destination;
+          const from = driver ?? (ride ? store : null);
+          return from && to && from !== to
+            ? <Polyline positions={[[from.latitude, from.longitude], [to.latitude, to.longitude]]} pathOptions={{ color: "#1D4ED8", dashArray: "6 8" }} />
+            : null;
+        })()}
         <Fit points={pts} />
       </MapContainer>
     </div>
