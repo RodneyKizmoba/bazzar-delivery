@@ -85,6 +85,49 @@ const ART: Record<string, () => JSX.Element> = {
       <path d="M52 14 l1.5 3.5 3.5 1.5 -3.5 1.5 -1.5 3.5 -1.5 -3.5 -3.5 -1.5 3.5 -1.5 z" fill="#FFD54F" />
     </>
   ),
+  // Desapega (moda nova, vintage e segunda mão): casaco num cabide, com etiqueta de preço
+  vintage: () => (
+    <>
+      <Shadow />
+      <path d="M32 7 q4 0 4 4 q0 3 -4 4 v3" stroke="#6B7280" strokeWidth="2.2" fill="none" strokeLinecap="round" />
+      <path d="M32 18 L10 28 H54 Z" fill="none" stroke="#6B7280" strokeWidth="2.2" strokeLinejoin="round" />
+      <path d="M20 26 L32 22 L44 26 L50 31 L46 37 L43 35 V56 H21 V35 L18 37 L14 31 Z" fill="#C2410C" />
+      <path d="M27 23.5 L32 33 L37 23.5" fill="#FDE6D3" />
+      <path d="M32 33 V56" stroke="#9A3412" strokeWidth="1.6" />
+      <circle cx="34.5" cy="39" r="1.3" fill="#FCD34D" /><circle cx="34.5" cy="45" r="1.3" fill="#FCD34D" /><circle cx="34.5" cy="51" r="1.3" fill="#FCD34D" />
+      <path d="M23 44 h6 v4 h-6 z" fill="#9A3412" />
+      <path d="M46 40 l8 -2 2 7 -8 2 z" fill="#FFF7ED" stroke="#9A3412" strokeWidth="1.2" />
+      <circle cx="48" cy="41.5" r="0.9" fill="#9A3412" />
+      <path d="M43 36 l3.5 4" stroke="#9A3412" strokeWidth="1" />
+    </>
+  ),
+  // bijuteria: colar de pérolas com pendente e um anel
+  jewelry: () => (
+    <>
+      <Shadow />
+      <path d="M14 14 Q32 46 50 14" fill="none" stroke="#D4A017" strokeWidth="1.4" />
+      {[[16,19],[19,25],[22.5,30],[26.5,34],[32,36],[37.5,34],[41.5,30],[45,25],[48,19]].map(([x,y],i) => <circle key={i} cx={x} cy={y} r="2.4" fill="#FFF7E6" stroke="#E5C77A" strokeWidth=".8" />)}
+      <path d="M32 38 l5 6 -5 7 -5 -7 z" fill="#E11D63" stroke="#9D174D" strokeWidth="1" />
+      <path d="M32 38 l2 6 -2 7" fill="#F472B6" opacity=".7" />
+      <circle cx="49" cy="46" r="6" fill="none" stroke="#F2C14E" strokeWidth="2.6" />
+      <path d="M46.5 39.5 l2.5 -3 2.5 3 -2.5 1.5 z" fill="#7DD3FC" stroke="#0EA5E9" strokeWidth=".8" />
+      <path d="M12 44 l1.2 2.8 2.8 1.2 -2.8 1.2 -1.2 2.8 -1.2 -2.8 -2.8 -1.2 2.8 -1.2 z" fill="#FFD54F" />
+    </>
+  ),
+  // outros negócios: pequena loja com toldo
+  other: () => (
+    <>
+      <Shadow />
+      <rect x="12" y="26" width="40" height="30" rx="2" fill="#2563EB" />
+      <rect x="16" y="34" width="14" height="12" rx="1.5" fill="#DBEAFE" />
+      <rect x="35" y="34" width="12" height="22" rx="1.5" fill="#1E3A8A" />
+      <circle cx="44" cy="45" r="1" fill="#FCD34D" />
+      <path d="M9 18 H55 L52 28 H12 Z" fill="#fff" />
+      {[0,1,2,3,4].map((i) => <path key={i} d={`M${9+i*9.2} 18 h4.6 l-0.6 10 h-4.6 z`} fill="#EF4444" />)}
+      <path d="M10 28 q2.6 3 5.3 0 q2.6 3 5.3 0 q2.6 3 5.3 0 q2.6 3 5.3 0 q2.6 3 5.3 0 q2.6 3 5.3 0 q2.6 3 5.3 0 q2.6 3 5.3 0" fill="#EF4444" />
+      <rect x="22" y="9" width="20" height="7" rx="2" fill="#FCD34D" />
+    </>
+  ),
   // ramo de túlipas em papel kraft
   flowers: () => (
     <>
@@ -211,7 +254,7 @@ const ART: Record<string, () => JSX.Element> = {
 
 export const CATEGORY_TILE_BG: Record<string, string> = {
   restaurant: "#FFE7D6", bakery: "#FFF1C9", grocery: "#DDF6E6", pharmacy: "#DCF2F5", beauty: "#F6E3FF",
-  flowers: "#FFE3EC", retail: "#ECE5FF", burger: "#FFF0D1", pizza: "#FFE4DC", grill: "#FFE7D6",
+  flowers: "#FFE3EC", retail: "#ECE5FF", vintage: "#FBE7DA", jewelry: "#FFF4CC", other: "#E3EEFF", burger: "#FFF0D1", pizza: "#FFE4DC", grill: "#FFE7D6",
   sushi: "#E2EEFF", angolan: "#FFE9D2", parcel: "#EFE6FF", taxi: "#FFF6CC",
 };
 

@@ -245,6 +245,64 @@ const STORES: StoreSeed[] = [
     menu: { "Pratos": [{ name: "Funje com peixe", price: 3500, allergens: ["fish"] }] },
   },
   MARIATO, // no fim, para não mudar os IDs das lojas usados nos testes
+  {
+    // Desapega: loja de roupa vintage / em segunda mão (sem fotos de demonstração: a loja publica as suas)
+    name: "Desapega da Kiami", storeType: "vintage", cuisines: ["Novo e vintage", "Senhora", "Homem"], zone: "Maianga",
+    street: "Rua Rainha Ginga, 45", lat: -8.8180, lng: 13.2340, zonesServed: [],
+    deliveryFee: 1500, time: 50, open: "09:00", close: "18:00",
+    description: "Roupa nova, vintage e em segunda mão, verificada peça a peça. Muitas são únicas: quando sai, já não volta.",
+    menu: {
+      "Senhora": [
+        { name: "Vestido em capulana anos 80", price: 9500, popular: true, description: "Tamanho M · Muito bom estado · Peça única" },
+        { name: "Blusa de seda vintage", price: 6000, description: "Tamanho S · Bom estado" },
+        { name: "Vestido de verão (novo)", price: 14000, description: "Tamanhos S, M, L · Novo com etiqueta" },
+        { name: "Mala de pele castanha", price: 12000, description: "Tamanho único · Como nova" },
+      ],
+      "Homem": [
+        { name: "Casaco de ganga vintage", price: 11000, popular: true, description: "Tamanho L · Muito bom estado" },
+        { name: "Camisa estampada anos 90", price: 5000, description: "Tamanho M · Bom estado" },
+      ],
+      "Sapatos": [
+        { name: "Sapatilhas clássicas brancas", price: 8500, description: "Tamanho 42 · Bom estado" },
+      ],
+    },
+  },
+  {
+    name: "Brilho Bijuteria", storeType: "jewelry", cuisines: ["Bijuteria", "Acessórios"], zone: "Talatona",
+    street: "Belas Shopping, piso 1", lat: -8.9180, lng: 13.1830, zonesServed: [],
+    deliveryFee: 1200, time: 45, open: "10:00", close: "20:00",
+    description: "Colares, brincos, pulseiras e acessórios para todas as ocasiões. Embrulho de oferta grátis.",
+    menu: {
+      "Colares": [
+        { name: "Colar de pérolas", price: 7500, popular: true },
+        { name: "Colar com pendente de coração", price: 5000 },
+      ],
+      "Brincos e anéis": [
+        { name: "Brincos de argola dourados", price: 3500, popular: true },
+        { name: "Anel ajustável com pedra", price: 4000 },
+      ],
+      "Acessórios": [
+        { name: "Pulseira de missangas", price: 2500 },
+        { name: "Lenço de cabeça em capulana", price: 3000 },
+      ],
+    },
+  },
+  {
+    name: "Papelaria & Artesanato Kianda", storeType: "other", cuisines: ["Papelaria", "Artesanato"], zone: "Alvalade",
+    street: "Rua Comandante Gika, 80", lat: -8.8290, lng: 13.2330, zonesServed: [],
+    deliveryFee: 1200, time: 50, open: "08:00", close: "18:00",
+    description: "Material escolar, papelaria e artesanato angolano. Exemplo de um negócio sem tipo próprio.",
+    menu: {
+      "Papelaria": [
+        { name: "Caderno A4 (pack de 5)", price: 3500, popular: true },
+        { name: "Caixa de canetas (12 un.)", price: 1800 },
+      ],
+      "Artesanato": [
+        { name: "Estatueta O Pensador em madeira", price: 9000, popular: true },
+        { name: "Cesto de palha entrançado", price: 6000 },
+      ],
+    },
+  },
 ];
 
 const DEMO_USERS = [
@@ -286,8 +344,10 @@ const BANNERS: (typeof banners.$inferInsert)[] = [
 const DEMO_THEMES: Record<string, string> = {
   "Burger Station": "lemon", "Pizzaria Ilha": "coral", "Sushi Baía": "blue", "Mercado Fresco Talatona": "mint",
   "Farmácia Saúde+": "aqua", "Flores de Luanda": "rose", "Casa & Oficina": "violet", "Beleza Natural": "berry",
-  "Bolos da Tia Rosa": "candy", "Mariato Restaurante Grill": "peach",
+  "Bolos da Tia Rosa": "candy", "Mariato Restaurante Grill": "peach", "Desapega da Kiami": "peach", "Brilho Bijuteria": "lemon", "Papelaria & Artesanato Kianda": "blue",
 };
+
+const NO_DEMO_PHOTO = new Set(["vintage", "jewelry", "other"]);
 
 async function insertStore(tx: any, s: StoreSeed, ownerId: number | null, opts: { isOpen?: boolean } = {}) {
     const [store] = await tx.insert(stores).values({
@@ -297,7 +357,8 @@ async function insertStore(tx: any, s: StoreSeed, ownerId: number | null, opts: 
       latitude: s.lat, longitude: s.lng, zonesServed: s.zonesServed, openingTime: s.open ?? "00:00", closingTime: s.close ?? "00:00",
       isOpen: opts.isOpen ?? true, isApproved: s.approved ?? true, isHomeBusiness: !!s.home, minNoticeMin: s.noticeMin ?? 0, maxOrdersPerDay: s.maxPerDay ?? null, deliveryFee: s.deliveryFee, minOrder: s.minOrder ?? 0,
       deliveryTimeMin: s.time, prepTimeMin: Math.round(s.time / 2),
-      logoUrl: photoForStore(s.name), coverUrl: photoForStore(s.name),
+      // sem foto de demonstração adequada: mostra o desenho do tipo de loja até a loja carregar as suas fotos
+      logoUrl: NO_DEMO_PHOTO.has(s.storeType) ? null : photoForStore(s.name), coverUrl: NO_DEMO_PHOTO.has(s.storeType) ? null : photoForStore(s.name),
       // sem avaliações inventadas: a média nasce das avaliações reais dos clientes
     }).returning();
     let order = 0;
@@ -306,7 +367,7 @@ async function insertStore(tx: any, s: StoreSeed, ownerId: number | null, opts: 
       for (const it of items) {
         const [mi] = await tx.insert(menuItems).values({
           storeId: store.id, sectionId: section.id, name: it.name, description: it.description ?? null, price: it.price,
-          imageUrl: it.imageUrl ?? photoForMenuItem(it.name, s.name),
+          imageUrl: it.imageUrl ?? (NO_DEMO_PHOTO.has(s.storeType) ? null : photoForMenuItem(it.name, s.name)),
           dietaryTags: it.dietary ?? [], allergens: it.allergens ?? [], isPopular: !!it.popular,
         }).returning();
         for (const [gi, g] of (it.groups ?? []).entries()) {

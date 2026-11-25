@@ -60,6 +60,25 @@ const VOCAB: Record<string, StoreVocab> = {
     categories: CATEGORIES, categoriesExample: { pt: "Ex.: Cosmética, Perfumes", en: "E.g. Cosmetics, Perfumes", fr: "Ex. : Cosmétiques, Parfums" },
     ticket: PICKLIST, busyExample: { pt: "Ex.: produto esgotado…", en: "E.g. out of stock…", fr: "Ex. : rupture de stock…" }, integration: TILL,
   },
+  vintage: {
+    catalog: { pt: "Peças", en: "Items", fr: "Articles" }, emptyIcon: "👗", emptyTitle: { pt: "Ainda não tem peças à venda", en: "No items for sale yet", fr: "Aucun article en vente" },
+    sectionExample: { pt: "Ex.: Vestidos, Calças, Sapatos, Malas…", en: "E.g. Dresses, Trousers, Shoes, Bags…", fr: "Ex. : Robes, Pantalons, Chaussures, Sacs…" },
+    categories: CATEGORIES, categoriesExample: { pt: "Ex.: Novo, Vintage, Senhora, Homem, Criança", en: "E.g. New, Vintage, Women, Men, Kids", fr: "Ex. : Neuf, Vintage, Femme, Homme, Enfant" },
+    ticket: PICKLIST, busyExample: { pt: "Ex.: peça já vendida…", en: "E.g. item already sold…", fr: "Ex. : article déjà vendu…" }, integration: TILL,
+  },
+  jewelry: {
+    catalog: CATALOG, emptyIcon: "💍", emptyTitle: { pt: "O seu catálogo está vazio", en: "Your catalogue is empty", fr: "Votre catalogue est vide" },
+    sectionExample: { pt: "Ex.: Colares, Brincos, Pulseiras, Anéis…", en: "E.g. Necklaces, Earrings, Bracelets, Rings…", fr: "Ex. : Colliers, Boucles d’oreilles, Bracelets, Bagues…" },
+    categories: CATEGORIES, categoriesExample: { pt: "Ex.: Bijuteria, Relógios, Acessórios", en: "E.g. Jewellery, Watches, Accessories", fr: "Ex. : Bijoux, Montres, Accessoires" },
+    ticket: PICKLIST, busyExample: { pt: "Ex.: peça esgotada…", en: "E.g. item sold out…", fr: "Ex. : article épuisé…" }, integration: TILL,
+  },
+  other: {
+    catalog: PRODUCTS, emptyIcon: "🏪", emptyTitle: { pt: "Ainda não tem produtos", en: "No products yet", fr: "Aucun produit" },
+    sectionExample: { pt: "Ex.: Novidades, Mais vendidos…", en: "E.g. New in, Best sellers…", fr: "Ex. : Nouveautés, Meilleures ventes…" },
+    categories: { pt: "O que vende? (separe por vírgulas)", en: "What do you sell? (comma separated)", fr: "Que vendez-vous ? (séparés par des virgules)" },
+    categoriesExample: { pt: "Ex.: Telemóveis, Papelaria, Artesanato", en: "E.g. Phones, Stationery, Crafts", fr: "Ex. : Téléphones, Papeterie, Artisanat" },
+    ticket: PICKLIST, busyExample: { pt: "Ex.: produto esgotado…", en: "E.g. out of stock…", fr: "Ex. : rupture de stock…" }, integration: TILL,
+  },
   retail: {
     catalog: CATALOG, emptyIcon: "🛍️", emptyTitle: { pt: "O seu catálogo está vazio", en: "Your catalogue is empty", fr: "Votre catalogue est vide" },
     sectionExample: { pt: "Ex.: Novidades, Acessórios…", en: "E.g. New in, Accessories…", fr: "Ex. : Nouveautés, Accessoires…" },

@@ -64,6 +64,9 @@ export const STORE_TYPE: Record<string, Tr & { icon: string; color: string }> = 
   beauty: { pt: "Beleza", en: "Beauty", fr: "Beauté", icon: "💄", color: FOOD_COLORS.beetroot },
   flowers: { pt: "Flores", en: "Flowers", fr: "Fleurs", icon: "💐", color: FOOD_COLORS.burgerSauce },
   retail: { pt: "Casa e presentes", en: "Home & gifts", fr: "Maison et cadeaux", icon: "🎁", color: FOOD_COLORS.ancho },
+  vintage: { pt: "Desapega (moda nova, vintage e segunda mão)", en: "Desapega (new, vintage & second-hand fashion)", fr: "Desapega (mode neuve, vintage et seconde main)", icon: "👗", color: FOOD_COLORS.beetroot },
+  jewelry: { pt: "Bijuteria e acessórios", en: "Jewellery & accessories", fr: "Bijoux et accessoires", icon: "💍", color: FOOD_COLORS.lemon },
+  other: { pt: "Outros negócios", en: "Other businesses", fr: "Autres commerces", icon: "🏪", color: FOOD_COLORS.ancho },
 };
 
 export const DIETARY: Record<string, Tr & { icon: string }> = {

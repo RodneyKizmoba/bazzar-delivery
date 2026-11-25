@@ -9,7 +9,7 @@ import { STORE_THEME_IDS } from "./themes";
 // ---------------------------------------------------------------------------
 export const userTypeEnum = pgEnum("user_type", ["customer", "supplier", "driver", "admin"]);
 export const storeTypeEnum = pgEnum("store_type", [
-  "restaurant", "grocery", "pharmacy", "beauty", "flowers", "retail", "bakery",
+  "restaurant", "grocery", "pharmacy", "beauty", "flowers", "retail", "bakery", "vintage", "jewelry", "other",
 ]);
 
 export const ORDER_STATUSES = [
@@ -22,7 +22,9 @@ export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
 export const DIETARY_TAGS = ["vegan", "vegetarian", "gluten_free", "halal", "lactose_free", "spicy"] as const;
 export const ALLERGENS = ["gluten", "dairy", "eggs", "nuts", "peanuts", "seafood", "fish", "soy"] as const;
-export const STORE_TYPES = ["restaurant", "bakery", "grocery", "pharmacy", "beauty", "flowers", "retail"] as const;
+// "vintage" = Desapega (moda nova, vintage e em segunda mão); "jewelry" = bijuteria e acessórios;
+// "other" = qualquer outro negócio (descreve-se nas categorias) — nenhum negócio fica de fora
+export const STORE_TYPES = ["restaurant", "bakery", "grocery", "pharmacy", "beauty", "flowers", "retail", "vintage", "jewelry", "other"] as const;
 export const PAYOUT_METHODS = ["multicaixa_express", "unitel_money", "bank_transfer"] as const;
 // tipo de veículo do estafeta: muda a velocidade estimada, o valor por entrega e o mínimo por hora
 export const VEHICLE_TYPES = ["moto", "car", "ebike", "bike"] as const;

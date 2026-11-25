@@ -21,6 +21,9 @@ import { useCart } from "@/context/CartContext";
 import { post, put, del, queryClient } from "@/lib/api";
 import { useLang, useT, T } from "@/lib/i18n";
 import { dateTime, kz, DIETARY, STORE_TYPE } from "@/lib/format";
+import { vocabFor } from "@/lib/storeVocab";
+
+const FOOD_TYPES = new Set(["restaurant", "bakery", "grocery"]);
 import { cn } from "@/lib/utils";
 import type { StoreCardData } from "@/pages/customer/Home";
 
@@ -317,7 +320,7 @@ export default function StorePage() {
       <Tabs value={tab} onValueChange={setTab} className="mt-4">
         <div className="px-4">
           <TabsList className="grid w-full grid-cols-2 rounded-full">
-            <TabsTrigger value="menu" className="rounded-full">{t({ pt: "Menu", en: "Menu", fr: "Menu" })}</TabsTrigger>
+            <TabsTrigger value="menu" className="rounded-full">{t(vocabFor(store.storeType).catalog)}</TabsTrigger>
             <TabsTrigger value="reviews" className="rounded-full">{t({ pt: "Avaliações", en: "Reviews", fr: "Avis" })}{store.ratingCount ? ` (${store.ratingCount})` : ""}</TabsTrigger>
           </TabsList>
         </div>
@@ -332,7 +335,8 @@ export default function StorePage() {
                 <Input id="menu-search" value={search} onChange={(e) => setSearch(e.target.value)} className="h-10 rounded-full bg-neutral-50 pl-9"
                   placeholder={t({ pt: `Pesquisar em ${store.name}`, en: `Search ${store.name}`, fr: `Rechercher chez ${store.name}` })} />
               </div>
-              <div className="-mx-4"><HScroll className="flex gap-1.5 px-4" arrowSize="sm" label="Dieta">
+              {/* filtros de dieta só onde se vende comida (não numa farmácia, florista ou Desapega) */}
+              {FOOD_TYPES.has(store.storeType) && <div className="-mx-4"><HScroll className="flex gap-1.5 px-4" arrowSize="sm" label="Dieta">
                 {Object.keys(DIETARY).map((tag) => {
                   const on = diet.includes(tag);
                   return (
@@ -343,7 +347,7 @@ export default function StorePage() {
                     </button>
                   );
                 })}
-              </HScroll></div>
+              </HScroll></div>}
             </div>
             {groups.length > 1 && (
               <HScroll arrowSize="sm"><nav ref={navRef} aria-label={t({ pt: "Secções do menu", en: "Menu sections", fr: "Sections du menu" })}

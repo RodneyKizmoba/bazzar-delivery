@@ -425,6 +425,9 @@ function ServiceRow({ zq }: { zq: string }) {
     { key: "flowers", art: "flowers", label: t({ pt: "Flores", en: "Flowers", fr: "Fleurs" }), href: `/pesquisa?type=flowers${zq}` },
     { key: "beauty", art: "beauty", label: t({ pt: "Beleza", en: "Beauty", fr: "Beauté" }), href: `/pesquisa?type=beauty${zq}` },
     { key: "retail", art: "retail", label: t({ pt: "Presentes", en: "Gifts", fr: "Cadeaux" }), href: `/pesquisa?type=retail${zq}` },
+    { key: "vintage", art: "vintage", label: "Desapega", href: `/pesquisa?type=vintage${zq}` },
+    { key: "jewelry", art: "jewelry", label: t({ pt: "Bijuteria", en: "Jewellery", fr: "Bijoux" }), href: `/pesquisa?type=jewelry${zq}` },
+    { key: "other", art: "other", label: t({ pt: "Mais lojas", en: "More shops", fr: "Plus de boutiques" }), href: `/pesquisa?type=other${zq}` },
     { key: "parcel", art: "parcel", label: t({ pt: "Envios", en: "Send", fr: "Envois" }) },
     { key: "taxi", art: "taxi", label: t({ pt: "Táxi", en: "Taxi", fr: "Taxi" }) },
   ];
@@ -460,6 +463,9 @@ function ServiceGrid({ zq }: { zq: string }) {
     { key: "flowers", art: "flowers", image: "roses.jpg", label: t({ pt: "Flores", en: "Flowers", fr: "Fleurs" }), href: `/pesquisa?type=flowers${zq}` },
     { key: "beauty", art: "beauty", image: "service-cosmetics.jpg", label: t({ pt: "Beleza", en: "Beauty", fr: "Beauté" }), href: `/pesquisa?type=beauty${zq}` },
     { key: "retail", art: "retail", image: "service-gifts.jpg", label: t({ pt: "Presentes", en: "Gifts", fr: "Cadeaux" }), href: `/pesquisa?type=retail${zq}` },
+    { key: "vintage", art: "vintage", label: "Desapega", sub: t({ pt: "Roupa nova, vintage e em segunda mão", en: "New, vintage & second-hand clothes", fr: "Vêtements neufs, vintage et seconde main" }), href: `/pesquisa?type=vintage${zq}` },
+    { key: "jewelry", art: "jewelry", label: t({ pt: "Bijuteria", en: "Jewellery", fr: "Bijoux" }), sub: t({ pt: "Colares, brincos e acessórios", en: "Necklaces, earrings & accessories", fr: "Colliers, boucles et accessoires" }), href: `/pesquisa?type=jewelry${zq}` },
+    { key: "other", art: "other", label: t({ pt: "Mais lojas", en: "More shops", fr: "Plus de boutiques" }), sub: t({ pt: "Todos os outros negócios", en: "Every other business", fr: "Tous les autres commerces" }), href: `/pesquisa?type=other${zq}` },
     { key: "parcel", art: "parcel", image: "parcel.jpg", label: t({ pt: "Envios", en: "Send", fr: "Envois" }) },
     { key: "taxi", art: "taxi", image: "taxi.jpg", label: t({ pt: "Táxi", en: "Taxi", fr: "Taxi" }) },
   ];
@@ -468,7 +474,10 @@ function ServiceGrid({ zq }: { zq: string }) {
       <>
         {tile.image && <CarouselImage src={`/photos/catalog/${tile.image}`} alt="" fallbackLabel={t({ pt: "Foto indisponível", en: "Photo unavailable", fr: "Photo indisponible" })}
           fallbackClassName="absolute inset-0" className={cn("absolute inset-0 h-full w-full object-cover", tile.key === "grocery" && "object-bottom")} />}
-        <span aria-hidden className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-black/10" />
+        {!tile.image && <CategoryArt kind={tile.art} className="absolute -right-1 top-1 h-[5.5rem] w-[5.5rem]" />}
+        {tile.image
+          ? <span aria-hidden className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-black/10" />
+          : <span aria-hidden className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/70 to-transparent" />}
         {!tile.href && <span className="absolute right-2 top-2 rounded-full bg-neutral-900/85 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-white">{soon}</span>}
         <span className="relative z-[1] mt-auto block w-full text-left text-white">
           <span className="block text-sm font-extrabold leading-tight">{tile.label}</span>

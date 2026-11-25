@@ -41,6 +41,9 @@ const DEFAULTS: Record<string, StoreThemeId[]> = {
   beauty: ["berry", "lilac", "candy"],
   flowers: ["rose", "candy", "berry"],
   retail: ["blue", "violet", "lilac"],
+  vintage: ["peach", "berry", "lilac"],
+  jewelry: ["lemon", "lilac", "berry"],
+  other: ["blue", "mint", "violet"],
 };
 
 export function isStoreThemeId(v: unknown): v is StoreThemeId {
