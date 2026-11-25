@@ -708,6 +708,12 @@ try {
     { role: "customer", next: safeNext, destination: safeNext },
     { role: "customer", next: "https://example.test/fora" },
     { role: "customer", next: "//example.test/fora" },
+    // URLSearchParams encodes the slash/backslash input just as an incoming link would.
+    // Browsers can interpret these as external URLs, making SPA navigation throw.
+    ...["customer", "supplier", "home", "driver"].map((role) => ({
+      role, next: "/\\example.test/fora",
+    })),
+    { role: "customer", next: "/\\\\example.test/fora" },
     ...["supplier", "home", "driver"].map((role) => ({ role, next: safeNext })),
     // Also exercise the rider dashboard's requests, beyond the initial approval screen.
     { role: "driver", approved: true },

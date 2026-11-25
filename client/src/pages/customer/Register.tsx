@@ -144,7 +144,7 @@ export default function Register() {
       const { user } = await post<{ user: User }>("/api/auth/register", body);
       setUser(user);
       const next = sp.get("next");
-      const safe = next && next.startsWith("/") && !next.startsWith("//") && user.userType === "customer" ? next : null;
+      const safe = next && next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\") && user.userType === "customer" ? next : null;
       navigate(safe ?? homeFor(user), { replace: true });
     } catch (err) {
       if (err instanceof ApiError && err.errors?.length) {
