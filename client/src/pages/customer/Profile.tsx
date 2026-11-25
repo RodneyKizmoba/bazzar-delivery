@@ -11,7 +11,6 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ChangePassword } from "@/components/ChangePassword";
 import { useAuth, homeFor, type User } from "@/hooks/useAuth";
 import { patch, post } from "@/lib/api";
 import { useLang, useT, T, type Lang } from "@/lib/i18n";
@@ -240,8 +239,6 @@ function ProfileInner() {
         <Row href="/info/privacidade" icon={<Shield className="h-5 w-5" />} label={t({ pt: "Privacidade", en: "Privacy", fr: "Confidentialité" })} />
         <Row href="/info/creditos" icon={<Camera className="h-5 w-5" />} label={t({ pt: "Créditos das fotos", en: "Photo credits", fr: "Crédits photo" })} />
       </nav>
-
-      <ChangePassword />
 
       <Button variant="outline" className="h-12 w-full rounded-xl text-red-600 hover:text-red-700" onClick={doLogout}>
         <LogOut className="mr-2 h-4 w-4" />{t(T.logout)}

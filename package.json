@@ -9,6 +9,7 @@
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc",
     "test:checkout-keyboard": "node tests/checkout-keyboard.ui.test.mjs",
+    "test:profile-password": "node tests/profile-password.ui.test.mjs",
     "db:generate": "drizzle-kit generate",
     "db:photos": "tsx scripts/backfill-catalog-photos.ts",
     "test:api": "tsx tests/api.test.ts",

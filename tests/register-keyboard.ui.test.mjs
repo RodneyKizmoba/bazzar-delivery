@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import puppeteer from "puppeteer-core";
 
 // Every registration request is answered in the browser; all other writes are blocked.
-// No accounts are created, even on a regression.
+// No accounts are created or login requests reach the server, even on a regression.
 const BASE = process.env.BASE || `https://${process.env.REPLIT_DEV_DOMAIN}`;
 const CHROME = process.env.CHROME_BIN || [
   "/usr/bin/google-chrome", "/usr/bin/chromium", "/repl/tools/bin/chromium",
@@ -22,6 +22,7 @@ try {
   const unexpectedApiReads = [];
   const apiReads = [];
   const registrations = [];
+  const loginRequests = [];
   const translations = {
     pt: {
       account: "Tipo de conta", business: "Tipo de negócio",
@@ -86,6 +87,9 @@ try {
   }
   let reply = { code: "TEST_INTERCEPTED", message: "Pedido interceptado pelo teste." };
   let replyStatus = 400;
+  // A controlled gate holds synthetic responses until pending-state assertions finish.
+  let registrationGate = null;
+  let onRegistration = null;
   // Empty destination data keeps successful registrations independent of the database.
   const destinationReplies = {
     "/api/addresses": { addresses: [] },
@@ -105,14 +109,22 @@ try {
   };
   await page.evaluateOnNewDocument(() => localStorage.setItem("lang", "pt"));
   await page.setRequestInterception(true);
-  page.on("request", (request) => {
+  page.on("request", async (request) => {
     const path = new URL(request.url()).pathname;
     const respond = (body, status = 200) => request.respond({
       status, contentType: "application/json", body: JSON.stringify(body),
     });
+    if (path === "/api/auth/login") {
+      loginRequests.push(request.method());
+      return respond({ message: "Unexpected login request intercepted by test." }, 400);
+    }
     if (path === "/api/auth/register" && request.method() === "POST") {
       registrations.push(JSON.parse(request.postData()));
-      return respond(reply, replyStatus);
+      onRegistration?.();
+      const body = reply;
+      const status = replyStatus;
+      if (registrationGate) await registrationGate;
+      return respond(body, status);
     }
     if (!["GET", "HEAD", "OPTIONS"].includes(request.method())) {
       unexpectedWrites.push(`${request.method()} ${path}`);
@@ -134,6 +146,42 @@ try {
     }
     return request.continue();
   });
+
+  // Exercise Login's real submit handler, not registration validation or native constraints.
+  const loginMessages = {
+    en: "Enter your username and password.",
+    fr: "Saisissez votre identifiant et votre mot de passe.",
+  };
+  for (const width of [1280, 390]) {
+    await page.setViewport({ width, height: 900 });
+    for (const [lang, message] of Object.entries(loginMessages)) {
+      await page.goto(`${BASE}/entrar`, { waitUntil: "networkidle0" });
+      await page.waitForSelector("#username");
+      await switchLanguage(lang);
+      assert.equal(await page.$eval("#username", (el) => el.value), "");
+      assert.equal(await page.$eval("#password", (el) => el.value), "");
+      assert.equal(await page.$('[role="alert"]'), null);
+      await page.evaluate(() => {
+        window.loginSubmits = 0;
+        document.querySelector("form").addEventListener("submit", () => {
+          window.loginSubmits++;
+        });
+      });
+      const before = loginRequests.length;
+      await page.click('form button[type="submit"]');
+      await page.waitForSelector('form [role="alert"]');
+      await page.waitForNetworkIdle({ idleTime: 500 });
+      assert.equal(await page.evaluate(() => window.loginSubmits), 1, `${lang}: form submitted`);
+      assert.equal(
+        await page.$eval('form [role="alert"]', (el) => el.textContent.trim()),
+        message, `${lang}: exact empty-login message`,
+      );
+      assert.equal(loginRequests.length, before, `${lang}: empty login must not send a request`);
+      assert.equal(await page.$eval('form button[type="submit"]', (el) => el.disabled), false);
+      assert.equal(new URL(page.url()).pathname, "/entrar");
+      console.log(`PASS ${width}px ${lang}: empty login shows exact localized message without a login request`);
+    }
+  }
 
   // A separate page has no evaluateOnNewDocument hook that resets the saved language to PT.
   const persistencePage = await browser.newPage();
@@ -386,6 +434,73 @@ try {
     assert.match(await page.$eval('[role="alert"]', (el) => el.textContent), new RegExp(expectedReply.message));
     return registrations.at(-1);
   }
+
+  // Hold each response instead of relying on a timer: every click/Enter burst
+  // must finish while the original request is still pending, including on retry.
+  for (const width of [1280, 390]) {
+    await page.setViewport({ width, height: 900 });
+    await open("customer");
+    await fill(common);
+    await page.click("#terms");
+    const before = registrations.length;
+    const formUrl = page.url();
+    for (const [attempt, trigger] of ["click", "Enter"].entries()) {
+      replyStatus = 503;
+      reply = { code: "TEST_UNAVAILABLE", message: `Falha sintética ${attempt + 1}. Tente novamente.` };
+      let release;
+      registrationGate = new Promise((resolve) => { release = resolve; });
+      // Puppeteer queues request listeners behind async interception handlers;
+      // observe arrival here without waiting for the gated handler to finish.
+      const requestSeen = new Promise((resolve) => { onRegistration = resolve; });
+      let responseSeen = false;
+      const onResponse = (res) => {
+        if (new URL(res.url()).pathname === "/api/auth/register") responseSeen = true;
+      };
+      page.on("response", onResponse);
+      try {
+        if (trigger === "click") await page.click(submit);
+        else {
+          await page.focus("#confirm");
+          await page.keyboard.press("Enter");
+        }
+        await requestSeen;
+        await page.waitForFunction(() => document.querySelector('form button[type="submit"]').disabled);
+        assert.equal(await page.$eval(submit, (el) => el.textContent.trim()), "A carregar…");
+        assert.equal(await page.$('[role="alert"]'), null, "retry clears the previous API error");
+        for (let i = 0; i < 4; i++) {
+          // Real pointer and keyboard input; do not dispatch artificial submit events.
+          await page.click(submit);
+          await page.focus("#confirm");
+          await page.keyboard.press("Enter");
+          assert.equal(await page.$eval(submit, (el) => el.disabled), true,
+            `${width}px: submit stays disabled throughout the burst`);
+        }
+        // Allow requests from the last input to reach interception. Exactly one
+        // in-flight request is expected; any duplicate is held by the same gate.
+        await page.waitForNetworkIdle({ concurrency: 1, idleTime: 200, timeout: 5000 });
+        assert.equal(responseSeen, false, "synthetic error has not been released");
+        assert.equal(registrations.length, before + attempt + 1,
+          `${width}px attempt ${attempt + 1}: click/Enter burst sends only one request`);
+        assert.deepEqual(registrations.at(-1), {
+          ...expectedCommon, userType: "customer", referralCode: null,
+        }, "retry preserves and serializes the original form values");
+      } finally {
+        registrationGate = null;
+        onRegistration = null;
+        release();
+        page.off("response", onResponse);
+      }
+      await page.waitForFunction((message) =>
+        !document.querySelector('form button[type="submit"]').disabled
+        && document.querySelector('[role="alert"]')?.textContent.includes(message),
+      {}, reply.message);
+      assert.equal(await page.$eval(submit, (el) => el.textContent.trim()), "Criar conta");
+      assert.equal(page.url(), formUrl, "synthetic failure keeps the registration form open");
+      assert.equal(registrations.length, before + attempt + 1, "failure must not auto-retry");
+    }
+    console.log(`PASS ${width}px: pending click/Enter bursts send one request, disable submit and recover after error for a keyboard retry`);
+  }
+  replyStatus = 400;
 
   // Language changes must not remount/reset the form, including hidden role state.
   // No submission (not even an intercepted one) is allowed in these scenarios.
@@ -708,6 +823,12 @@ try {
     { role: "customer", next: safeNext, destination: safeNext },
     { role: "customer", next: "https://example.test/fora" },
     { role: "customer", next: "//example.test/fora" },
+    // URLSearchParams encodes the slash/backslash input just as an incoming link would.
+    // Browsers can interpret these as external URLs, making SPA navigation throw.
+    ...["customer", "supplier", "home", "driver"].map((role) => ({
+      role, next: "/\\example.test/fora",
+    })),
+    { role: "customer", next: "/\\\\example.test/fora" },
     ...["supplier", "home", "driver"].map((role) => ({ role, next: safeNext })),
     // Also exercise the rider dashboard's requests, beyond the initial approval screen.
     { role: "driver", approved: true },
@@ -761,6 +882,7 @@ try {
     }
   }
   assert.deepEqual(unexpectedWrites, [], "no unhandled write requests may be attempted");
+  assert.deepEqual(loginRequests, [], "no login requests may be attempted");
   assert.deepEqual(unexpectedApiReads, [], "all API reads must be intercepted, including destination pages");
   assert.deepEqual(errors, []);
 } finally {
