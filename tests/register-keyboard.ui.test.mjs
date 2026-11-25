@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import puppeteer from "puppeteer-core";
 
 // Every registration request is answered in the browser; all other writes are blocked.
@@ -8,11 +11,12 @@ const BASE = process.env.BASE || `https://${process.env.REPLIT_DEV_DOMAIN}`;
 const CHROME = process.env.CHROME_BIN || [
   "/usr/bin/google-chrome", "/usr/bin/chromium", "/repl/tools/bin/chromium",
 ].find(existsSync);
-const browser = await puppeteer.launch({
+const launchOptions = {
   executablePath: CHROME,
   headless: true,
   args: ["--no-sandbox", "--disable-dev-shm-usage", "--lang=pt-PT"],
-});
+};
+const browser = await puppeteer.launch(launchOptions);
 
 try {
   const page = await browser.newPage();
@@ -278,6 +282,77 @@ try {
     console.log(`PASS language persistence ${lang}: reload and leave/return preserve document, selector and accessible group name`);
   }
   await persistencePage.close();
+
+  // A real process restart must restore disk-backed storage, not just in-memory state.
+  for (const lang of ["en", "fr"]) {
+    const userDataDir = await mkdtemp(join(tmpdir(), "register-language-"));
+    let profileBrowser;
+    const restartErrors = [];
+    const restartWrites = [];
+    async function openProfile() {
+      profileBrowser = await puppeteer.launch({ ...launchOptions, userDataDir });
+      const target = await profileBrowser.newPage();
+      target.on("pageerror", (error) => restartErrors.push(error.message));
+      // Observe submissions without changing the preference or preventing app behavior.
+      await target.evaluateOnNewDocument(() => {
+        window.registrationSubmits = 0;
+        document.addEventListener("submit", () => window.registrationSubmits++, true);
+      });
+      await target.setRequestInterception(true);
+      target.on("request", (request) => {
+        const path = new URL(request.url()).pathname;
+        if (!["GET", "HEAD", "OPTIONS"].includes(request.method())) {
+          restartWrites.push(`${request.method()} ${path}`);
+          return request.abort();
+        }
+        if (!path.startsWith("/api/")) return request.continue();
+        const body = path === "/api/auth/me" ? { user: null }
+          : path === "/api/meta" ? {
+            zones: ["Talatona", "Maianga"], welcomeBonusPoints: 100,
+            storeTypes: ["restaurant", "bakery"], dietaryTags: [], cuisines: [],
+            plus: { monthlyPrice: 3000, freeDeliveryMinOrder: 5000 },
+            points: { pointValueKz: 1, kzPerPointEarned: 100, maxDiscountPct: 20 },
+          } : {};
+        return request.respond({
+          status: 200, contentType: "application/json", body: JSON.stringify(body),
+        });
+      });
+      await target.goto(`${BASE}/registar`, { waitUntil: "networkidle0" });
+      await target.waitForSelector("#fullName");
+      return target;
+    }
+    try {
+      const beforeRestart = await openProfile();
+      await switchLanguage(lang, beforeRestart);
+      await accessibleGroups(lang, false, beforeRestart);
+      assert.equal(await beforeRestart.evaluate(() => window.registrationSubmits), 0,
+        `${lang}: selecting the language must not submit registration`);
+      const previousProcess = profileBrowser.process();
+      await profileBrowser.close();
+      assert.notEqual(previousProcess.exitCode, null, "previous browser process exited");
+      profileBrowser = null;
+
+      const restored = await openProfile();
+      await restored.waitForFunction((expected) =>
+        document.documentElement.lang === expected
+        && document.querySelector('select[aria-label="Idioma / Language"]')?.value === expected,
+      {}, lang);
+      assert.equal(await restored.evaluate(() => localStorage.getItem("lang")), lang);
+      await accessibleGroups(lang, false, restored);
+      assert.equal(await restored.evaluate(() => window.registrationSubmits), 0,
+        `${lang}: restoring the language must not submit registration`);
+      assert.equal(new URL(restored.url()).pathname, "/registar");
+      assert.deepEqual(restartWrites, [], `${lang}: no writes before or after browser restart`);
+      assert.deepEqual(restartErrors, [], `${lang}: no page errors before or after browser restart`);
+      console.log(`PASS fresh browser session ${lang}: same profile restores document, selector and accessible account group without submitting`);
+    } finally {
+      try {
+        await profileBrowser?.close();
+      } finally {
+        await rm(userDataDir, { recursive: true, force: true });
+      }
+    }
+  }
 
   const keyboardCases = [1280, 390].flatMap((width) =>
     Object.keys(translations).map((lang) => ({ width, lang })));
