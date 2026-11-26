@@ -14,6 +14,7 @@
     "db:photos": "tsx scripts/backfill-catalog-photos.ts",
     "test:api": "tsx tests/api.test.ts",
     "test:fees": "tsx tests/fees.unit.test.ts",
+    "test:commission": "tsx tests/commission.unit.test.ts",
     "test:taxi": "tsx tests/taxi.unit.test.ts",
     "test:taxi-api": "tsx tests/taxi.api.test.ts",
     "test:parcels-api": "tsx tests/parcels.api.test.ts"

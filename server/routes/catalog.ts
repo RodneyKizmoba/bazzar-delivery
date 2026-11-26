@@ -109,8 +109,11 @@ catalogRouter.get("/stores", ah(async (req, res) => {
   for (const tag of dietary) {
     conds.push(sql`exists (select 1 from menu_items mi where mi.store_id = ${stores.id} and mi.is_available and ${tag} = any(mi.dietary_tags))`);
   }
+  // plano Básico: só aparece quando o cliente procura a loja pelo nome
+  if (!f.q) conds.push(sql`${stores.plan} <> 'basic'`);
   if (f.q) {
     const like = `%${f.q.replace(/[%_]/g, "")}%`;
+    conds.push(sql`(${stores.plan} <> 'basic' or ${stores.name} ilike ${like})`);
     conds.push(or(
       ilike(stores.name, like),
       ilike(stores.description, like),
@@ -120,7 +123,8 @@ catalogRouter.get("/stores", ah(async (req, res) => {
   }
 
   const order = {
-    recommended: [desc(stores.isOpen), desc(sql`${stores.ratingAvg} * ln(${stores.ratingCount} + 2)`)],
+    // plano Destaque: primeiro nas listas (depois de estar aberta)
+    recommended: [desc(stores.isOpen), desc(sql`(${stores.plan} = 'featured')`), desc(sql`${stores.ratingAvg} * ln(${stores.ratingCount} + 2)`)],
     rating: [desc(stores.ratingAvg), desc(stores.ratingCount)],
     delivery_time: [asc(stores.deliveryTimeMin)],
     delivery_fee: [asc(stores.deliveryFee)],

@@ -48,7 +48,7 @@ export async function quoteParcel(input: { pickup: Point; dropoff: Point; size: 
   const sizeFee = sizeFeeFor(input.size);
   // Nos envios não há comissão de comida a pagar o estafeta: o preço cobre sempre o que ele ganha + uma margem.
   const rate = input.size === "large" ? "car" : "moto";
-  const rider = riderPayFor({ pickupKm: 2, dropKm: km, vehicle: rate, at: new Date(), busy, rate });
+  const rider = riderPayFor({ pickupKm: 2, dropKm: km, vehicle: rate, at: new Date(), busy, rate, noFloor: true });
   const riderShare = Math.round((sizeFee * config.parcelRiderSharePct) / 100);
   const floorFee = Math.ceil(((rider.total * (1 + config.parcelMinMarginPct / 100)) + riderShare - sizeFee) / 50) * 50;
   const deliveryFee = Math.max(customerDeliveryFee(km, busy, 1000, rate), floorFee);

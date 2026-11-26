@@ -51,6 +51,8 @@ const AdminDashboard = lazy(() => import("@/pages/admin/AdminDashboard"));
 const AdminOrders = lazy(() => import("@/pages/admin/AdminOrders"));
 const PartnerAds = lazy(() => import("@/pages/partner/PartnerAds"));
 const PartnerPayouts = lazy(() => import("@/pages/partner/PartnerPayouts"));
+const PartnerInvoices = lazy(() => import("@/pages/partner/PartnerInvoices"));
+const AdminInvoices = lazy(() => import("@/pages/admin/AdminInvoices"));
 const AdminAudit = lazy(() => import("@/pages/admin/AdminAudit"));
 const AdminTeam = lazy(() => import("@/pages/admin/AdminTeam"));
 const AdminFinance = lazy(() => import("@/pages/admin/AdminFinance"));
@@ -94,6 +96,8 @@ function Routes() {
         <Route path="/parceiro/avaliacoes" component={PartnerReviews} />
         <Route path="/parceiro/estatisticas" component={PartnerStats} />
         <Route path="/parceiro/pagamentos" component={PartnerPayouts} />
+        <Route path="/parceiro/notas" component={PartnerInvoices} />
+        <Route path="/parceiro/notas/:id" component={PartnerInvoices} />
         <Route path="/parceiro/publicidade" component={PartnerAds} />
 
         <Route path="/estafeta" component={DriverHome} />
@@ -104,6 +108,8 @@ function Routes() {
         <Route path="/admin/despacho" component={AdminDispatch} />
         <Route path="/admin/viagens" component={AdminRides} />
         <Route path="/admin/financas" component={AdminFinance} />
+        <Route path="/admin/notas" component={AdminInvoices} />
+        <Route path="/admin/notas/:id" component={AdminInvoices} />
         <Route path="/admin/equipa" component={AdminTeam} />
         <Route path="/admin/registo" component={AdminAudit} />
         <Route path="/admin/lojas" component={AdminStores} />

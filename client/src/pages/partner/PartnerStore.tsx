@@ -18,6 +18,7 @@ import { usePartnerTabs, usePartnerTitle } from "./PartnerOrders";
 import { PinPicker } from "@/components/OrderMap";
 import { ChangePassword } from "@/components/ChangePassword";
 import { useStoreVocab } from "@/lib/storeVocab";
+import { PlanPicker } from "@/components/PlanPicker";
 
 export default function PartnerStore() {
   const tabs = usePartnerTabs();
@@ -25,6 +26,7 @@ export default function PartnerStore() {
   return (
     <Guard roles={["supplier"]}>
       <PanelShell title={title} tabs={tabs}>
+        <PlanPicker />
         <StoreForm />
         <PosIntegration />
         <div className="mx-auto mt-6 max-w-3xl"><ChangePassword /></div>

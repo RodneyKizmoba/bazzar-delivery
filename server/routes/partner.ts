@@ -5,6 +5,7 @@ import { db } from "../db";
 import {
   menuItemInputSchema, menuItems, menuSections, optionGroups, options, orderItems, orders, reviews, storeUpdateSchema,
   stores, users, type Store,
+  STORE_PLANS,
 } from "@shared/schema";
 import { ah, forbidden, idParam, notFound, parse } from "../lib/http";
 import { requireRole } from "../lib/auth";
@@ -14,6 +15,8 @@ import { AD_DAYS, adsOf, buyAd, cancelAd } from "../lib/ads";
 import { available, payoutsOf } from "../lib/payouts";
 import { nextPayday } from "../lib/fees";
 import { config } from "../config";
+import { commissionRateFor, planOptionsFor } from "../lib/commission";
+import { getInvoice, listInvoices } from "../lib/invoices";
 import { assertSafeWebhookUrl, newApiKey, newWebhookSecret, sendPosWebhook, withoutSecrets } from "../lib/pos";
 
 export const partnerRouter = Router();
@@ -81,15 +84,37 @@ partnerRouter.post("/orders/:id/status", ah(async (req, res) => {
 partnerRouter.get("/finance", ah(async (req, res) => {
   const s = await myStore(req);
   res.json({
-    ...(await account("store", s.id)), commissionPct: s.commissionPct ?? config.commissionPct, payoutMethod: s.payoutMethod, payoutReference: s.payoutReference,
+    ...(await account("store", s.id)), commissionPct: commissionRateFor(s, "delivery"), payoutMethod: s.payoutMethod, payoutReference: s.payoutReference,
     available: await available("store", s.id), nextPayday: nextPayday(new Date()), payouts: await payoutsOf("store", s.id),
   });
 }));
 
-/** Comissões por forma de entrega (para a loja decidir). */
+/** Comissões por forma de entrega e planos (para a loja decidir). */
 partnerRouter.get("/commissions", ah(async (req, res) => {
   const s = await myStore(req);
-  res.json({ delivery: s.commissionPct ?? config.commissionPct, pickup: config.commissionPickupPct, storeDelivery: config.commissionSelfDeliveryPct });
+  res.json({
+    delivery: commissionRateFor(s, "delivery"), pickup: commissionRateFor(s, "pickup"), storeDelivery: commissionRateFor(s, "store_delivery"),
+    plan: s.plan, counterPrice: s.counterPrice, commissionFreeUntil: s.commissionFreeUntil, custom: s.commissionPct != null,
+    options: planOptionsFor(s),
+  });
+}));
+
+/** Escolher o plano (Básico / Padrão / Destaque) e o compromisso "mesmo preço que no balcão". */
+partnerRouter.patch("/plan", ah(async (req, res) => {
+  const s = await myStore(req);
+  const input = parse(z.object({ plan: z.enum(STORE_PLANS).optional(), counterPrice: z.boolean().optional() }), req.body);
+  const [u] = await db.update(stores).set(input).where(eq(stores.id, s.id)).returning();
+  res.json({ plan: u.plan, counterPrice: u.counterPrice, delivery: commissionRateFor(u, "delivery") });
+}));
+
+/** Notas de comissões da loja. */
+partnerRouter.get("/invoices", ah(async (req, res) => {
+  const s = await myStore(req);
+  res.json({ invoices: await listInvoices({ storeId: s.id }) });
+}));
+partnerRouter.get("/invoices/:id", ah(async (req, res) => {
+  const s = await myStore(req);
+  res.json({ invoice: await getInvoice(idParam(req), s.id) });
 }));
 
 /** Publicidade: as minhas campanhas, preço e comprar/cancelar. */

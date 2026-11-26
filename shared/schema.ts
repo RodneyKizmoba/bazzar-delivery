@@ -25,6 +25,9 @@ export const DIETARY_TAGS = ["vegan", "vegetarian", "gluten_free", "halal", "lac
 export const ALLERGENS = ["gluten", "dairy", "eggs", "nuts", "peanuts", "seafood", "fish", "soy"] as const;
 // "vintage" = Desapega (moda nova, vintage e em segunda mão); "jewelry" = bijuteria e acessórios;
 // "other" = qualquer outro negócio (descreve-se nas categorias) — nenhum negócio fica de fora
+/** Planos da loja (modelo Uber Eats): quanto maior a comissão, mais visibilidade. */
+export const STORE_PLANS = ["basic", "standard", "featured"] as const;
+export type StorePlan = (typeof STORE_PLANS)[number];
 export const STORE_TYPES = ["restaurant", "bakery", "grocery", "pharmacy", "beauty", "flowers", "retail", "vintage", "jewelry", "other"] as const;
 export const PAYOUT_METHODS = ["multicaixa_express", "unitel_money", "bank_transfer"] as const;
 // tipo de veículo do estafeta: muda a velocidade estimada, o valor por entrega e o mínimo por hora
@@ -143,7 +146,10 @@ export const stores = pgTable("stores", {
   deliveryFee: integer("delivery_fee").notNull().default(1000),
   minOrder: integer("min_order").notNull().default(0),
   prepTimeMin: integer("prep_time_min").notNull().default(20),
-  commissionPct: real("commission_pct"), // comissão PedeJá desta loja (%); vazio = valor geral (COMMISSION_PCT)
+  commissionPct: real("commission_pct"), // comissão personalizada (%), negociada pelo admin; vazio = tipo de loja + plano
+  plan: text("plan").$type<StorePlan>().notNull().default("standard"), // Básico / Padrão / Destaque (ver STORE_PLANS)
+  counterPrice: boolean("counter_price").notNull().default(false), // compromisso "mesmo preço que no balcão" (−2 pontos)
+  commissionFreeUntil: timestamp("commission_free_until"), // 1.º mês sem comissão (a contar da aprovação)
   deliveryTimeMin: integer("delivery_time_min").notNull().default(35), // estimativa total
   ratingAvg: real("rating_avg").notNull().default(0),
   ratingCount: integer("rating_count").notNull().default(0),
@@ -265,6 +271,7 @@ export const orders = pgTable("orders", {
   storeEarning: integer("store_earning"),
   riderEarning: integer("rider_earning"),
   settledAt: timestamp("settled_at"),
+  invoiceId: integer("invoice_id"), // fatura de comissões em que esta encomenda entrou
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
   deliveredAt: timestamp("delivered_at"),
@@ -288,6 +295,9 @@ export const orderItems = pgTable("order_items", {
   selectedOptions: jsonb("selected_options").$type<SelectedOption[]>().notNull().default([]),
   specialInstructions: text("special_instructions"),
   addedBy: text("added_by"), // nome do participante (encomenda em grupo)
+  // comissão PedeJá sobre este artigo (calculada na entrega; aparece na fatura da loja)
+  commissionPct: real("commission_pct"),
+  commissionAmount: integer("commission_amount"),
 });
 export type OrderItem = typeof orderItems.$inferSelect;
 
@@ -304,7 +314,7 @@ export type OrderEvent = typeof orderEvents.$inferSelect;
 // ---------------------------------------------------------------------------
 // Contas: quanto a PedeJá deve a cada loja e estafeta (positivo) ou eles devem (negativo)
 // ---------------------------------------------------------------------------
-export const LEDGER_KINDS = ["order_earning", "cash_collected", "payout", "cash_deposit", "adjustment", "ads"] as const;
+export const LEDGER_KINDS = ["order_earning", "cash_collected", "payout", "cash_deposit", "adjustment", "ads", "invoice_vat"] as const;
 export type LedgerKind = (typeof LEDGER_KINDS)[number];
 export const ledgerEntries = pgTable("ledger_entries", {
   id: serial("id").primaryKey(),
@@ -316,6 +326,7 @@ export const ledgerEntries = pgTable("ledger_entries", {
   amount: integer("amount").notNull(), // Kz; + a PedeJá deve, − deve à PedeJá
   note: text("note"),
   reference: text("reference"), // nº da transferência / recibo
+  invoiceId: integer("invoice_id"), // publicidade/IVA já faturados
   createdBy: integer("created_by"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => [
@@ -373,6 +384,47 @@ export const sponsorships = pgTable("sponsorships", {
   cancelledAt: timestamp("cancelled_at"),
 }, (t) => [index("sponsorships_store_idx").on(t.storeId), index("sponsorships_active_idx").on(t.status, t.endsAt)]);
 export type Sponsorship = typeof sponsorships.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// Notas de comissões (mensais): o que a PedeJá cobra a cada loja (comissão por artigo vendido + publicidade).
+// Não são a fatura fiscal: essa sai do software certificado pela AGT (Decreto Presidencial 71/25), e o seu n.º fica em agtInvoiceNumber.
+// ---------------------------------------------------------------------------
+export type InvoiceLine = {
+  kind: "item" | "ads";
+  date: string; // AAAA-MM-DD
+  orderNumber?: string;
+  description: string; // artigo (com quantidade) ou campanha "Patrocinado"
+  quantity: number;
+  amount: number; // valor vendido (artigo) ou preço da campanha, Kz
+  commissionPct?: number;
+  commission: number; // o que a PedeJá cobra nesta linha, Kz (sem IVA)
+};
+export const storeInvoices = pgTable("store_invoices", {
+  id: serial("id").primaryKey(),
+  number: text("number").notNull(), // FC 2026/000001
+  storeId: integer("store_id").notNull().references(() => stores.id),
+  periodStart: timestamp("period_start").notNull(), // 1.º dia do mês, 00:00 Luanda
+  periodEnd: timestamp("period_end").notNull(), // 1.º dia do mês seguinte
+  // dados da loja no momento da emissão (a fatura não muda se a loja mudar depois)
+  storeName: text("store_name").notNull(),
+  storeNif: text("store_nif"),
+  storeAddress: text("store_address").notNull(),
+  lines: jsonb("lines").$type<InvoiceLine[]>().notNull(),
+  salesTotal: integer("sales_total").notNull(), // valor dos artigos vendidos
+  commissionTotal: integer("commission_total").notNull(),
+  adsTotal: integer("ads_total").notNull(),
+  netTotal: integer("net_total").notNull(), // comissão + publicidade, sem IVA
+  vatPct: real("vat_pct").notNull(),
+  vatAmount: integer("vat_amount").notNull(),
+  total: integer("total").notNull(), // net + IVA
+  status: text("status").$type<"issued" | "void">().notNull().default("issued"),
+  // a fatura fiscal é emitida no software certificado pela AGT; aqui fica o seu número para cruzar
+  agtInvoiceNumber: text("agt_invoice_number"),
+  issuedAt: timestamp("issued_at").notNull().defaultNow(),
+  issuedBy: integer("issued_by"),
+  voidedAt: timestamp("voided_at"),
+}, (t) => [uniqueIndex("store_invoices_number_idx").on(t.number), index("store_invoices_store_idx").on(t.storeId)]);
+export type StoreInvoice = typeof storeInvoices.$inferSelect;
 
 export interface RiderPayDetail {
   vehicle: VehicleType; pickupKm: number; dropKm: number; estMinutes: number;

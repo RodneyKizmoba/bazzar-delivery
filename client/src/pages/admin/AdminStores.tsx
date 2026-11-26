@@ -21,6 +21,7 @@ interface AdminStore {
   id: number; name: string; storeType: string; zone: string; street: string; phone: string; isApproved: boolean; isChain: boolean; isHomeBusiness?: boolean; theme?: string | null;
   isOpen: boolean; deliveryFee: number; businessNif: string | null; ownerName: string | null; ownerPhone: string | null;
   logoUrl: string | null; createdAt: string; ratingAvg: number; ratingCount: number; zonesServed: string[];
+  plan?: "basic" | "standard" | "featured"; effectiveCommissionPct?: number; commissionFreeUntil?: string | null;
 }
 
 export default function AdminStores() {
@@ -57,7 +58,7 @@ function StoreRow({ store }: { store: AdminStore }) {
   const [fee, setFee] = useState(String(store.deliveryFee));
   const [confirmSuspend, setConfirmSuspend] = useState(false);
   const m = useMutation({
-    mutationFn: (body: Partial<Pick<AdminStore, "isApproved" | "isChain" | "isOpen" | "deliveryFee" | "isHomeBusiness" | "theme">>) => patch(`/api/admin/stores/${store.id}`, body),
+    mutationFn: (body: Partial<Pick<AdminStore, "isApproved" | "isChain" | "isOpen" | "deliveryFee" | "isHomeBusiness" | "theme" | "plan">>) => patch(`/api/admin/stores/${store.id}`, body),
     onSuccess: () => {
       queryClient.invalidateQueries({ predicate: (q) => typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).startsWith("/api/admin/stores") });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
@@ -101,6 +102,16 @@ function StoreRow({ store }: { store: AdminStore }) {
         <div className="flex items-center gap-2">
           <Switch id={`open-${store.id}`} checked={store.isOpen} disabled={m.isPending} onCheckedChange={(v) => m.mutate({ isOpen: v })} />
           <Label htmlFor={`open-${store.id}`}>{store.isOpen ? t(T.open) : t(T.closed)}</Label>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
+          <Label htmlFor={`plan-${store.id}`}>{t({ pt: "Plano", en: "Plan", fr: "Formule" })}</Label>
+          <select id={`plan-${store.id}`} className="h-9 rounded-md border px-2 text-sm" value={store.plan ?? "standard"} disabled={m.isPending}
+            onChange={(e) => m.mutate({ plan: e.target.value as AdminStore["plan"] })}>
+            <option value="basic">{t({ pt: "Básico", en: "Basic", fr: "Basique" })}</option>
+            <option value="standard">{t({ pt: "Padrão", en: "Standard", fr: "Standard" })}</option>
+            <option value="featured">{t({ pt: "Destaque", en: "Featured", fr: "Vedette" })}</option>
+          </select>
+          {store.effectiveCommissionPct != null && <span className="text-sm text-neutral-600">{t({ pt: `Comissão actual: ${store.effectiveCommissionPct}%`, en: `Current commission: ${store.effectiveCommissionPct}%`, fr: `Commission actuelle : ${store.effectiveCommissionPct} %` })}{store.commissionFreeUntil && new Date(store.commissionFreeUntil) > new Date() ? t({ pt: ` (1.º mês grátis até ${dateTime(store.commissionFreeUntil)})`, en: ` (free first month until ${dateTime(store.commissionFreeUntil)})`, fr: ` (1er mois gratuit jusqu'au ${dateTime(store.commissionFreeUntil)})` }) : ""}</span>}
         </div>
         <form className="flex items-end gap-2 sm:col-span-2" onSubmit={(e) => { e.preventDefault(); if (feeValid) m.mutate({ deliveryFee: feeNum }); }}>
           <div className="space-y-1">

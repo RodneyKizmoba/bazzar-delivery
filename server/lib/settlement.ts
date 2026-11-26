@@ -1,7 +1,8 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db, type DbOrTx } from "../db";
 import { config } from "../config";
-import { ledgerEntries, orders, stores, type Fulfilment, type Order } from "@shared/schema";
+import { ledgerEntries, orderItems, orders, stores, type Fulfilment, type Order } from "@shared/schema";
+import { commissionRateFor, itemCommissions } from "./commission";
 
 /**
  * Acerto de contas (fase 3).
@@ -23,8 +24,8 @@ import { ledgerEntries, orders, stores, type Fulfilment, type Order } from "@sha
  *  - estafeta: valor da entrega (riderPay) + espera + 100% da gorjeta (independente do que o cliente pagou de entrega);
  *  - PedeJá: comissão + taxa de entrega do cliente + taxa de serviço + encomenda pequena + prioridade − descontos − pagamento ao estafeta.
  */
-export function splitOrder(o: Pick<Order, "subtotal" | "deliveryFee" | "riderTip" | "priorityFee" | "discount" | "total" | "serviceFee" | "smallOrderFee" | "riderPay" | "riderWaitFee"> & { fulfilment?: Fulfilment }, pct: number, hasRider = true) {
-  const commission = Math.round((o.subtotal * pct) / 100);
+export function splitOrder(o: Pick<Order, "subtotal" | "deliveryFee" | "riderTip" | "priorityFee" | "discount" | "total" | "serviceFee" | "smallOrderFee" | "riderPay" | "riderWaitFee"> & { fulfilment?: Fulfilment }, pct: number, hasRider = true, commissionAmount?: number) {
+  const commission = commissionAmount ?? Math.round((o.subtotal * pct) / 100);
   if (o.fulfilment === "pickup" || o.fulfilment === "store_delivery") {
     // a loja entrega (ou o cliente levanta): a taxa de entrega e a gorjeta são da loja; sem estafeta PedeJá
     const storeEarning = o.subtotal - commission + o.deliveryFee + o.riderTip;
@@ -38,7 +39,7 @@ export function splitOrder(o: Pick<Order, "subtotal" | "deliveryFee" | "riderTip
   return { commission, storeEarning, riderEarning, riderPay, platform };
 }
 
-/** Comissão conforme a forma de entrega: estafeta PedeJá (da loja ou geral), recolha, ou estafetas da loja. */
+/** Comissão conforme a forma de entrega (versão simples, sem plano nem tipo de loja). */
 export function commissionFor(fulfilment: Fulfilment, storePct: number | null) {
   if (fulfilment === "pickup") return config.commissionPickupPct;
   if (fulfilment === "store_delivery") return config.commissionSelfDeliveryPct;
@@ -48,9 +49,15 @@ export function commissionFor(fulfilment: Fulfilment, storePct: number | null) {
 /** Chamado dentro da transacção que marca a encomenda como entregue. Idempotente. */
 export async function settleDeliveredOrder(tx: DbOrTx, order: Order) {
   if (order.settledAt) return;
-  const [store] = await tx.select({ commissionPct: stores.commissionPct }).from(stores).where(eq(stores.id, order.storeId));
-  const pct = commissionFor(order.fulfilment, store?.commissionPct ?? null);
-  const s = splitOrder(order, pct, !!order.driverId);
+  const [store] = await tx.select({
+    storeType: stores.storeType, plan: stores.plan, commissionPct: stores.commissionPct, counterPrice: stores.counterPrice, commissionFreeUntil: stores.commissionFreeUntil,
+  }).from(stores).where(eq(stores.id, order.storeId));
+  // envios não têm artigos de loja: sem comissão
+  const pct = order.kind === "parcel" || !store ? 0 : commissionRateFor(store, order.fulfilment, order.createdAt);
+  const items = await tx.select({ id: orderItems.id, unitPrice: orderItems.unitPrice, quantity: orderItems.quantity }).from(orderItems).where(eq(orderItems.orderId, order.id));
+  const ic = itemCommissions(items, pct);
+  for (const l of ic.lines) await tx.update(orderItems).set({ commissionPct: l.commissionPct, commissionAmount: l.commissionAmount }).where(eq(orderItems.id, l.id));
+  const s = splitOrder(order, pct, !!order.driverId, items.length ? ic.total : undefined);
   await tx.update(orders).set({
     commissionPct: pct, commissionAmount: s.commission, storeEarning: s.storeEarning,
     riderEarning: s.riderEarning, settledAt: new Date(),

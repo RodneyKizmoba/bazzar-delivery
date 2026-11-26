@@ -2,7 +2,7 @@ import { Router } from "express";
 import { and, desc, eq, gte, ilike, inArray, ne, or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
-import { ADMIN_PERMS, bannerInputSchema, banners, orders, promoCodes, promoInputSchema, rides, stores, subscriptions, taxiDrivers, users, ORDER_STATUSES, RIDE_STATUSES } from "@shared/schema";
+import { ADMIN_PERMS, bannerInputSchema, banners, orders, promoCodes, promoInputSchema, rides, stores, subscriptions, taxiDrivers, users, ORDER_STATUSES, RIDE_STATUSES, STORE_PLANS } from "@shared/schema";
 import { ah, badRequest, conflict, HttpError, idParam, notFound, parse } from "../lib/http";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "crypto";
@@ -16,6 +16,8 @@ import { closeOffersOnClaim, redispatch, riderPayQuote } from "../lib/dispatchEn
 import { account } from "../lib/settlement";
 import { markPayout, runWeeklyPayouts } from "../lib/payouts";
 import { adsOf, buyAd, cancelAd } from "../lib/ads";
+import { generateInvoices, getInvoice, listInvoices, setAgtNumber, voidInvoice } from "../lib/invoices";
+import { commissionRateFor } from "../lib/commission";
 import { nextPayday } from "../lib/fees";
 import { config } from "../config";
 import { ledgerEntries } from "@shared/schema";
@@ -34,7 +36,7 @@ const AREAS: [RegExp, AdminPerm | "owner" | null][] = [
   [/^\/stats$/, null], // resumo: toda a equipa
   [/^\/charts/, "finance"],
   [/^\/(orders|dispatch|rides)(\/|$)/, "orders"],
-  [/^\/(finance|ledger|payouts)(\/|\.|$)/, "finance"],
+  [/^\/(finance|ledger|payouts|invoices)(\/|\.|$)/, "finance"],
   [/^\/(stores|users|drivers)(\/|$)/, "people"],
   [/^\/(promos|banners|ads)(\/|$)/, "marketing"],
   [/^\/staff(\/|$)/, "owner"],
@@ -168,7 +170,8 @@ adminRouter.get("/finance", ah(async (req, res) => {
   }).from(orders).where(and(eq(orders.status, "delivered"), gte(orders.deliveredAt, since)));
   const storeRows = await db.execute(sql`
     select s.id, s.name, s.payout_method as "payoutMethod", s.payout_reference as "payoutReference",
-      coalesce(s.commission_pct, ${config.commissionPct})::float as "commissionPct", s.commission_pct is not null as "customCommission",
+      s.commission_pct::float as "commissionPct", s.commission_pct is not null as "customCommission",
+      s.store_type as "storeType", s.plan, s.counter_price as "counterPrice", s.commission_free_until as "commissionFreeUntil",
       coalesce((select sum(l.amount) from ledger_entries l where l.party_type = 'store' and l.party_id = s.id), 0)::int as balance
     from stores s where s.is_approved order by balance desc, s.name`);
   const riderRows = await db.execute(sql`
@@ -181,7 +184,11 @@ adminRouter.get("/finance", ah(async (req, res) => {
     // receita PedeJá = comissão + taxas do cliente (entrega, serviço, pequena, prioridade) − descontos − pagamento aos estafetas (sem gorjetas)
     days, totals: { ...t, platformNet: t.commission + t.deliveryFees + t.serviceFees + t.smallOrderFees + t.priorityFees - t.discounts - (t.riderPay - t.tips) },
     defaultCommissionPct: config.commissionPct, riderCashLimit: config.riderCashLimit,
-    stores: storeRows.rows, riders: riderRows.rows,
+    // comissão efectiva de cada loja: tipo de negócio + plano (ou a negociada), com o compromisso de preço e o 1.º mês
+    stores: (storeRows.rows as any[]).map(({ storeType, plan, counterPrice, commissionFreeUntil, ...r }) => ({
+      ...r, plan, commissionPct: commissionRateFor({ storeType, plan, counterPrice, commissionPct: r.commissionPct, commissionFreeUntil: commissionFreeUntil ? new Date(commissionFreeUntil) : null }, "delivery"),
+    })),
+    riders: riderRows.rows,
   });
 }));
 
@@ -413,17 +420,47 @@ adminRouter.get("/stores", ah(async (req, res) => {
   const rows = await db.select({ s: stores, ownerName: users.fullName, ownerPhone: users.phone }).from(stores)
     .leftJoin(users, eq(users.id, stores.ownerId))
     .where(and(eq(stores.isSystem, false), pendingOnly ? eq(stores.isApproved, false) : undefined)).orderBy(desc(stores.createdAt)).limit(500);
-  res.json({ stores: rows.map((r) => ({ ...withoutSecrets(r.s), ownerName: r.ownerName, ownerPhone: r.ownerPhone })) });
+  res.json({ stores: rows.map((r) => ({ ...withoutSecrets(r.s), ownerName: r.ownerName, ownerPhone: r.ownerPhone, effectiveCommissionPct: commissionRateFor(r.s, "delivery") })) });
 }));
 
 adminRouter.patch("/stores/:id", ah(async (req, res) => {
   const input = parse(z.object({
     isApproved: z.boolean().optional(), isChain: z.boolean().optional(), isOpen: z.boolean().optional(), isHomeBusiness: z.boolean().optional(),
     deliveryFee: z.number().int().min(0).optional(), commissionPct: z.number().min(0).max(50).nullable().optional(), theme: z.enum(STORE_THEME_IDS).nullable().optional(), zonesServed: z.array(z.string().trim().min(2).max(60)).optional(),
+    plan: z.enum(STORE_PLANS).optional(), counterPrice: z.boolean().optional(),
   }), req.body);
-  const [s] = await db.update(stores).set(input).where(eq(stores.id, idParam(req))).returning();
+  const [before] = await db.select({ isApproved: stores.isApproved, freeUntil: stores.commissionFreeUntil }).from(stores).where(eq(stores.id, idParam(req)));
+  if (!before) throw notFound("Loja não encontrada");
+  // 1.º mês sem comissão: começa quando a loja é aprovada pela primeira vez
+  const extra = input.isApproved && !before.isApproved && !before.freeUntil && config.commissionFreeDays > 0
+    ? { commissionFreeUntil: new Date(Date.now() + config.commissionFreeDays * 86_400_000) } : {};
+  const [s] = await db.update(stores).set({ ...input, ...extra }).where(eq(stores.id, idParam(req))).returning();
   if (!s) throw notFound("Loja não encontrada");
   res.json({ store: withoutSecrets(s) });
+}));
+
+// ---------------------------------------------------------------------------
+// Notas de comissões (mensais, por loja)
+// ---------------------------------------------------------------------------
+adminRouter.get("/invoices", ah(async (req, res) => {
+  const month = typeof req.query.month === "string" && req.query.month ? req.query.month : undefined;
+  const storeId = req.query.storeId ? Number(req.query.storeId) : undefined;
+  res.json({ invoices: await listInvoices({ month, storeId }), vatPct: config.invoiceVatPct });
+}));
+adminRouter.post("/invoices/generate", ah(async (req, res) => {
+  const { month } = parse(z.object({ month: z.string() }), req.body);
+  const created = await generateInvoices(month, req.user!.id);
+  res.status(201).json({ created: created.map(({ lines, ...r }) => r) });
+}));
+adminRouter.get("/invoices/:id", ah(async (req, res) => {
+  res.json({ invoice: await getInvoice(idParam(req)) });
+}));
+adminRouter.patch("/invoices/:id", ah(async (req, res) => {
+  const { agtInvoiceNumber } = parse(z.object({ agtInvoiceNumber: z.string().trim().max(60).nullable() }), req.body);
+  res.json({ invoice: await setAgtNumber(idParam(req), agtInvoiceNumber || null) });
+}));
+adminRouter.post("/invoices/:id/void", ah(async (req, res) => {
+  res.json({ invoice: await voidInvoice(idParam(req), req.user!.id) });
 }));
 
 adminRouter.get("/users", ah(async (req, res) => {

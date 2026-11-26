@@ -38,21 +38,24 @@ check("busy +20%, very busy +40% (4 km: 500 → 600 / 700)", customerDeliveryFee
 check("busy levels from waiting orders vs free riders", busyLevelFrom(0, 3) === 0 && busyLevelFrom(1, 0) === 0 && busyLevelFrom(3, 2) === 1 && busyLevelFrom(5, 1) === 2 && busyLevelFrom(4, 3) === 1);
 
 // --- estafeta
-const moto = riderPayFor({ pickupKm: 2, dropKm: 4, vehicle: "moto", at: NORMAL, busy: 0 });
+const moto = riderPayFor({ pickupKm: 2, dropKm: 4, vehicle: "moto", at: NORMAL, busy: 0, noFloor: true });
 check("moto, 4 km delivery, normal hour -> 88% of the 500 Kz fee = 440 Kz", moto.total === 440 && moto.base === 260 && moto.distance === 180, moto);
-const six = riderPayFor({ pickupKm: 2, dropKm: 6, vehicle: "moto", at: NORMAL, busy: 0 });
+const six = riderPayFor({ pickupKm: 2, dropKm: 6, vehicle: "moto", at: NORMAL, busy: 0, noFloor: true });
 check("moto, 6 km -> 88% of 650 = 572 → 570 Kz (as in the pricing sheet)", six.total === 570, six);
-const car = riderPayFor({ pickupKm: 2, dropKm: 4, vehicle: "car", at: NORMAL, busy: 0 });
-const bike = riderPayFor({ pickupKm: 2, dropKm: 4, vehicle: "bike", at: NORMAL, busy: 0 });
+const car = riderPayFor({ pickupKm: 2, dropKm: 4, vehicle: "car", at: NORMAL, busy: 0, noFloor: true });
+const bike = riderPayFor({ pickupKm: 2, dropKm: 4, vehicle: "bike", at: NORMAL, busy: 0, noFloor: true });
 check("car pays more than moto, bike less", car.total > moto.total && bike.total < moto.total, [car.total, moto.total, bike.total]);
 const big = riderPayFor({ pickupKm: 2, dropKm: 6, vehicle: "car", at: NORMAL, busy: 0, rate: "car" });
 check("large parcel (car rate), 6 km -> 88% of 1 350 ≈ 1 190 Kz", big.total === 1190, big);
-const night = riderPayFor({ pickupKm: 2, dropKm: 4, vehicle: "moto", at: new Date("2026-11-25T22:30:00Z"), busy: 0 });
+const night = riderPayFor({ pickupKm: 2, dropKm: 4, vehicle: "moto", at: new Date("2026-11-25T22:30:00Z"), busy: 0, noFloor: true });
 check("night (23:30 Luanda) +20%", night.band === "night" && night.timeBonus === 90 && night.total === 530, night);
-const peak = riderPayFor({ pickupKm: 2, dropKm: 4, vehicle: "moto", at: new Date("2026-11-25T11:30:00Z"), busy: 2 });
+const peak = riderPayFor({ pickupKm: 2, dropKm: 4, vehicle: "moto", at: new Date("2026-11-25T11:30:00Z"), busy: 2, noFloor: true });
 check("lunch peak +10% and very busy +30%", peak.band === "peak" && peak.timeBonus === 40 && peak.busyBonus === 130, peak);
-const slow = riderPayFor({ pickupKm: 0.2, dropKm: 0.3, vehicle: "car", at: NORMAL, busy: 0 });
-check("hourly floor is off by default (RIDER_HOURLY_FLOOR=1 turns it on)", slow.floorTopUp === 0, slow);
+const floored = riderPayFor({ pickupKm: 2, dropKm: 6, vehicle: "moto", at: NORMAL, busy: 0 });
+check("hourly floor 1 500 Kz/h on delivery time: 6 km (28 min) moto -> 700 Kz (570 + 130 top-up)", floored.estMinutes === 28 && floored.floorTopUp === 130 && floored.total === 700, floored);
+const carFloor = riderPayFor({ pickupKm: 0.2, dropKm: 0.3, vehicle: "car", at: NORMAL, busy: 0 });
+check("car floor in proportion (2 000 Kz/h)", carFloor.total >= Math.round((2000 * carFloor.estMinutes) / 60), carFloor);
+check("no floor when asked (parcels)", riderPayFor({ pickupKm: 2, dropKm: 6, vehicle: "moto", at: NORMAL, busy: 0, noFloor: true }).floorTopUp === 0);
 const noGps = riderPayFor({ pickupKm: null, dropKm: null, vehicle: null, at: NORMAL, busy: 0 });
 check("no GPS: assumes 2 km + 4 km on a moto", noGps.vehicle === "moto" && noGps.pickupKm === 2 && noGps.dropKm === 4);
 check("time bands", timeBand(new Date("2026-11-25T04:00:00Z")) === "night" && timeBand(new Date("2026-11-25T18:30:00Z")) === "peak" && timeBand(NORMAL) === "normal");
@@ -67,7 +70,7 @@ check("wait: capped at 30 paid minutes (900 Kz)", waitFeeFor(t0, after(120)) ===
 check("wait: never arrived -> 0", waitFeeFor(null, after(20)) === 0);
 
 // --- pagamentos
-check("instant cash-out fee 2%, minimum 200", instantCashoutFee(5000) === 200 && instantCashoutFee(50000) === 1000);
+check("instant cash-out fee 1%, minimum 200", instantCashoutFee(5000) === 200 && instantCashoutFee(50000) === 500);
 const wed = new Date("2026-11-25T12:00:00Z"); // quarta
 check("week starts Monday 00:00 Luanda (Sunday 23:00 UTC)", weekStartLuanda(wed).toISOString() === "2026-11-22T23:00:00.000Z", weekStartLuanda(wed));
 check("next payday from Wednesday = Tuesday 1 Dec (Luanda)", nextPayday(wed).toISOString() === "2026-11-30T23:00:00.000Z", nextPayday(wed));

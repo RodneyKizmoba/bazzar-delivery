@@ -193,6 +193,13 @@ async function validatePromo(db: DbOrTx, code: string, user: User | null, store:
   return promo;
 }
 
+/** Mínimo PedeJá por encomenda: abaixo disto a encomenda é recusada (não há encomendas de 500 ou 1 000 Kz). */
+export function assertMinOrder(subtotal: number) {
+  if (config.minOrderKz > 0 && subtotal < config.minOrderKz) {
+    throw badRequest(`O valor mínimo de uma encomenda na PedeJá é ${config.minOrderKz.toLocaleString("pt-AO")} Kz. Junte mais ${(config.minOrderKz - subtotal).toLocaleString("pt-AO")} Kz em produtos.`, "BELOW_MIN_ORDER");
+  }
+}
+
 export async function buildQuote(
   db: DbOrTx,
   opts: {
@@ -209,9 +216,10 @@ export async function buildQuote(
   const subtotal = lines.reduce((s, l) => s + l.lineTotal, 0);
   // abaixo do mínimo já não bloqueia: paga a diferença como "taxa de encomenda pequena"
   const smallOrderFee = smallOrderFeeFor(subtotal, store.minOrder);
-  const serviceFee = serviceFeeFor(subtotal);
+  let serviceFee = serviceFeeFor(subtotal);
 
   const isPlus = opts.user ? await hasActivePlus(db, opts.user.id) : false;
+  if (isPlus) serviceFee = Math.min(serviceFee, config.plusServiceFeeMax); // Plus: taxa de serviço com teto
   // como chega ao cliente: recolha (se a loja aceitar), estafetas da própria loja, ou estafeta PedeJá
   if (opts.fulfilment === "pickup" && !store.offersPickup) throw badRequest(`${store.name} não tem recolha na loja.`, "PICKUP_NOT_OFFERED");
   const fulfilment: Fulfilment = opts.fulfilment === "pickup" ? "pickup" : store.ownDelivery ? "store_delivery" : "delivery";
@@ -224,6 +232,13 @@ export async function buildQuote(
   if (isPlus && fulfilment === "delivery" && subtotal >= config.plusFreeDeliveryMinOrder) {
     plusSavings = deliveryFee;
     deliveryFee = 0;
+  }
+
+  // teto às taxas: entrega + serviço nunca passam de FEE_CAP_PCT da comida; corta-se só a taxa de serviço
+  // (a entrega paga o estafeta e a taxa de encomenda pequena é a escolha do cliente, por isso não se cortam)
+  if (config.feeCapPct > 0 && subtotal > 0) {
+    const room = Math.floor((subtotal * config.feeCapPct) / 100) - deliveryFee;
+    if (serviceFee > room) serviceFee = Math.max(0, Math.floor(room / 10) * 10);
   }
 
   let discount = 0;
@@ -296,6 +311,7 @@ export function quoteToJson(q: Quote) {
     isPlus: q.isPlus,
     plusSavings: q.plusSavings,
     plusFreeDeliveryMinOrder: config.plusFreeDeliveryMinOrder,
+    minOrder: config.minOrderKz, // mínimo PedeJá por encomenda (abaixo disto não se pode encomendar)
     priorityOption: { fee: config.priorityFee, minutesSaved: config.priorityMinutesSaved },
   };
 }

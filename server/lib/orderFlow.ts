@@ -7,7 +7,7 @@ import {
 } from "@shared/schema";
 import { config } from "../config";
 import { badRequest, conflict, forbidden, notFound } from "./http";
-import { assertDailyCapacity, assertStoreCanTakeOrder, buildQuote, validateSchedule } from "./pricing";
+import { assertDailyCapacity, assertMinOrder, assertStoreCanTakeOrder, buildQuote, validateSchedule } from "./pricing";
 import { assertMethodAvailable, refundOrderPayment, startOrderPayment } from "./payments";
 import { notifyOrderStatus } from "./notify";
 import { notifyExternalDispatch } from "./dispatch";
@@ -95,6 +95,7 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
       priority: !!input.priority, riderTip: input.riderTip ?? 0, destination: pickup ? null : addr, fulfilment: input.fulfilment,
     });
     const store = quote.store;
+    assertMinOrder(quote.subtotal);
     validateSchedule(input.scheduledFor ?? null, store);
     assertStoreCanTakeOrder(store, input.scheduledFor ?? null);
     await tx.execute(sql`select pg_advisory_xact_lock(${store.id})`); // evita ultrapassar a capacidade diária em pedidos simultâneos
@@ -440,6 +441,7 @@ export async function modifyOrder(
         destination: (update.deliveryAddress as Order["deliveryAddress"] | undefined) ?? order.deliveryAddress, busyLevel: order.busyLevel as 0 | 1 | 2,
         fulfilment: order.fulfilment === "pickup" ? "pickup" : undefined,
       });
+      assertMinOrder(quote.subtotal);
       let discount = 0;
       if (order.promoCode) {
         const [promo] = await tx.select().from(promoCodes).where(eq(promoCodes.code, order.promoCode));

@@ -28,6 +28,7 @@ export const config = {
   // PedeJá Plus
   plusMonthlyPrice: num("PLUS_MONTHLY_PRICE", 2500),
   plusFreeDeliveryMinOrder: num("PLUS_FREE_DELIVERY_MIN_ORDER", 3000),
+  plusServiceFeeMax: num("PLUS_SERVICE_FEE_MAX", 500), // membros Plus nunca pagam mais do que isto de taxa de serviço
   priorityFee: num("PRIORITY_FEE", 500), // Kz a mais pela entrega prioritária
   priorityMinutesSaved: num("PRIORITY_MINUTES_SAVED", 10),
 
@@ -57,7 +58,19 @@ export const config = {
   presenceStaleMin: num("PRESENCE_STALE_MIN", 10), // sem GPS há mais de 10 min: deixa de receber ofertas
 
   // Dinheiro
-  commissionPct: num("COMMISSION_PCT", 20), // entrega com estafeta PedeJá (cada loja pode ter a sua)
+  commissionPct: num("COMMISSION_PCT", 20), // entrega com estafeta PedeJá, tipo de loja sem taxa própria (plano Padrão)
+  // comissão do plano Padrão por tipo de negócio (margens diferentes: medicamentos e mercearia ganham menos por artigo)
+  commissionByType: (() => {
+    const base: Record<string, number> = { restaurant: 20, bakery: 20, grocery: 15, pharmacy: 12, beauty: 18, flowers: 18, retail: 18, vintage: 18, jewelry: 18, other: 18 };
+    try { return { ...base, ...(process.env.COMMISSION_BY_TYPE ? JSON.parse(process.env.COMMISSION_BY_TYPE) : {}) } as Record<string, number>; } catch { return base; }
+  })(),
+  // planos da loja (modelo Uber Eats): Básico −5 pontos (só aparece em pesquisa pelo nome), Destaque +5 (topo das listas)
+  planBasicOffset: num("PLAN_BASIC_OFFSET", -5),
+  planFeaturedOffset: num("PLAN_FEATURED_OFFSET", 5),
+  counterPricePts: num("COUNTER_PRICE_PTS", 2), // "mesmo preço que no balcão": menos 2 pontos de comissão
+  commissionFreeDays: num("COMMISSION_FREE_DAYS", 30), // 1.º mês sem comissão, a contar da aprovação
+  // IVA nas notas de comissões: só quem está no Regime Geral do IVA o liquida (0 = não liquida; 14 = taxa geral)
+  invoiceVatPct: num("INVOICE_VAT_PCT", 0),
   commissionPickupPct: num("COMMISSION_PICKUP_PCT", 9), // cliente levanta no balcão (8–10%)
   commissionSelfDeliveryPct: num("COMMISSION_SELF_DELIVERY_PCT", 10), // loja entrega com os seus estafetas (8–12%)
   // Publicidade ("Patrocinado" no topo das pesquisas)
@@ -78,11 +91,13 @@ export const config = {
   serviceFeePct: num("SERVICE_FEE_PCT", 5), // % da comida antes de descontos
   serviceFeeMin: num("SERVICE_FEE_MIN", 150),
   serviceFeeMax: num("SERVICE_FEE_MAX", 2500),
+  minOrderKz: num("MIN_ORDER_KZ", 3000), // a PedeJá não aceita encomendas de lojas abaixo disto (comida, medicamentos, roupa…)
+  feeCapPct: num("FEE_CAP_PCT", 35), // entrega + serviço nunca passam de 35% da comida (corta-se a taxa de serviço)
   smallOrderMin: num("SMALL_ORDER_MIN", 0), // mínimo geral; cada loja pode ter o seu (abaixo: paga a diferença)
 
   // Pagamento aos estafetas (por entrega, separado do que o cliente paga)
   riderSharePct: num("RIDER_SHARE_PCT", 88), // o estafeta fica com 88% da taxa de entrega (comissão PedeJá 12%)
-  riderHourlyFloor: process.env.RIDER_HOURLY_FLOOR === "1", // mínimo por hora estimada (desligado por defeito)
+  riderHourlyFloorKz: num("RIDER_HOURLY_FLOOR_KZ", 1500), // mínimo por hora em entrega (mota; carro e bicicleta em proporção); 0 = desligado
   riderNightBonusPct: num("RIDER_NIGHT_BONUS_PCT", 20), // 22h–06h
   riderPeakBonusPct: num("RIDER_PEAK_BONUS_PCT", 10), // 12h–14h e 19h–21h
   riderBusyBonusPct: num("RIDER_BUSY_BONUS_PCT", 15),
@@ -93,7 +108,7 @@ export const config = {
   riderWaitMaxMin: num("RIDER_WAIT_MAX_MIN", 30), // no máximo 30 min de espera pagos
   // Pagamentos: semanal à terça (ganhos de segunda a domingo da semana anterior); levantamento imediato com taxa
   payoutWeekday: num("PAYOUT_WEEKDAY", 2), // 0=domingo … 2=terça
-  instantCashoutFeePct: num("INSTANT_CASHOUT_FEE_PCT", 2),
+  instantCashoutFeePct: num("INSTANT_CASHOUT_FEE_PCT", 1),
   instantCashoutFeeMin: num("INSTANT_CASHOUT_FEE_MIN", 200),
   instantCashoutMin: num("INSTANT_CASHOUT_MIN", 2000),
 

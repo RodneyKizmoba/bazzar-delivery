@@ -14,7 +14,7 @@ import { useT, T } from "@/lib/i18n";
 import { kz } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
-  errCode, PromoInput, QuoteBreakdown, readCheckoutPrefs, useMeta, useQuote, writeCheckoutPrefs, type Quote,
+  errCode, PromoInput, QuoteBreakdown, MinOrderNotice, belowMinOrder, readCheckoutPrefs, useMeta, useQuote, writeCheckoutPrefs, type Quote,
 } from "./_orderingKit";
 
 /** Procura no texto do erro ("X" está esgotado) a linha correspondente do carrinho. */
@@ -221,7 +221,7 @@ export default function Cart() {
             {quote.isUpdating && <Loader2 className="h-4 w-4 animate-spin text-neutral-400" aria-label={t(T.loading)} />}
           </div>
           {q ? (
-            <div className={cn(quote.isUpdating && "opacity-60 transition-opacity")}><QuoteBreakdown quote={q} /></div>
+            <div className={cn("space-y-3", quote.isUpdating && "opacity-60 transition-opacity")}><QuoteBreakdown quote={q} /><MinOrderNotice quote={q} /></div>
           ) : quote.isLoading || (quote.isUpdating && !quote.error) ? (
             <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-4 animate-pulse rounded bg-neutral-100" />)}</div>
           ) : (
@@ -235,7 +235,7 @@ export default function Cart() {
       {/* Barra fixa */}
       <div className="fixed bottom-16 left-0 right-0 z-20">
         <div className="mx-auto max-w-md border-t bg-white/95 px-4 py-3 backdrop-blur">
-          <Button className="h-12 w-full rounded-xl text-base" disabled={blocking || !q || quote.isUpdating} onClick={goCheckout}>
+          <Button className="h-12 w-full rounded-xl text-base" disabled={blocking || !q || quote.isUpdating || belowMinOrder(q)} onClick={goCheckout}>
             <span className="flex-1 text-left">{user ? t({ pt: "Continuar", en: "Continue", fr: "Continuer" }) : t({ pt: "Entrar para continuar", en: "Log in to continue", fr: "Se connecter pour continuer" })}</span>
             {q && <span className="font-bold">{kz(q.total)}</span>}
           </Button>

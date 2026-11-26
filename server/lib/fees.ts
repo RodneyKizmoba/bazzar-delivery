@@ -10,8 +10,8 @@ import type { RiderPayDetail, VehicleType } from "@shared/schema";
  *  - Cliente: taxa de entrega (tarifa de entrega da Yango −5%, pela distância loja→cliente; mais cara quando está muito movimentado),
  *    taxa de serviço (% da comida antes de descontos, com mínimo e máximo),
  *    taxa de encomenda pequena (a diferença até ao mínimo da loja), gorjeta opcional.
- *  - Estafeta: 88% da taxa calibrada da viagem (ajustado pelo veículo, hora do dia e movimento;
- *    mínimo por hora opcional com RIDER_HOURLY_FLOOR=1); + espera na loja acima
+ *  - Estafeta: 88% da taxa calibrada da viagem (ajustado pelo veículo, hora do dia e movimento),
+ *    nunca abaixo de 1 500 Kz por hora estimada em entrega (comida); + espera na loja acima
  *    de 5 min; + 100% da gorjeta. É mostrado na oferta, antes de aceitar.
  * Funções puras (testadas em tests/fees.unit.test.ts) + uma consulta para o nível de movimento.
  */
@@ -119,7 +119,7 @@ export function timeBand(at: Date): "night" | "peak" | "normal" {
  * loja→cliente (como na Yango, os km até à loja não são pagos), ajustado pelo veículo, + bónus de hora e movimento.
  * rate "car" (envio grande): parte da tarifa de carro, sem multiplicador de veículo.
  */
-export function riderPayFor(opts: { pickupKm: number | null; dropKm: number | null; vehicle: VehicleType | null; at: Date; busy: 0 | 1 | 2; rate?: DeliveryRate }): RiderPayDetail {
+export function riderPayFor(opts: { pickupKm: number | null; dropKm: number | null; vehicle: VehicleType | null; at: Date; busy: 0 | 1 | 2; rate?: DeliveryRate; noFloor?: boolean }): RiderPayDetail {
   const vehicle = opts.vehicle ?? "moto";
   const v = VEHICLES[vehicle];
   const pickupKm = Math.round((opts.pickupKm ?? 2) * 10) / 10; // sem GPS: assume 2 km até à loja
@@ -138,7 +138,9 @@ export function riderPayFor(opts: { pickupKm: number | null; dropKm: number | nu
   const busyPct = opts.busy === 2 ? config.riderVeryBusyBonusPct : opts.busy === 1 ? config.riderBusyBonusPct : 0;
   const busyBonus = round10(((base + distance) * busyPct) / 100);
   const subtotal = base + distance + timeBonus + busyBonus;
-  const floor = config.riderHourlyFloor ? Math.ceil((v.hourlyFloor * estMinutes) / 60 / 10) * 10 : 0; // mínimo por hora (opcional)
+  // mínimo por hora de entrega (RIDER_HOURLY_FLOOR_KZ para mota; os outros veículos em proporção), pago pela PedeJá
+  const hourly = opts.noFloor ? 0 : (config.riderHourlyFloorKz * v.hourlyFloor) / VEHICLES.moto.hourlyFloor;
+  const floor = hourly > 0 ? Math.ceil((hourly * estMinutes) / 60 / 10) * 10 : 0;
   const floorTopUp = Math.max(0, floor - subtotal);
   const total = subtotal + floorTopUp;
   return { vehicle, pickupKm, dropKm, estMinutes, base, distance, timeBonus, busyBonus, floorTopUp, total, band, busyLevel: opts.busy };

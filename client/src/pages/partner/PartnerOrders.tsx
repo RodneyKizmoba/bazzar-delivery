@@ -29,6 +29,7 @@ export function usePartnerTabs() {
     { href: "/parceiro/avaliacoes", label: t({ pt: "Avaliações", en: "Reviews", fr: "Avis" }) },
     { href: "/parceiro/estatisticas", label: t({ pt: "Estatísticas", en: "Statistics", fr: "Statistiques" }) },
     { href: "/parceiro/pagamentos", label: t({ pt: "Pagamentos", en: "Payouts", fr: "Paiements" }) },
+    { href: "/parceiro/notas", label: t({ pt: "Notas", en: "Statements", fr: "Relevés" }) },
     { href: "/parceiro/publicidade", label: t({ pt: "Publicidade", en: "Ads", fr: "Publicité" }) },
   ];
 }

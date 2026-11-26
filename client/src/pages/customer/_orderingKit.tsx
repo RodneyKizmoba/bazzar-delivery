@@ -49,7 +49,7 @@ export interface Quote {
   pointsRedeemed: number; pointsDiscount: number; total: number; promoCode: string | null;
   isPlus: boolean; plusSavings: number; plusFreeDeliveryMinOrder: number;
   priorityFee?: number; riderTip?: number; priorityOption?: { fee: number; minutesSaved: number };
-  serviceFee?: number; smallOrderFee?: number; smallOrderMin?: number; deliveryKm?: number | null; busyLevel?: number;
+  serviceFee?: number; smallOrderFee?: number; smallOrderMin?: number; minOrder?: number; deliveryKm?: number | null; busyLevel?: number;
   fulfilment?: "delivery" | "pickup" | "store_delivery";
   feeRules?: { serviceFeePct: number; serviceFeeMin: number; serviceFeeMax: number };
 }
@@ -719,4 +719,20 @@ export interface StoreDetail {
   isFavorite: boolean;
   sections: { id: number; name: string; sortOrder: number }[];
   items: import("@/components/ItemDialog").MenuItemFull[];
+}
+
+
+/** Abaixo do mínimo PedeJá (3 000 Kz) não se pode encomendar: diz quanto falta. */
+export function belowMinOrder(q: Pick<Quote, "subtotal" | "minOrder"> | undefined) {
+  return !!q && !!q.minOrder && q.subtotal < q.minOrder;
+}
+export function MinOrderNotice({ quote }: { quote: Pick<Quote, "subtotal" | "minOrder"> | undefined }) {
+  const t = useT();
+  if (!quote || !belowMinOrder(quote)) return null;
+  const missing = quote.minOrder! - quote.subtotal;
+  return (
+    <p role="status" className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
+      {t({ pt: `O valor mínimo de uma encomenda é ${kz(quote.minOrder!)}. Junte mais ${kz(missing)} em produtos para continuar.`, en: `The minimum order is ${kz(quote.minOrder!)}. Add ${kz(missing)} more to continue.`, fr: `La commande minimum est de ${kz(quote.minOrder!)}. Ajoutez ${kz(missing)} pour continuer.` })}
+    </p>
+  );
 }

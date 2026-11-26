@@ -1230,7 +1230,12 @@ async function main() {
     check("quote with address: delivery by distance (~0.8 km road -> Yango min 325 −5% = 300 Kz)", r.status === 200 && q.deliveryKm > 0.5 && q.deliveryKm < 1.2 && q.deliveryFee === 300, q && { km: q.deliveryKm, fee: q.deliveryFee });
     check("service fee 5% of food (4500 -> 230 Kz, rounded to 10)", q.serviceFee === 230 && q.total === 4500 + 300 + 230, q && { sf: q.serviceFee, total: q.total });
     r = await cli.post("/api/cart/quote", { storeId: 1, items: [AGUA] });
-    check("service fee minimum 150 Kz on a 500 Kz order", r.body.quote.serviceFee === 150, r.body.quote?.serviceFee);
+    check("quote tells the PedeJá minimum order (3 000 Kz)", r.body.quote.minOrder === 3000, r.body.quote?.minOrder);
+    {
+      const low = await cli.post("/api/orders", { storeId: 1, items: [AGUA], addressId: addrTalatona, paymentMethod: "cash" });
+      check("a 500 Kz order is refused (below the 3 000 Kz minimum)", low.status === 400 && low.body.code === "BELOW_MIN_ORDER" && /3.000 Kz/.test(low.body.error ?? low.body.message ?? ""), low.body);
+    }
+    check("fee cap: on a 500 Kz order the service fee is dropped (delivery + service ≤ 35% of food; delivery never cut)", r.body.quote.serviceFee === 0 && r.body.quote.deliveryFee > 0, r.body.quote && { sf: r.body.quote.serviceFee, df: r.body.quote.deliveryFee });
     r = await cli.post("/api/cart/quote", { storeId: 1, items: [{ ...FRANGO, quantity: 15 }] });
     check("service fee capped at 2 500 Kz", r.body.quote.serviceFee === 2500, r.body.quote?.serviceFee);
     r = await cli.post("/api/cart/quote", { storeId: 1, items: [FRANGO], addressId: 999999 });
@@ -1678,6 +1683,53 @@ async function main() {
     const c6 = new Client("carla6");
     r = await c6.post("/api/auth/login", { username: `carla_${uniq}`, password: "Operacoes#2026!" });
     check("after reset she logs in with password and sets 2FA up again", r.status === 200 && r.body.user?.twoFactorEnabled === false, r.body);
+  });
+
+  // =========================================================================
+  await section("Store plans, commission per item and monthly statements", async () => {
+    const mine = (await loja.get("/api/partner/store")).body.store;
+    let r = await loja.get("/api/partner/commissions");
+    check("partner sees plan Standard and the rates of its business type", r.status === 200 && r.body.plan === "standard" && r.body.options.basic === r.body.options.standard - 5 && r.body.options.featured === r.body.options.standard + 5, r.body);
+    const std = r.body.delivery;
+    r = await loja.patch("/api/partner/plan", { plan: "basic" });
+    check("Basic plan: −5 points", r.status === 200 && r.body.plan === "basic" && r.body.delivery === std - 5, r.body);
+    let list = (await anon.get("/api/stores?limit=100")).body.stores ?? [];
+    check("Basic store is hidden from lists…", !list.some((x: any) => x.id === mine.id), list.map((x: any) => x.id));
+    list = (await anon.get(`/api/stores?q=${encodeURIComponent(mine.name)}`)).body.stores ?? [];
+    check("…but found when searched by name", list.some((x: any) => x.id === mine.id), list.map((x: any) => x.name));
+    r = await loja.patch("/api/partner/plan", { plan: "featured" });
+    list = (await anon.get("/api/stores?limit=100&sort=recommended")).body.stores ?? [];
+    check("Featured plan: +5 points and first among open stores (after paid \"Sponsored\")", r.body.delivery === std + 5 && list.filter((x: any) => !x.sponsored)[0]?.id === mine.id, { d: r.body.delivery, top: list.slice(0, 3).map((x: any) => x.name) });
+    r = await loja.patch("/api/partner/plan", { plan: "standard", counterPrice: true });
+    check("same price as in store: −2 points", r.body.delivery === std - 2 && r.body.counterPrice === true, r.body);
+    await loja.patch("/api/partner/plan", { counterPrice: false });
+    check("partner can't set a bad plan", (await loja.patch("/api/partner/plan", { plan: "gold" })).status === 400);
+
+    // nota de comissões do mês (o servidor de testes permite o mês em curso)
+    const month = new Date(Date.now() + 3_600_000).toISOString().slice(0, 7);
+    check("only finance staff can issue statements", (await loja.post("/api/admin/invoices/generate", { month })).status === 403);
+    r = await admin.post("/api/admin/invoices/generate", { month });
+    const inv = (r.body.created ?? []).find((x: any) => x.storeId === mine.id);
+    check("admin issues the month's statements (one per store with sales)", r.status === 201 && !!inv && /^FC \d{4}\/\d{6}$/.test(inv.number) && inv.commissionTotal > 0, r.body);
+    const full = (await admin.get(`/api/admin/invoices/${inv?.id}`)).body.invoice;
+    const items = (full?.lines ?? []).filter((l: any) => l.kind === "item");
+    check("one line per item sold, each with its % and commission", items.length > 0 && items.every((l: any) => l.commission === Math.round((l.amount * l.commissionPct) / 100) || l.description.startsWith("Encomenda")), items.slice(0, 3));
+    check("totals add up: commission = sum of lines; total = net + VAT", full && full.commissionTotal === items.reduce((s: number, l: any) => s + l.commission, 0) && full.total === full.netTotal + full.vatAmount && full.netTotal === full.commissionTotal + full.adsTotal, full && { c: full.commissionTotal, n: full.netTotal, t: full.total });
+    r = await loja.get("/api/partner/invoices");
+    check("partner sees its statement", r.status === 200 && r.body.invoices.some((x: any) => x.id === inv.id));
+    check("partner opens it", (await loja.get(`/api/partner/invoices/${inv.id}`)).body.invoice?.number === inv.number);
+    check("another store can't open it (404)", (await loja2.get(`/api/partner/invoices/${inv.id}`)).status === 404);
+    r = await admin.post("/api/admin/invoices/generate", { month });
+    check("issuing again doesn't bill the same sales twice", r.status === 201 && !(r.body.created ?? []).some((x: any) => x.storeId === mine.id), r.body.created);
+    r = await admin.patch(`/api/admin/invoices/${inv.id}`, { agtInvoiceNumber: "FT PJ2026/123" });
+    check("admin records the AGT tax-invoice number", r.status === 200 && r.body.invoice.agtInvoiceNumber === "FT PJ2026/123", r.body);
+    r = await admin.post(`/api/admin/invoices/${inv.id}/void`);
+    check("admin voids a statement", r.status === 200 && r.body.invoice.status === "void", r.body);
+    check("void twice → 409", (await admin.post(`/api/admin/invoices/${inv.id}/void`)).status === 409);
+    r = await admin.post("/api/admin/invoices/generate", { month });
+    const again = (r.body.created ?? []).find((x: any) => x.storeId === mine.id);
+    check("after voiding, the sales can be billed again (new number)", !!again && again.number !== inv.number && again.commissionTotal === inv.commissionTotal, { again, inv });
+    check("bad month refused", (await admin.post("/api/admin/invoices/generate", { month: "2026-13" })).status === 400);
   });
 
   // =========================================================================
