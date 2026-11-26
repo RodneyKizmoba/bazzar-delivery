@@ -51,6 +51,7 @@ export async function riderPayQuote(tx: any, order: Order, driverId: number, bus
     pickupKm: hasLL(me) && hasLL(store) ? roadKm(me, store) : null,
     dropKm: order.deliveryKm ?? (hasLL(store) && hasLL(order.deliveryAddress) ? roadKm(store, order.deliveryAddress) : null),
     vehicle: (row?.v as VehicleType | null) ?? "moto", at: new Date(), busy: busy ?? await currentBusyLevel(tx),
+    rate: order.parcel?.size === "large" ? "car" : "moto",
   });
   // Envios: o estafeta recebe parte do extra de tamanho (pacote médio/grande)
   const parcelBonus = order.parcel ? Math.round((order.parcel.sizeFee * config.parcelRiderSharePct) / 100) : 0;

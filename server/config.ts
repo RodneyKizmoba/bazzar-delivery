@@ -69,10 +69,9 @@ export const config = {
   pinMaxAttempts: num("PIN_MAX_ATTEMPTS", 5),
 
   // Taxas ao cliente (modelo Deliveroo, em Kz)
-  deliveryBaseFee: num("DELIVERY_BASE_FEE", 400),
-  deliveryPerKm: num("DELIVERY_PER_KM", 150),
-  deliveryMinFee: num("DELIVERY_MIN_FEE", 500),
-  deliveryMaxFee: num("DELIVERY_MAX_FEE", 3500),
+  // Taxa de entrega = tarifa de entrega de mota da Yango Luanda com DELIVERY_DISCOUNT_PCT a menos,
+  // arredondada para baixo a 50 Kz (tabela em server/lib/fees.ts, DELIVERY_REFERENCE)
+  deliveryDiscountPct: num("DELIVERY_DISCOUNT_PCT", 5),
   busyPricing: process.env.BUSY_PRICING !== "0",
   busySurchargePct: num("BUSY_SURCHARGE_PCT", 20), // movimentado
   veryBusySurchargePct: num("VERY_BUSY_SURCHARGE_PCT", 40), // muito movimentado
@@ -82,8 +81,8 @@ export const config = {
   smallOrderMin: num("SMALL_ORDER_MIN", 0), // mínimo geral; cada loja pode ter o seu (abaixo: paga a diferença)
 
   // Pagamento aos estafetas (por entrega, separado do que o cliente paga)
-  riderBasePay: num("RIDER_BASE_PAY", 600),
-  riderPerKm: num("RIDER_PER_KM", 200), // km até à loja + km até ao cliente
+  riderSharePct: num("RIDER_SHARE_PCT", 88), // o estafeta fica com 88% da taxa de entrega (comissão PedeJá 12%)
+  riderHourlyFloor: process.env.RIDER_HOURLY_FLOOR === "1", // mínimo por hora estimada (desligado por defeito)
   riderNightBonusPct: num("RIDER_NIGHT_BONUS_PCT", 20), // 22h–06h
   riderPeakBonusPct: num("RIDER_PEAK_BONUS_PCT", 10), // 12h–14h e 19h–21h
   riderBusyBonusPct: num("RIDER_BUSY_BONUS_PCT", 15),
@@ -98,20 +97,13 @@ export const config = {
   instantCashoutFeeMin: num("INSTANT_CASHOUT_FEE_MIN", 200),
   instantCashoutMin: num("INSTANT_CASHOUT_MIN", 2000),
 
-  // Táxi (estilo DiDi). Categoria Económica = tabela do dono; as outras são um multiplicador da Económica.
-  taxiMinFare: num("TAXI_MIN_FARE", 455), // tarifa mínima, já inclui os primeiros km e minutos
-  taxiIncludedKm: num("TAXI_INCLUDED_KM", 2.5),
-  taxiIncludedMin: num("TAXI_INCLUDED_MIN", 5.8),
-  taxiPerKm: num("TAXI_PER_KM", 80), // depois dos km incluídos (cidade e subúrbios)
-  taxiPerMin: num("TAXI_PER_MIN", 48), // durante o trajecto, depois dos minutos incluídos
-  taxiWaitFreeMin: num("TAXI_WAIT_FREE_MIN", 10), // espera na recolha: primeiros 10 min grátis
-  taxiWaitPerMin: num("TAXI_WAIT_PER_MIN", 40), // depois: Kz por minuto
+  // Táxi (estilo DiDi). Preço = tarifa de referência da Yango Luanda (máximas, válidas até 01.12.2026)
+  // com TAXI_DISCOUNT_PCT a menos, arredondado PARA BAIXO a 50 Kz: fica sempre pelo menos 5% mais barato.
+  // A tabela por categoria está em server/lib/taxiFares.ts (TAXI_REFERENCE).
+  taxiDiscountPct: num("TAXI_DISCOUNT_PCT", 5),
+  taxiXlFactor: num("TAXI_XL_FACTOR", 1.1), // a Yango não tem XL em Luanda: XL = Comfort+ × 1,10 (6–7 lugares)
   taxiPickupFee: num("TAXI_PICKUP_FEE", 0), // taxa de recolha (0 = sem taxa)
-  taxiStopFee: num("TAXI_STOP_FEE", 100), // por cada paragem adicional (além dos km/min a mais)
-  taxiRoundTo: num("TAXI_ROUND_TO", 50), // arredonda o preço para cima, em múltiplos de 50 Kz
-  taxiFactorMoto: num("TAXI_FACTOR_MOTO", 0.65),
-  taxiFactorComfort: num("TAXI_FACTOR_COMFORT", 1.3),
-  taxiFactorXl: num("TAXI_FACTOR_XL", 1.5),
+  taxiRoundTo: num("TAXI_ROUND_TO", 50), // múltiplos de 50 Kz
   taxiSpeedKmh: num("TAXI_SPEED_KMH", 20), // carro em Luanda, com trânsito (mota: +25%)
   // tarifa dinâmica: hora de ponta e muita procura (o maior dos dois); TAXI_SURGE=0 desliga
   taxiSurge: process.env.TAXI_SURGE !== "0",
@@ -127,12 +119,12 @@ export const config = {
   taxiSearchMaxMin: num("TAXI_SEARCH_MAX_MIN", 5), // sem motorista ao fim de 5 min: avisa o cliente
   sosPhone: process.env.SOS_PHONE || "113", // Polícia Nacional de Angola
 
-  // Envios: taxa de entrega normal (distância) + extra por tamanho; parte do extra vai para o estafeta
-  parcelMediumFee: num("PARCEL_MEDIUM_FEE", 500), // até ~15 kg
-  parcelLargeFee: num("PARCEL_LARGE_FEE", 1500), // até ~30 kg, só carro
+  // Envios: tarifa de entrega Yango −5% (mota; pacote grande: carro) + extra por tamanho opcional (0 por defeito)
+  parcelMediumFee: num("PARCEL_MEDIUM_FEE", 0), // até ~15 kg
+  parcelLargeFee: num("PARCEL_LARGE_FEE", 0), // até ~30 kg, só carro (já paga a tarifa de carro)
   parcelRiderSharePct: num("PARCEL_RIDER_SHARE_PCT", 50),
-  // sem comida não há comissão: o envio nunca custa menos do que o estafeta ganha + esta margem
-  parcelMinMarginPct: num("PARCEL_MIN_MARGIN_PCT", 15),
+  // sem comida não há comissão: o envio nunca custa menos do que o estafeta ganha (+ esta margem)
+  parcelMinMarginPct: num("PARCEL_MIN_MARGIN_PCT", 0),
 
   // Portal externo de estafetas (opcional)
   driverPortalUrl: process.env.DRIVER_PORTAL_URL || "",

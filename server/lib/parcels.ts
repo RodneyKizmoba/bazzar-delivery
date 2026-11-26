@@ -14,8 +14,8 @@ import { publishOrder } from "./realtime";
  * Cada envio é uma encomenda (kind "parcel") da loja interna "PedeJá Envios": usa o mesmo despacho,
  * a mesma app do estafeta, o mesmo código de entrega e as mesmas contas. Não há loja a aceitar:
  * o envio nasce "pronto" e o despacho procura logo o estafeta mais perto do ponto de recolha.
- * Preço: a taxa de entrega normal por distância + um extra por tamanho (médio/grande);
- * parte do extra vai para o estafeta (PARCEL_RIDER_SHARE_PCT). O resto fica para a PedeJá.
+ * Preço: a tarifa de entrega da Yango −5% (mota; pacote grande: carro) + um extra por tamanho opcional
+ * (0 por defeito); parte do extra vai para o estafeta (PARCEL_RIDER_SHARE_PCT). Nunca abaixo do que o estafeta ganha.
  */
 
 const SYSTEM_STORE = "PedeJá Envios";
@@ -47,10 +47,11 @@ export async function quoteParcel(input: { pickup: Point; dropoff: Point; size: 
   const busy = await currentBusyLevel(db);
   const sizeFee = sizeFeeFor(input.size);
   // Nos envios não há comissão de comida a pagar o estafeta: o preço cobre sempre o que ele ganha + uma margem.
-  const rider = riderPayFor({ pickupKm: 2, dropKm: km, vehicle: input.size === "large" ? "car" : "moto", at: new Date(), busy });
+  const rate = input.size === "large" ? "car" : "moto";
+  const rider = riderPayFor({ pickupKm: 2, dropKm: km, vehicle: rate, at: new Date(), busy, rate });
   const riderShare = Math.round((sizeFee * config.parcelRiderSharePct) / 100);
   const floorFee = Math.ceil(((rider.total * (1 + config.parcelMinMarginPct / 100)) + riderShare - sizeFee) / 50) * 50;
-  const deliveryFee = Math.max(customerDeliveryFee(km, busy, 1000), floorFee);
+  const deliveryFee = Math.max(customerDeliveryFee(km, busy, 1000, rate), floorFee);
   const etaMin = Math.round(15 + (km / 20) * 60); // estafeta chega + viagem a ~20 km/h
   return { km, busyLevel: busy, deliveryFee, sizeFee, total: deliveryFee + sizeFee, etaMin, largeNeedsCar: input.size === "large" };
 }

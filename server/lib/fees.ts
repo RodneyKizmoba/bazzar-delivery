@@ -7,11 +7,11 @@ import type { RiderPayDetail, VehicleType } from "@shared/schema";
  * Taxas e pagamento aos estafetas — modelo Deliveroo, em Kz.
  *
  * O que o CLIENTE paga e o que o ESTAFETA recebe são contas separadas:
- *  - Cliente: taxa de entrega (distância loja→cliente, mais cara quando está muito movimentado),
+ *  - Cliente: taxa de entrega (tarifa de entrega da Yango −5%, pela distância loja→cliente; mais cara quando está muito movimentado),
  *    taxa de serviço (% da comida antes de descontos, com mínimo e máximo),
  *    taxa de encomenda pequena (a diferença até ao mínimo da loja), gorjeta opcional.
- *  - Estafeta: valor por entrega (base + km até à loja + km até ao cliente, ajustado pelo veículo,
- *    hora do dia e movimento), nunca abaixo de um mínimo por hora estimada; + espera na loja acima
+ *  - Estafeta: 88% da taxa calibrada da viagem (ajustado pelo veículo, hora do dia e movimento;
+ *    mínimo por hora opcional com RIDER_HOURLY_FLOOR=1); + espera na loja acima
  *    de 5 min; + 100% da gorjeta. É mostrado na oferta, antes de aceitar.
  * Funções puras (testadas em tests/fees.unit.test.ts) + uma consulta para o nível de movimento.
  */
@@ -56,9 +56,31 @@ export async function currentBusyLevel(db: DbOrTx): Promise<0 | 1 | 2> {
 // ---------------------------------------------------------------------------
 // Cliente
 // ---------------------------------------------------------------------------
-/** Taxa de entrega: base + km, entre mínimo e máximo, + sobretaxa quando muito movimentado. Sem coordenadas: taxa da loja. */
-export function customerDeliveryFee(km: number | null, busy: 0 | 1 | 2, storeFallback: number) {
-  let fee = km == null ? storeFallback : Math.min(config.deliveryMaxFee, Math.max(config.deliveryMinFee, config.deliveryBaseFee + km * config.deliveryPerKm));
+/**
+ * Tarifas de referência: entregas da Yango em Luanda (máximas, válidas até 01.12.2026).
+ * Mínimo já inclui os primeiros km e minutos; tempo estimado: mota 2,4 min/km, carro 3 min/km.
+ */
+export const DELIVERY_REFERENCE = {
+  moto: { minFare: 325, includedKm: 2, includedMin: 5.5, perKm: 58, perMin: 16, minPerKm: 2.4 },
+  car: { minFare: 598.5, includedKm: 2.5, includedMin: 6, perKm: 94.05, perMin: 41.8, minPerKm: 3 },
+} as const;
+export type DeliveryRate = keyof typeof DELIVERY_REFERENCE;
+
+/** Preço de referência (Yango) de uma entrega de A a B, arredondado para cima a 50 Kz. */
+export function referenceDeliveryFee(km: number, rate: DeliveryRate = "moto") {
+  const r = DELIVERY_REFERENCE[rate];
+  const k = Math.max(0, km), min = k * r.minPerKm;
+  const raw = r.minFare + Math.max(0, k - r.includedKm) * r.perKm + Math.max(0, min - r.includedMin) * r.perMin;
+  return Math.ceil(raw / 50 - 1e-9) * 50;
+}
+/** Preço PedeJá: a referência com DELIVERY_DISCOUNT_PCT a menos, arredondado PARA BAIXO a 50 Kz (sempre ≥ 5% mais barato). */
+export function calibratedDeliveryFee(km: number, rate: DeliveryRate = "moto") {
+  return Math.floor((referenceDeliveryFee(km, rate) * (1 - config.deliveryDiscountPct / 100)) / 50 + 1e-9) * 50;
+}
+
+/** Taxa de entrega: tarifa calibrada pela distância loja→cliente, + sobretaxa quando muito movimentado. Sem coordenadas: taxa da loja. */
+export function customerDeliveryFee(km: number | null, busy: 0 | 1 | 2, storeFallback: number, rate: DeliveryRate = "moto") {
+  let fee = km == null ? storeFallback : calibratedDeliveryFee(km, rate);
   const pct = busy === 2 ? config.veryBusySurchargePct : busy === 1 ? config.busySurchargePct : 0;
   fee = fee * (1 + pct / 100);
   return round50(fee);
@@ -92,8 +114,12 @@ export function timeBand(at: Date): "night" | "peak" | "normal" {
   return "normal";
 }
 
-/** Valor da entrega para o estafeta (sem gorjeta nem espera). */
-export function riderPayFor(opts: { pickupKm: number | null; dropKm: number | null; vehicle: VehicleType | null; at: Date; busy: 0 | 1 | 2 }): RiderPayDetail {
+/**
+ * Valor da entrega para o estafeta (sem gorjeta nem espera): RIDER_SHARE_PCT (88%) da taxa calibrada da viagem
+ * loja→cliente (como na Yango, os km até à loja não são pagos), ajustado pelo veículo, + bónus de hora e movimento.
+ * rate "car" (envio grande): parte da tarifa de carro, sem multiplicador de veículo.
+ */
+export function riderPayFor(opts: { pickupKm: number | null; dropKm: number | null; vehicle: VehicleType | null; at: Date; busy: 0 | 1 | 2; rate?: DeliveryRate }): RiderPayDetail {
   const vehicle = opts.vehicle ?? "moto";
   const v = VEHICLES[vehicle];
   const pickupKm = Math.round((opts.pickupKm ?? 2) * 10) / 10; // sem GPS: assume 2 km até à loja
@@ -101,15 +127,18 @@ export function riderPayFor(opts: { pickupKm: number | null; dropKm: number | nu
   const km = pickupKm + dropKm;
   const estMinutes = Math.round((km / v.speedKmh) * 60 + config.riderHandlingMin);
   // cada parcela arredondada a 10 Kz, para a soma mostrada ao estafeta bater certo
-  const base = round10(config.riderBasePay * v.mult);
-  const distance = round10(km * config.riderPerKm * v.mult);
+  const rate = opts.rate ?? "moto";
+  const mult = rate === "car" ? 1 : v.mult;
+  const share = config.riderSharePct / 100;
+  const base = round10(calibratedDeliveryFee(0, rate) * share * mult);
+  const distance = Math.max(0, round10(calibratedDeliveryFee(dropKm, rate) * share * mult) - base);
   const band = timeBand(opts.at);
   const bandPct = band === "night" ? config.riderNightBonusPct : band === "peak" ? config.riderPeakBonusPct : 0;
   const timeBonus = round10(((base + distance) * bandPct) / 100);
   const busyPct = opts.busy === 2 ? config.riderVeryBusyBonusPct : opts.busy === 1 ? config.riderBusyBonusPct : 0;
   const busyBonus = round10(((base + distance) * busyPct) / 100);
   const subtotal = base + distance + timeBonus + busyBonus;
-  const floor = Math.ceil((v.hourlyFloor * estMinutes) / 60 / 10) * 10; // mínimo por hora estimada, arredondado para cima
+  const floor = config.riderHourlyFloor ? Math.ceil((v.hourlyFloor * estMinutes) / 60 / 10) * 10 : 0; // mínimo por hora (opcional)
   const floorTopUp = Math.max(0, floor - subtotal);
   const total = subtotal + floorTopUp;
   return { vehicle, pickupKm, dropKm, estMinutes, base, distance, timeBonus, busyBonus, floorTopUp, total, band, busyLevel: opts.busy };

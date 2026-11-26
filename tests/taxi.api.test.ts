@@ -52,7 +52,7 @@ async function main() {
   const cats = q.body?.options?.map((o: any) => o.category);
   check("quote: 4 categories (moto, economy, comfort, xl), no login needed", q.status === 200 && JSON.stringify(cats) === JSON.stringify(["moto", "economy", "comfort", "xl"]), q.body);
   const ecoOpt = q.body.options.find((o: any) => o.category === "economy");
-  check("quote: economy price is a multiple of 50 and ≥ 500 Kz", ecoOpt.fare % 50 === 0 && ecoOpt.fare >= 500 && ecoOpt.detail.minFare === 455 && ecoOpt.detail.perKm === 80 && ecoOpt.detail.perMin === 48, ecoOpt.detail);
+  check("quote: economy = Yango −5% (622 min, 97 Kz/km, 46 Kz/min), multiple of 50, 5 min free wait", ecoOpt.fare % 50 === 0 && ecoOpt.fare >= 600 && ecoOpt.detail.minFare === 622 && ecoOpt.detail.perKm === 97 && ecoOpt.detail.perMin === 46 && ecoOpt.waitFreeMin === 5 && ecoOpt.waitPerMin === 55, ecoOpt);
   const same = await anon.post("/api/taxi/quote", { pickup: BELAS, dropoff: BELAS, stops: [] });
   check("quote: same pickup and destination is refused", same.status === 400 && same.body.code === "SAME_PLACE", same.body);
 

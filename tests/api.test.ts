@@ -259,7 +259,7 @@ async function main() {
       subtotal: 1, total: 1, deliveryFee: 0, discount: 99999, status: "delivered", paymentStatus: "paid", customerId: 3, driverId: 7, pointsRedeemed: -500,
     });
     const o = r.body.order;
-    check("create order ignores client price/total/status fields", r.status === 201 && o.subtotal === 4500 && o.deliveryFee === 500 && o.serviceFee === 230 && o.total === 4500 + 500 + 230 && o.status === "pending" && o.paymentStatus === "paid" && o.customerId === cliUser.id && o.driverId === null && o.discount === 0, r.body);
+    check("create order ignores client price/total/status fields", r.status === 201 && o.subtotal === 4500 && o.deliveryFee === 300 && o.serviceFee === 230 && o.total === 4500 + 300 + 230 && o.status === "pending" && o.paymentStatus === "paid" && o.customerId === cliUser.id && o.driverId === null && o.discount === 0, r.body);
     if (o) {
       const d = await cli.get(`/api/orders/${o.id}`);
       check("order item name/unit price come from DB", d.body.items[0].name === "Frango grelhado" && d.body.items[0].unitPrice === 4500, d.body.items);
@@ -1227,8 +1227,8 @@ async function main() {
     // --- customer fees
     r = await cli.post("/api/cart/quote", { storeId: 1, items: [FRANGO], addressId: addrTalatona });
     let q = r.body.quote;
-    check("quote with address: delivery by distance (~0.8 km road -> min 500 Kz)", r.status === 200 && q.deliveryKm > 0.5 && q.deliveryKm < 1.2 && q.deliveryFee === 500, q && { km: q.deliveryKm, fee: q.deliveryFee });
-    check("service fee 5% of food (4500 -> 230 Kz, rounded to 10)", q.serviceFee === 230 && q.total === 4500 + 500 + 230, q && { sf: q.serviceFee, total: q.total });
+    check("quote with address: delivery by distance (~0.8 km road -> Yango min 325 −5% = 300 Kz)", r.status === 200 && q.deliveryKm > 0.5 && q.deliveryKm < 1.2 && q.deliveryFee === 300, q && { km: q.deliveryKm, fee: q.deliveryFee });
+    check("service fee 5% of food (4500 -> 230 Kz, rounded to 10)", q.serviceFee === 230 && q.total === 4500 + 300 + 230, q && { sf: q.serviceFee, total: q.total });
     r = await cli.post("/api/cart/quote", { storeId: 1, items: [AGUA] });
     check("service fee minimum 150 Kz on a 500 Kz order", r.body.quote.serviceFee === 150, r.body.quote?.serviceFee);
     r = await cli.post("/api/cart/quote", { storeId: 1, items: [{ ...FRANGO, quantity: 15 }] });
@@ -1267,7 +1267,7 @@ async function main() {
     r = await rm.get("/api/driver/available");
     const av = r.body.orders.find((x: any) => x.id === P.id);
     check("open list shows MY pay before accepting (car, ~2.6 km to store + drop)", av && av.riderPayDetail.vehicle === "car" && av.riderPayDetail.pickupKm > 2 && av.payout === av.riderPayDetail.total + 300, av?.riderPayDetail);
-    check("pay = base + distance + bonuses, never below the hourly floor", av && av.riderPayDetail.total >= Math.round(2400 * av.riderPayDetail.estMinutes / 60) && av.riderPayDetail.total === av.riderPayDetail.base + av.riderPayDetail.distance + av.riderPayDetail.timeBonus + av.riderPayDetail.busyBonus + av.riderPayDetail.floorTopUp, av?.riderPayDetail);
+    check("pay = base + distance + bonuses (88% of the calibrated fee)", av && av.riderPayDetail.total > 0 && av.riderPayDetail.total === av.riderPayDetail.base + av.riderPayDetail.distance + av.riderPayDetail.timeBonus + av.riderPayDetail.busyBonus + av.riderPayDetail.floorTopUp, av?.riderPayDetail);
     r = await rm.post(`/api/driver/orders/${P.id}/claim`);
     check("claim fixes the rider pay on the order", r.status === 200 && r.body.order.riderPay === av.riderPayDetail.total && !("deliveryPin" in r.body.order), r.body.order?.riderPay);
     r = await rm.post(`/api/driver/orders/${P.id}/arrived`, { at: "store" });
@@ -1300,7 +1300,7 @@ async function main() {
     // --- settlement
     const op = r.body.order;
     check("store: food − 20% commission (default)", op.commissionPct === 20 && op.commissionAmount === Math.round(op.subtotal * 0.2) && op.storeEarning === op.subtotal - op.commissionAmount, op);
-    check("rider: own pay + wait + 100% tip (not the customer's delivery fee)", op.riderEarning === op.riderPay + op.riderWaitFee + 300 && op.riderPay !== op.deliveryFee, { pay: op.riderPay, fee: op.deliveryFee, earn: op.riderEarning });
+    check("rider: own pay + wait + 100% tip", op.riderEarning === op.riderPay + op.riderWaitFee + 300 && op.riderPay > 0, { pay: op.riderPay, fee: op.deliveryFee, earn: op.riderEarning });
     r = await loja.get("/api/partner/finance");
     check("store balance grows by its earning; next payday shown", r.body.balance - storeBefore.balance === op.storeEarning && new Date(r.body.nextPayday).getUTCDay() === 1 /* terça 00:00 Luanda = segunda 23:00 UTC */, { b: r.body.balance, pd: r.body.nextPayday });
     let w = (await rm.get("/api/driver/wallet")).body;

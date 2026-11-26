@@ -52,9 +52,9 @@ async function main() {
   const qs = await anon.post("/api/parcels/quote", { pickup: FROM, dropoff: TO, size: "small" });
   const qm = await anon.post("/api/parcels/quote", { pickup: FROM, dropoff: TO, size: "medium" });
   const ql = await anon.post("/api/parcels/quote", { pickup: FROM, dropoff: TO, size: "large" });
-  check("quote: size extra 0 / 500 / 1 500 and bigger parcels cost more", qs.status === 200 && qs.body.sizeFee === 0 && qm.body.sizeFee === 500 && ql.body.sizeFee === 1500
-    && qs.body.total < qm.body.total && qm.body.total < ql.body.total && ql.body.total === ql.body.deliveryFee + 1500, [qs.body, qm.body, ql.body]);
-  check("quote: delivery fee follows the normal rule (min 500, multiple of 50)", qs.body.deliveryFee >= 500 && qs.body.deliveryFee % 50 === 0, qs.body);
+  check("quote: no size extra by default; small = medium (moto rate), large costs more (car rate)", qs.status === 200 && qs.body.sizeFee === 0 && qm.body.sizeFee === 0 && ql.body.sizeFee === 0
+    && qs.body.total === qm.body.total && qm.body.total < ql.body.total, [qs.body, qm.body, ql.body]);
+  check("quote: delivery fee = Yango delivery −5%, multiple of 50", qs.body.deliveryFee >= 300 && qs.body.deliveryFee % 50 === 0, qs.body);
   check("quote: same place refused", (await anon.post("/api/parcels/quote", { pickup: FROM, dropoff: FROM, size: "small" })).body?.code === "SAME_PLACE");
 
   // --- quem pode enviar
@@ -98,11 +98,12 @@ async function main() {
   const w = (await rider.get("/api/driver/wallet")).body;
   check("rider wallet: cash in hand = what the sender paid", w.cashHeld === o2.total, { cashHeld: w.cashHeld, total: o2.total });
 
-  // --- 3: médio, pago por banco: o estafeta recebe parte do extra
+  // --- 3: médio, pago por banco: o estafeta recebe 88% da taxa
   r = await cust.post("/api/parcels", { ...base, size: "medium", fragile: true, paymentMethod: "multicaixa_express" });
   const p3 = r.body.order.id;
   const offer3 = await waitFor(async () => (await rider.get("/api/driver/offers")).body.offer);
-  check("medium parcel offer includes the rider's share of the size extra (50% of 500)", offer3?.payDetail?.parcelBonus === 250, offer3?.payDetail);
+  const o3fee = (await cust.get(`/api/orders/${p3}`)).body.order?.deliveryFee ?? qm.body.deliveryFee;
+  check("medium parcel offer: rider gets ~88% of the delivery fee and PedeJá never loses", offer3?.payDetail?.total <= o3fee && offer3?.payDetail?.total >= o3fee * 0.85, { pay: offer3?.payDetail, fee: o3fee });
   await rider.post(`/api/driver/offers/${offer3.id}/accept`);
   await rider.post(`/api/driver/orders/${p3}/arrived`, { at: "store" });
   await rider.post(`/api/driver/orders/${p3}/status`, { status: "picked_up" });

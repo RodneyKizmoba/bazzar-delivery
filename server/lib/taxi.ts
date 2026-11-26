@@ -9,7 +9,7 @@ import {
 import { badRequest, conflict, forbidden, notFound } from "./http";
 import { assertMethodAvailable } from "./payments";
 import { distanceKm, setPresence } from "./dispatchEngine";
-import { CATEGORY_ORDER, currentSurge, estMinutes, fareFor, routeKm, splitRide, waitFeeFor } from "./taxiFares";
+import { CATEGORY_ORDER, currentSurge, estMinutes, fareFor, routeKm, splitRide, tariffFor, waitFeeFor } from "./taxiFares";
 
 /**
  * Táxi (estilo DiDi): o cliente pede uma viagem e o pedido vai ao motorista livre mais próximo
@@ -44,9 +44,11 @@ export async function quoteRide(input: { pickup: RidePlace; dropoff: RidePlace; 
     const surge = await currentSurge(db, category, now);
     const fare = fareFor({ category, km, minutes, surge, stops: stops.length });
     const nearby = await nearbyDrivers(category, input.pickup);
-    options.push({ category, km, minutes: Math.round(minutes), fare: fare.total, detail: fare, driversNearby: nearby.count, pickupEtaMin: nearby.etaMin });
+    const t = tariffFor(category);
+    options.push({ category, km, minutes: Math.round(minutes), fare: fare.total, detail: fare, driversNearby: nearby.count, pickupEtaMin: nearby.etaMin, waitFreeMin: t.waitFreeMin, waitPerMin: t.waitPerMin });
   }
-  return { km, options, waitFreeMin: config.taxiWaitFreeMin, waitPerMin: config.taxiWaitPerMin };
+  const eco = tariffFor("economy");
+  return { km, options, waitFreeMin: eco.waitFreeMin, waitPerMin: eco.waitPerMin };
 }
 
 async function nearbyDrivers(category: RideCategory, at: RidePlace) {
@@ -398,7 +400,7 @@ export async function customerView(r: Ride) {
     pin: ["searching", "accepted", "arrived"].includes(r.status) ? r.pin : null,
     shareToken: r.shareToken, rating: r.rating, sos: !!r.sosAt,
     driver, driverLocation: r.driverLatitude != null ? { latitude: r.driverLatitude, longitude: r.driverLongitude!, at: r.driverLocationAt } : null,
-    waitFreeMin: config.taxiWaitFreeMin, waitPerMin: config.taxiWaitPerMin, sosPhone: config.sosPhone,
+    waitFreeMin: tariffFor(r.category).waitFreeMin, waitPerMin: tariffFor(r.category).waitPerMin, sosPhone: config.sosPhone,
     acceptedAt: r.acceptedAt, arrivedAt: r.arrivedAt, startedAt: r.startedAt, completedAt: r.completedAt, cancelledAt: r.cancelledAt,
     cancelledBy: r.cancelledBy, createdAt: r.createdAt,
   };
@@ -416,7 +418,7 @@ export async function driverView(r: Ride) {
     earning: r.driverEarning ?? est.driverEarning, commissionPct: config.taxiCommissionPct,
     customer: { name: c?.name ?? "", firstName: (c?.name ?? "").split(" ")[0], phone: c?.phone ?? "" },
     pinAttemptsLeft: Math.max(0, config.pinMaxAttempts - r.pinAttempts),
-    waitFreeMin: config.taxiWaitFreeMin, waitPerMin: config.taxiWaitPerMin, sosPhone: config.sosPhone,
+    waitFreeMin: tariffFor(r.category).waitFreeMin, waitPerMin: tariffFor(r.category).waitPerMin, sosPhone: config.sosPhone,
     acceptedAt: r.acceptedAt, arrivedAt: r.arrivedAt, startedAt: r.startedAt, completedAt: r.completedAt, createdAt: r.createdAt,
   };
 }

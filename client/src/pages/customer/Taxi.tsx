@@ -26,7 +26,7 @@ import { PaymentPicker, firstAvailableMethod, useAddresses, useMeta } from "./_o
 const CURRENT = "/api/taxi/rides/current";
 const CASH_LABEL: Tr = { pt: "Numerário ao motorista", en: "Cash to the driver", fr: "Espèces au chauffeur" };
 
-interface QuoteOption { category: RideCategory; km: number; minutes: number; fare: number; detail: FareDetail; driversNearby: number; pickupEtaMin: number | null }
+interface QuoteOption { category: RideCategory; km: number; minutes: number; fare: number; detail: FareDetail; driversNearby: number; pickupEtaMin: number | null; waitFreeMin?: number; waitPerMin?: number }
 interface QuoteRes { km: number; options: QuoteOption[]; waitFreeMin: number; waitPerMin: number }
 interface DriverCard { name: string; firstName: string; phone: string; vehicle: Vehicle; rating: number | null; ratingCount: number }
 interface RideView {
@@ -198,7 +198,7 @@ function RequestForm() {
               })}
             </div>
           )}
-          {chosen && <FareNote d={chosen.detail} waitFreeMin={quote.data!.waitFreeMin} waitPerMin={quote.data!.waitPerMin} />}
+          {chosen && <FareNote d={chosen.detail} waitFreeMin={chosen.waitFreeMin ?? quote.data!.waitFreeMin} waitPerMin={chosen.waitPerMin ?? quote.data!.waitPerMin} />}
         </section>
       )}
 
