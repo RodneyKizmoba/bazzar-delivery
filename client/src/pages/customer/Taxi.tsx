@@ -300,7 +300,8 @@ function FareNote({ d, waitFreeMin, waitPerMin }: { d: FareDetail; waitFreeMin: 
         {!!d.rounding && row(t({ pt: "Arredondamento (múltiplos de 50 Kz)", en: "Rounding (to 50 Kz)", fr: "Arrondi (50 Kz)" }), d.rounding)}
         <p className="pt-1 text-neutral-600">{t({ pt: `Espera na partida: ${waitFreeMin} min grátis, depois ${waitPerMin} Kz/min.`, en: `Waiting at pickup: ${waitFreeMin} min free, then ${waitPerMin} Kz/min.`, fr: `Attente au départ : ${waitFreeMin} min gratuites, puis ${waitPerMin} Kz/min.` })}</p>
       </div>
-    </details>
+      <p className="mt-2 text-neutral-600">{t({ pt: "A corrida é prestada pelo taxista. A PedeJá é a plataforma de intermediação e fica com uma comissão sobre o preço, paga pelo taxista.", en: "The ride is provided by the driver. PedeJá is the intermediation platform and keeps a commission on the fare, paid by the driver.", fr: "La course est assurée par le chauffeur. PedeJá est la plateforme d'intermédiation et garde une commission sur le prix, payée par le chauffeur." })}</p>
+      </details>
   );
 }
 

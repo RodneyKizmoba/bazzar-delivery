@@ -49,7 +49,8 @@ export interface Quote {
   pointsRedeemed: number; pointsDiscount: number; total: number; promoCode: string | null;
   isPlus: boolean; plusSavings: number; plusFreeDeliveryMinOrder: number;
   priorityFee?: number; riderTip?: number; priorityOption?: { fee: number; minutesSaved: number };
-  serviceFee?: number; smallOrderFee?: number; smallOrderMin?: number; minOrder?: number; deliveryKm?: number | null; busyLevel?: number;
+  serviceFee?: number; smallOrderFee?: number; smallOrderMin?: number; minOrder?: number;
+  seller?: Seller; deliveryKm?: number | null; busyLevel?: number;
   fulfilment?: "delivery" | "pickup" | "store_delivery";
   feeRules?: { serviceFeePct: number; serviceFeeMin: number; serviceFeeMax: number };
 }
@@ -734,5 +735,28 @@ export function MinOrderNotice({ quote }: { quote: Pick<Quote, "subtotal" | "min
     <p role="status" className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
       {t({ pt: `O valor mínimo de uma encomenda é ${kz(quote.minOrder!)}. Junte mais ${kz(missing)} em produtos para continuar.`, en: `The minimum order is ${kz(quote.minOrder!)}. Add ${kz(missing)} more to continue.`, fr: `La commande minimum est de ${kz(quote.minOrder!)}. Ajoutez ${kz(missing)} pour continuer.` })}
     </p>
+  );
+}
+
+
+export interface Seller { name: string; nif: string | null; sellerType: "individual" | "company"; vatRegime: "exclusion" | "simplified" | "general" }
+const SELLER_REGIME: Record<Seller["vatRegime"], Tr> = {
+  exclusion: { pt: "IVA — Regime de Exclusão", en: "VAT — Exclusion regime", fr: "TVA — Régime d'exclusion" },
+  simplified: { pt: "IVA — Regime Simplificado", en: "VAT — Simplified regime", fr: "TVA — Régime simplifié" },
+  general: { pt: "IVA — Regime Geral", en: "VAT — General regime", fr: "TVA — Régime général" },
+};
+
+/** Quem vende (a loja) e o papel da PedeJá (intermediária): no checkout e no recibo. */
+export function SellerNote({ seller, kind = "order" }: { seller?: Seller | null; kind?: "order" | "receipt" }) {
+  const t = useT();
+  if (!seller) return null;
+  return (
+    <div className="rounded-xl bg-neutral-50 p-3 text-xs text-neutral-600" data-testid="seller-note">
+      <p><span className="font-semibold text-neutral-800">{t({ pt: "Vendido por", en: "Sold by", fr: "Vendu par" })}: {seller.name}</span>
+        {seller.nif ? ` · NIF ${seller.nif}` : ""} · {t(SELLER_REGIME[seller.vatRegime])}</p>
+      <p className="mt-1">{kind === "receipt"
+        ? t({ pt: "Os artigos foram vendidos pela loja, que é responsável por eles e pelo seu IVA. A PedeJá é a plataforma de intermediação: as taxas de entrega, serviço e outras indicadas acima são cobradas pela PedeJá.", en: "The items were sold by the store, which is responsible for them and their VAT. PedeJá is the intermediation platform: the delivery, service and other fees above are charged by PedeJá.", fr: "Les articles sont vendus par le magasin, responsable de ceux-ci et de leur TVA. PedeJá est la plateforme d'intermédiation : les frais ci-dessus sont facturés par PedeJá." })
+        : t({ pt: "A loja vende os artigos. A PedeJá é a plataforma de intermediação e cobra só as suas taxas (entrega, serviço e outras indicadas acima).", en: "The store sells the items. PedeJá is the intermediation platform and only charges its own fees (delivery, service and others above).", fr: "Le magasin vend les articles. PedeJá est la plateforme d'intermédiation et ne facture que ses frais." })}</p>
+    </div>
   );
 }

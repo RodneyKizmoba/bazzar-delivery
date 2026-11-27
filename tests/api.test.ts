@@ -1231,6 +1231,7 @@ async function main() {
     check("service fee 5% of food (4500 -> 230 Kz, rounded to 10)", q.serviceFee === 230 && q.total === 4500 + 300 + 230, q && { sf: q.serviceFee, total: q.total });
     r = await cli.post("/api/cart/quote", { storeId: 1, items: [AGUA] });
     check("quote tells the PedeJá minimum order (3 000 Kz)", r.body.quote.minOrder === 3000, r.body.quote?.minOrder);
+    check("quote names the seller (the store) for the 'Sold by' line", r.body.quote.seller?.name && ["individual", "company"].includes(r.body.quote.seller.sellerType) && ["exclusion", "simplified", "general"].includes(r.body.quote.seller.vatRegime), r.body.quote?.seller);
     {
       const low = await cli.post("/api/orders", { storeId: 1, items: [AGUA], addressId: addrTalatona, paymentMethod: "cash" });
       check("a 500 Kz order is refused (below the 3 000 Kz minimum)", low.status === 400 && low.body.code === "BELOW_MIN_ORDER" && /3.000 Kz/.test(low.body.error ?? low.body.message ?? ""), low.body);

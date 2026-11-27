@@ -16,7 +16,7 @@ import { useLang, useT, T } from "@/lib/i18n";
 import { kz, dateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
-  AddressPicker, clearCheckoutPrefs, firstAvailableMethod, OrderErrorAlert, PaymentPicker, QuoteBreakdown, MinOrderNotice, belowMinOrder, readCheckoutPrefs, Section,
+  AddressPicker, clearCheckoutPrefs, firstAvailableMethod, OrderErrorAlert, PaymentPicker, QuoteBreakdown, MinOrderNotice, belowMinOrder, SellerNote, readCheckoutPrefs, Section,
   useAddresses, useMeta, useQuote, WhenPicker, noticeLabel, type StoreDetail, type WhenMode,
 } from "./_orderingKit";
 
@@ -257,6 +257,7 @@ function CheckoutInner() {
               ))}
             </ul>
             <div className="border-t pt-3"><QuoteBreakdown quote={q} /></div>
+            <SellerNote seller={q.seller} />
             <MinOrderNotice quote={q} />
             {(prefs.promoCode && !q.promoCode) && (
               <p className="text-xs text-amber-700">{t({ pt: "O código promocional não foi aplicado.", en: "The promo code wasn't applied.", fr: "Le code promo n'a pas été appliqué." })}</p>

@@ -189,7 +189,8 @@ customerRouter.get("/orders/:id", requireAuth, ah(async (req, res) => {
     customer: req.user!.id === order.customerId ? null : customer,
     store: order.pickupAddress
       ? { id: store.id, name: store.name, phone: order.pickupAddress.contactPhone, street: order.pickupAddress.street, zone: order.pickupAddress.zone, latitude: order.pickupAddress.latitude, longitude: order.pickupAddress.longitude, logoUrl: null }
-      : { id: store.id, name: store.name, phone: store.phone, street: store.street, zone: store.zone, latitude: store.latitude, longitude: store.longitude, logoUrl: store.logoUrl },
+      : { id: store.id, name: store.name, phone: store.phone, street: store.street, zone: store.zone, latitude: store.latitude, longitude: store.longitude, logoUrl: store.logoUrl,
+          seller: { name: store.name, nif: store.businessNif, sellerType: store.sellerType, vatRegime: store.vatRegime } },
   });
 }));
 

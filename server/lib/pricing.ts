@@ -281,6 +281,8 @@ export function quoteToJson(q: Quote) {
   return {
     storeId: q.store.id,
     storeName: q.store.name,
+    // quem vende é a loja; a PedeJá é intermediária (aparece no checkout e no recibo)
+    seller: { name: q.store.name, nif: q.store.businessNif, sellerType: q.store.sellerType, vatRegime: q.store.vatRegime },
     lines: q.lines.map((l) => ({
       menuItemId: l.menuItem.id,
       name: l.menuItem.name,

@@ -23,7 +23,7 @@ import { kz, dateTime, time, ORDER_STATUS, PAYMENT } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { poll } from "@/lib/live";
 import {
-  AddressPicker, FINAL_STATUSES, PriceRow, Section, WhenPicker, OrderErrorAlert, PAYMENT_ICON, type SelectedOption,
+  AddressPicker, FINAL_STATUSES, PriceRow, Section, WhenPicker, OrderErrorAlert, PAYMENT_ICON, SellerNote, type Seller, type SelectedOption,
 } from "./_orderingKit";
 
 interface Pt { latitude: number; longitude: number }
@@ -70,7 +70,7 @@ interface Detail {
   order: OrderFull; items: OrderItemRow[]; events: OrderEvent[]; review: Review | null;
   driver: { id: number; fullName: string; phone: string } | null;
   customer: { fullName: string; phone: string } | null;
-  store: { id: number; name: string; phone: string; street: string; zone: string; latitude: number | null; longitude: number | null; logoUrl: string | null };
+  store: { id: number; name: string; phone: string; street: string; zone: string; latitude: number | null; longitude: number | null; logoUrl: string | null; seller?: Seller };
 }
 interface Tracking {
   driverAssignedAt?: string | null; driverAtStoreAt?: string | null; driverAtCustomerAt?: string | null;
@@ -605,6 +605,7 @@ function OrderDetailInner({ id }: { id: string }) {
           )}
           <div className="border-t pt-2"><PriceRow strong label={t(T.total)} value={kz(order.total)} /></div>
         </div>
+        <div className="mt-3"><SellerNote seller={store.seller} kind="receipt" /></div>
       </Section>
       </>}
 
