@@ -3,6 +3,7 @@ import { db, type DbOrTx } from "../db";
 import { config } from "../config";
 import { ledgerEntries, orderItems, orders, stores, type Fulfilment, type Order } from "@shared/schema";
 import { commissionRateFor, itemCommissions } from "./commission";
+import { maybeRaiseVatRegime } from "./vat";
 
 /**
  * Acerto de contas (fase 3).
@@ -62,6 +63,8 @@ export async function settleDeliveredOrder(tx: DbOrTx, order: Order) {
     commissionPct: pct, commissionAmount: s.commission, storeEarning: s.storeEarning,
     riderEarning: s.riderEarning, settledAt: new Date(),
   }).where(eq(orders.id, order.id));
+  // vendas na PedeJá já passaram o limite do IVA este ano? sobe o regime da loja (nunca desce)
+  if (order.kind !== "parcel") await maybeRaiseVatRegime(tx, order.storeId);
   const rows: (typeof ledgerEntries.$inferInsert)[] = order.kind === "parcel" ? [] : [
     { partyType: "store", partyId: order.storeId, orderId: order.id, kind: "order_earning", amount: s.storeEarning,
       note: `${order.orderNumber}: comida ${order.subtotal} Kz − comissão ${pct}% (${s.commission} Kz)${order.fulfilment === "store_delivery" ? ` + entrega ${order.deliveryFee} Kz${order.riderTip ? ` + gorjeta ${order.riderTip} Kz` : ""}` : order.fulfilment === "pickup" ? " · recolha" : ""}` },

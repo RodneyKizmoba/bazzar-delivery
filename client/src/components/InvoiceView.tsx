@@ -2,12 +2,14 @@ import { Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/lib/i18n";
 import { kz } from "@/lib/format";
+import { REGIME_LABEL } from "@/components/TaxCard";
 
 export interface InvoiceLine { kind: "item" | "ads"; date: string; orderNumber?: string; description: string; quantity: number; amount: number; commissionPct?: number; commission: number }
 export interface Invoice {
   id: number; number: string; storeId: number; periodStart: string; periodEnd: string; storeName: string; storeNif: string | null; storeAddress: string;
   lines: InvoiceLine[]; salesTotal: number; commissionTotal: number; adsTotal: number; netTotal: number; vatPct: number; vatAmount: number; total: number;
   status: "issued" | "void"; agtInvoiceNumber: string | null; issuedAt: string;
+  storeVatRegime?: "exclusion" | "simplified" | "general" | null; pedejaVatRegime?: "exclusion" | "simplified" | "general" | null; vatIncluded?: boolean;
 }
 export type InvoiceRow = Omit<Invoice, "lines"> & { lineCount: number };
 
@@ -37,6 +39,7 @@ export function InvoiceView({ inv }: { inv: Invoice }) {
         <p className="font-semibold">{inv.storeName}</p>
         <p>{inv.storeAddress}</p>
         <p>NIF: {inv.storeNif || "—"}</p>
+        {inv.storeVatRegime && <p>IVA — {t(REGIME_LABEL[inv.storeVatRegime])}</p>}
       </div>
       <table className="mt-4 w-full text-sm">
         <caption className="sr-only">{t({ pt: "Artigos vendidos e comissão", en: "Items sold and commission", fr: "Articles vendus et commission" })}</caption>
@@ -69,11 +72,15 @@ export function InvoiceView({ inv }: { inv: Invoice }) {
         <dt>{t({ pt: "Vendas (artigos)", en: "Sales (items)", fr: "Ventes (articles)" })}</dt><dd className="text-right tabular-nums">{kz(inv.salesTotal)}</dd>
         <dt>{t({ pt: "Comissão", en: "Commission", fr: "Commission" })}</dt><dd className="text-right tabular-nums">{kz(inv.commissionTotal)}</dd>
         <dt>{t({ pt: "Publicidade", en: "Advertising", fr: "Publicité" })}</dt><dd className="text-right tabular-nums">{kz(inv.adsTotal)}</dd>
-        <dt>{t({ pt: `IVA ${inv.vatPct}%`, en: `VAT ${inv.vatPct}%`, fr: `TVA ${inv.vatPct} %` })}</dt><dd className="text-right tabular-nums">{kz(inv.vatAmount)}</dd>
+        {inv.vatPct > 0 && !inv.vatIncluded && <><dt>{t({ pt: `IVA ${inv.vatPct}%`, en: `VAT ${inv.vatPct}%`, fr: `TVA ${inv.vatPct} %` })}</dt><dd className="text-right tabular-nums">{kz(inv.vatAmount)}</dd></>}
         <dt className="border-t pt-1 font-bold">{t({ pt: "Total", en: "Total", fr: "Total" })}</dt><dd className="border-t pt-1 text-right font-bold tabular-nums">{kz(inv.total)}</dd>
+        {inv.vatPct > 0 && inv.vatIncluded && <><dt className="text-xs text-neutral-500">{t({ pt: `IVA ${inv.vatPct}% incluído`, en: `incl. VAT ${inv.vatPct}%`, fr: `dont TVA ${inv.vatPct} %` })}</dt><dd className="text-right text-xs tabular-nums text-neutral-500">{kz(inv.vatAmount)}</dd></>}
       </dl>
+      {inv.vatPct === 0 && inv.pedejaVatRegime && inv.pedejaVatRegime !== "general" && (
+        <p className="mt-2 text-right text-xs text-neutral-600">PedeJá: IVA — {t(REGIME_LABEL[inv.pedejaVatRegime])}</p>
+      )}
       <p className="mt-4 text-xs text-neutral-500">{t({
-        pt: `A comissão e a publicidade já foram descontadas no seu saldo, em cada entrega.${inv.vatAmount ? " O IVA foi descontado ao emitir esta nota." : ""} Este documento não é a fatura fiscal: essa é emitida em software certificado pela AGT${inv.agtInvoiceNumber ? ` (n.º ${inv.agtInvoiceNumber})` : ""}.`,
+        pt: `A comissão e a publicidade já foram descontadas no seu saldo, em cada entrega.${inv.vatAmount && !inv.vatIncluded ? " O IVA foi descontado ao emitir esta nota." : inv.vatAmount ? " O IVA está incluído na comissão: não paga nada a mais." : ""} Este documento não é a fatura fiscal: essa é emitida em software certificado pela AGT${inv.agtInvoiceNumber ? ` (n.º ${inv.agtInvoiceNumber})` : ""}.`,
         en: `Commission and advertising were already deducted from your balance on each delivery.${inv.vatAmount ? " VAT was deducted when this statement was issued." : ""} This is not the tax invoice: that is issued in AGT-certified software${inv.agtInvoiceNumber ? ` (no. ${inv.agtInvoiceNumber})` : ""}.`,
         fr: `Commission et publicité déjà déduites de votre solde à chaque livraison.${inv.vatAmount ? " TVA déduite à l'émission." : ""} Ce n'est pas la facture fiscale (logiciel certifié AGT${inv.agtInvoiceNumber ? `, n° ${inv.agtInvoiceNumber}` : ""}).`,
       })}</p>

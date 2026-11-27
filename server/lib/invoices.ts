@@ -9,7 +9,8 @@ import { badRequest, conflict, notFound } from "./http";
  *
  * Uma nota por loja e por mês, com uma linha por artigo vendido (valor, % e comissão) e uma por campanha
  * "Patrocinado". A comissão já foi descontada no saldo da loja em cada entrega; a nota documenta-a.
- * IVA: só se INVOICE_VAT_PCT > 0 (Regime Geral do IVA). Nesse caso, o IVA é descontado no saldo da loja.
+ * IVA: só se a PedeJá estiver no Regime Geral (PEDEJA_VAT_REGIME=general). Por defeito vem incluído na comissão
+ * (a loja paga a % anunciada e a nota mostra o IVA contido); com VAT_INCLUDED=0 é somado e sai do saldo da loja.
  * A fatura fiscal sai do software certificado pela AGT; o seu número fica em agtInvoiceNumber.
  */
 
@@ -77,18 +78,22 @@ export async function generateInvoices(month: string, by: number | null) {
       const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(storeInvoices).where(sql`${storeInvoices.number} like ${`FC ${year}/%`}`);
       const number = `FC ${year}/${String(n + 1).padStart(6, "0")}`;
       const netTotal = c.commissionTotal + c.adsTotal;
-      const vatPct = config.invoiceVatPct;
-      const vatAmount = Math.round((netTotal * vatPct) / 100);
+      // IVA só se a PedeJá estiver no Regime Geral; por defeito vem INCLUÍDO na comissão (a loja paga a % anunciada)
+      const vatPct = config.pedejaVatRegime === "general" ? config.vatGeneralRate : 0;
+      const vatIncluded = config.vatIncluded;
+      const vatAmount = vatIncluded ? Math.round((netTotal * vatPct) / (100 + vatPct)) : Math.round((netTotal * vatPct) / 100);
+      const chargedVat = vatIncluded ? 0 : vatAmount; // só o IVA não incluído sai do saldo da loja
       const [row] = await tx.insert(storeInvoices).values({
         number, storeId: s.id, periodStart: start, periodEnd: end,
         storeName: s.name, storeNif: s.businessNif, storeAddress: `${s.street}, ${s.zone}`,
+        storeVatRegime: s.vatRegime, pedejaVatRegime: config.pedejaVatRegime, vatIncluded,
         lines: c.lines, salesTotal: c.salesTotal, commissionTotal: c.commissionTotal, adsTotal: c.adsTotal,
-        netTotal, vatPct, vatAmount, total: netTotal + vatAmount, issuedBy: by,
+        netTotal, vatPct, vatAmount, total: netTotal + chargedVat, issuedBy: by,
       }).returning();
       if (c.orderIds.length) await tx.update(orders).set({ invoiceId: row.id }).where(inArray(orders.id, c.orderIds));
       if (c.adIds.length) await tx.update(ledgerEntries).set({ invoiceId: row.id }).where(inArray(ledgerEntries.id, c.adIds));
       // a comissão e a publicidade já saíram do saldo; o IVA (se houver) sai agora
-      if (vatAmount > 0) {
+      if (chargedVat > 0) {
         await tx.insert(ledgerEntries).values({ partyType: "store", partyId: s.id, kind: "invoice_vat", amount: -vatAmount, invoiceId: row.id, note: `${number}: IVA ${vatPct}% sobre ${netTotal} Kz`, createdBy: by });
       }
       return row;
@@ -120,7 +125,7 @@ export async function voidInvoice(id: number, by: number | null) {
     if (inv.status === "void") throw conflict("Esta nota já está anulada.", "ALREADY_VOID");
     await tx.update(orders).set({ invoiceId: null }).where(eq(orders.invoiceId, id));
     await tx.update(ledgerEntries).set({ invoiceId: null }).where(and(eq(ledgerEntries.invoiceId, id), eq(ledgerEntries.kind, "ads")));
-    if (inv.vatAmount > 0) {
+    if (!inv.vatIncluded && inv.vatAmount > 0) {
       await tx.insert(ledgerEntries).values({ partyType: "store", partyId: inv.storeId, kind: "adjustment", amount: inv.vatAmount, note: `${inv.number} anulada: IVA devolvido`, createdBy: by });
     }
     const [u] = await tx.update(storeInvoices).set({ status: "void", voidedAt: new Date() }).where(eq(storeInvoices.id, id)).returning();

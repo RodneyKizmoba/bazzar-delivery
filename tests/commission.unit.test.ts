@@ -3,6 +3,7 @@
  * Correr: DATABASE_URL=postgres://... npx tsx tests/commission.unit.test.ts
  */
 import { commissionRateFor, itemCommissions, planOptionsFor } from "../server/lib/commission";
+import { impliedRegime, regimeAtLeast, vatDueDate } from "../server/lib/vat";
 
 let pass = 0, fail = 0;
 function check(name: string, ok: boolean, detail?: unknown) {
@@ -34,6 +35,13 @@ const med = itemCommissions([{ unitPrice: 2500, quantity: 2 }], 12);
 check("medicine 2 × 2 500 at 12% = 600", med.total === 600, med);
 const o = planOptionsFor({ storeType: "pharmacy", counterPrice: false });
 check("plan options for a pharmacy: 7 / 12 / 17", o.basic === 7 && o.standard === 12 && o.featured === 17, o);
+
+check("VAT regime from yearly sales: < 25 M Exclusion, 25 M–350 M Simplified, ≥ 350 M General",
+  impliedRegime(24_999_999) === "exclusion" && impliedRegime(25_000_000) === "simplified" && impliedRegime(349_999_999) === "simplified" && impliedRegime(350_000_000) === "general");
+check("regime only goes up (never below what the sales imply)", regimeAtLeast("exclusion", "simplified") === "simplified" && regimeAtLeast("general", "simplified") === "general");
+
+check("VAT due on the last working day of the next month (Oct 2026 → Mon 2026-11-30; Dec 2026 → Fri 2027-01-29)",
+  vatDueDate("2026-10") === "2026-11-30" && vatDueDate("2026-12") === "2027-01-29", [vatDueDate("2026-10"), vatDueDate("2026-12")]);
 
 console.log(`\n========== COMMISSION SUMMARY: ${pass} passed, ${fail} failed ==========`);
 process.exit(fail ? 1 : 0);

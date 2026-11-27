@@ -2,7 +2,7 @@ import { Router } from "express";
 import { and, desc, eq, gte, ilike, inArray, ne, or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
-import { ADMIN_PERMS, bannerInputSchema, banners, orders, promoCodes, promoInputSchema, rides, stores, subscriptions, taxiDrivers, users, ORDER_STATUSES, RIDE_STATUSES, STORE_PLANS } from "@shared/schema";
+import { ADMIN_PERMS, bannerInputSchema, banners, orders, promoCodes, promoInputSchema, rides, stores, subscriptions, taxiDrivers, users, ORDER_STATUSES, RIDE_STATUSES, STORE_PLANS, SELLER_TYPES, VAT_REGIMES } from "@shared/schema";
 import { ah, badRequest, conflict, HttpError, idParam, notFound, parse } from "../lib/http";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "crypto";
@@ -16,8 +16,9 @@ import { closeOffersOnClaim, redispatch, riderPayQuote } from "../lib/dispatchEn
 import { account } from "../lib/settlement";
 import { markPayout, runWeeklyPayouts } from "../lib/payouts";
 import { adsOf, buyAd, cancelAd } from "../lib/ads";
-import { generateInvoices, getInvoice, listInvoices, setAgtNumber, voidInvoice } from "../lib/invoices";
+import { generateInvoices, getInvoice, listInvoices, monthRange, setAgtNumber, voidInvoice } from "../lib/invoices";
 import { commissionRateFor } from "../lib/commission";
+import { allStoresYearSales, pedejaMonthVat, pedejaYearRevenue } from "../lib/vat";
 import { nextPayday } from "../lib/fees";
 import { config } from "../config";
 import { ledgerEntries } from "@shared/schema";
@@ -420,7 +421,8 @@ adminRouter.get("/stores", ah(async (req, res) => {
   const rows = await db.select({ s: stores, ownerName: users.fullName, ownerPhone: users.phone }).from(stores)
     .leftJoin(users, eq(users.id, stores.ownerId))
     .where(and(eq(stores.isSystem, false), pendingOnly ? eq(stores.isApproved, false) : undefined)).orderBy(desc(stores.createdAt)).limit(500);
-  res.json({ stores: rows.map((r) => ({ ...withoutSecrets(r.s), ownerName: r.ownerName, ownerPhone: r.ownerPhone, effectiveCommissionPct: commissionRateFor(r.s, "delivery") })) });
+  const sales = await allStoresYearSales();
+  res.json({ stores: rows.map((r) => ({ ...withoutSecrets(r.s), ownerName: r.ownerName, ownerPhone: r.ownerPhone, effectiveCommissionPct: commissionRateFor(r.s, "delivery"), yearSales: sales.get(r.s.id) ?? 0 })) });
 }));
 
 adminRouter.patch("/stores/:id", ah(async (req, res) => {
@@ -428,6 +430,8 @@ adminRouter.patch("/stores/:id", ah(async (req, res) => {
     isApproved: z.boolean().optional(), isChain: z.boolean().optional(), isOpen: z.boolean().optional(), isHomeBusiness: z.boolean().optional(),
     deliveryFee: z.number().int().min(0).optional(), commissionPct: z.number().min(0).max(50).nullable().optional(), theme: z.enum(STORE_THEME_IDS).nullable().optional(), zonesServed: z.array(z.string().trim().min(2).max(60)).optional(),
     plan: z.enum(STORE_PLANS).optional(), counterPrice: z.boolean().optional(),
+    sellerType: z.enum(SELLER_TYPES).optional(), vatRegime: z.enum(VAT_REGIMES).optional(),
+    businessNif: z.string().trim().toUpperCase().regex(/^[0-9A-Z]{9,14}$/).nullable().optional(),
   }), req.body);
   const [before] = await db.select({ isApproved: stores.isApproved, freeUntil: stores.commissionFreeUntil }).from(stores).where(eq(stores.id, idParam(req)));
   if (!before) throw notFound("Loja não encontrada");
@@ -445,7 +449,10 @@ adminRouter.patch("/stores/:id", ah(async (req, res) => {
 adminRouter.get("/invoices", ah(async (req, res) => {
   const month = typeof req.query.month === "string" && req.query.month ? req.query.month : undefined;
   const storeId = req.query.storeId ? Number(req.query.storeId) : undefined;
-  res.json({ invoices: await listInvoices({ month, storeId }), vatPct: config.invoiceVatPct });
+  const pedeja = await pedejaYearRevenue();
+  if (month) monthRange(month); // valida AAAA-MM
+  const vatMonth = month ? await pedejaMonthVat(month) : null;
+  res.json({ invoices: await listInvoices({ month, storeId }), vatPct: pedeja.vatPct, pedeja, vatMonth });
 }));
 adminRouter.post("/invoices/generate", ah(async (req, res) => {
   const { month } = parse(z.object({ month: z.string() }), req.body);

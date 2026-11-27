@@ -1705,6 +1705,29 @@ async function main() {
     await loja.patch("/api/partner/plan", { counterPrice: false });
     check("partner can't set a bad plan", (await loja.patch("/api/partner/plan", { plan: "gold" })).status === 400);
 
+    // IVA da loja: tipo de vendedor, NIF, regime e vendas do ano na PedeJá
+    let tax = (await loja.get("/api/partner/tax")).body;
+    check("tax status: year sales on PedeJá and VAT thresholds (25 M / 350 M by default)", typeof tax.yearSales === "number" && tax.yearSales > 0 && tax.thresholds.simplifiedFrom > 0 && tax.thresholds.generalFrom > tax.thresholds.simplifiedFrom, tax);
+    if (tax.yearSales >= tax.thresholds.simplifiedFrom) {
+      check("sales on PedeJá alone crossed the threshold → the app raised the VAT regime", tax.vatRegime !== "exclusion" && !!tax.raisedAt && tax.minRegime !== "exclusion", tax);
+      const low = await loja.patch("/api/partner/tax", { vatRegime: "exclusion" });
+      check("…and the store can't declare a lower regime", low.status === 400 && low.body.code === "VAT_REGIME_TOO_LOW", low.body);
+    } else {
+      check("below the threshold: Exclusion, no raise", tax.vatRegime === "exclusion" && !tax.raisedAt, tax);
+    }
+    check("alert flag follows the 20 M warning level", tax.alert === (tax.vatRegime === "exclusion" && tax.yearSales >= tax.thresholds.alertAt), tax);
+    let tr = await loja.patch("/api/partner/tax", { sellerType: "company", businessNif: null });
+    check("a company must give its NIF", tr.status === 400 && tr.body.code === "NIF_REQUIRED", tr.body);
+    check("bad NIF refused", (await loja.patch("/api/partner/tax", { businessNif: "12-3" })).status === 400);
+    tr = await loja.patch("/api/partner/tax", { sellerType: "company", businessNif: "5417123456" });
+    check("company with NIF saved", tr.status === 200 && tr.body.sellerType === "company" && tr.body.businessNif === "5417123456", tr.body);
+    tr = await loja.patch("/api/partner/tax", { vatRegime: "general" });
+    check("store declares the General regime (like Kero or Maxi)", tr.status === 200 && tr.body.vatRegime === "general", tr.body);
+    const as = (await admin.get("/api/admin/stores")).body.stores.find((x: any) => x.id === mine.id);
+    check("admin sees seller type, VAT regime and the year's sales", as?.sellerType === "company" && as?.vatRegime === "general" && as?.yearSales === tax.yearSales, as && { t: as.sellerType, v: as.vatRegime, y: as.yearSales });
+    const seededChain = (await admin.get("/api/admin/stores")).body.stores.find((x: any) => x.isChain);
+    check("seeded chains are companies in the General regime", !seededChain || (seededChain.sellerType === "company" && seededChain.vatRegime === "general"), seededChain && { n: seededChain.name, t: seededChain.sellerType });
+
     // nota de comissões do mês (o servidor de testes permite o mês em curso)
     const month = new Date(Date.now() + 3_600_000).toISOString().slice(0, 7);
     check("only finance staff can issue statements", (await loja.post("/api/admin/invoices/generate", { month })).status === 403);
@@ -1714,7 +1737,16 @@ async function main() {
     const full = (await admin.get(`/api/admin/invoices/${inv?.id}`)).body.invoice;
     const items = (full?.lines ?? []).filter((l: any) => l.kind === "item");
     check("one line per item sold, each with its % and commission", items.length > 0 && items.every((l: any) => l.commission === Math.round((l.amount * l.commissionPct) / 100) || l.description.startsWith("Encomenda")), items.slice(0, 3));
-    check("totals add up: commission = sum of lines; total = net + VAT", full && full.commissionTotal === items.reduce((s: number, l: any) => s + l.commission, 0) && full.total === full.netTotal + full.vatAmount && full.netTotal === full.commissionTotal + full.adsTotal, full && { c: full.commissionTotal, n: full.netTotal, t: full.total });
+    check("totals add up: commission = sum of lines; VAT included → total = net", full && full.commissionTotal === items.reduce((s: number, l: any) => s + l.commission, 0) && full.netTotal === full.commissionTotal + full.adsTotal
+      && (full.vatIncluded ? full.total === full.netTotal : full.total === full.netTotal + full.vatAmount), full && { c: full.commissionTotal, n: full.netTotal, t: full.total, v: full.vatAmount, inc: full.vatIncluded });
+    const pj = (await admin.get(`/api/admin/invoices?month=${month}`)).body.pedeja;
+    check("statement records the store's and PedeJá's VAT regimes", full?.storeVatRegime === "general" && full?.pedejaVatRegime === pj?.regime, full && { s: full.storeVatRegime, p: full.pedejaVatRegime });
+    check("VAT on the commission only when PedeJá is in the General regime (14% included: net × 14/114)",
+      pj?.regime === "general" ? full.vatPct === 14 && full.vatAmount === Math.round((full.netTotal * 14) / 114) : full.vatPct === 0 && full.vatAmount === 0, { regime: pj?.regime, v: full?.vatAmount, n: full?.netTotal });
+    check("admin sees PedeJá's estimated revenue this year and its implied regime", pj && pj.revenue > 0 && ["exclusion", "simplified", "general"].includes(pj.implied), pj);
+    const vm = (await admin.get(`/api/admin/invoices?month=${month}`)).body.vatMonth;
+    check("monthly VAT of PedeJá on what it keeps, with the due date (last working day of next month)", vm && vm.month === month && /^\d{4}-\d{2}-\d{2}$/.test(vm.dueDate)
+      && vm.vat === (vm.regime === "general" ? Math.round((vm.revenue * 14) / 114) : vm.regime === "simplified" ? Math.round((vm.revenue * 7) / 100) : 0), vm);
     r = await loja.get("/api/partner/invoices");
     check("partner sees its statement", r.status === 200 && r.body.invoices.some((x: any) => x.id === inv.id));
     check("partner opens it", (await loja.get(`/api/partner/invoices/${inv.id}`)).body.invoice?.number === inv.number);

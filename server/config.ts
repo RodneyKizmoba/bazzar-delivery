@@ -69,8 +69,14 @@ export const config = {
   planFeaturedOffset: num("PLAN_FEATURED_OFFSET", 5),
   counterPricePts: num("COUNTER_PRICE_PTS", 2), // "mesmo preço que no balcão": menos 2 pontos de comissão
   commissionFreeDays: num("COMMISSION_FREE_DAYS", 30), // 1.º mês sem comissão, a contar da aprovação
-  // IVA nas notas de comissões: só quem está no Regime Geral do IVA o liquida (0 = não liquida; 14 = taxa geral)
-  invoiceVatPct: num("INVOICE_VAT_PCT", 0),
+  // IVA da PedeJá: o regime da PedeJá decide se as notas levam IVA (Geral: 14% incluído na comissão)
+  pedejaVatRegime: (["exclusion", "simplified", "general"].includes(process.env.PEDEJA_VAT_REGIME ?? "") ? process.env.PEDEJA_VAT_REGIME : "exclusion") as "exclusion" | "simplified" | "general",
+  vatGeneralRate: num("VAT_GENERAL_RATE", 14),
+  vatSimplifiedRate: num("VAT_SIMPLIFIED_RATE", 7), // sobre o recebido; não vai na fatura
+  vatIncluded: process.env.VAT_INCLUDED !== "0", // comissão com IVA incluído (a loja paga sempre a % anunciada)
+  vatSimplifiedFrom: num("VAT_SIMPLIFIED_FROM", 25_000_000), // limites anuais do CIVA (faturação do ano anterior)
+  vatGeneralFrom: num("VAT_GENERAL_FROM", 350_000_000),
+  vatAlertAt: num("VAT_ALERT_AT", 20_000_000), // aviso à loja antes do limite
   commissionPickupPct: num("COMMISSION_PICKUP_PCT", 9), // cliente levanta no balcão (8–10%)
   commissionSelfDeliveryPct: num("COMMISSION_SELF_DELIVERY_PCT", 10), // loja entrega com os seus estafetas (8–12%)
   // Publicidade ("Patrocinado" no topo das pesquisas)

@@ -362,7 +362,9 @@ async function insertStore(tx: any, s: StoreSeed, ownerId: number | null, opts: 
     const [store] = await tx.insert(stores).values({
       theme: DEMO_THEMES[s.name] ?? null,
       ownerId, name: s.name, storeType: s.storeType, description: s.description,
-      cuisines: s.cuisines, isChain: !!s.isChain, phone: s.phone ?? "+244923100100", street: s.street, zone: s.zone,
+      cuisines: s.cuisines, isChain: !!s.isChain,
+      // cadeias (como o Kero ou o Maxi) são empresas no Regime Geral; os outros, pessoas singulares na Exclusão
+      sellerType: s.isChain ? "company" : "individual", vatRegime: s.isChain ? "general" : "exclusion", phone: s.phone ?? "+244923100100", street: s.street, zone: s.zone,
       latitude: s.lat, longitude: s.lng, zonesServed: s.zonesServed, openingTime: s.open ?? "00:00", closingTime: s.close ?? "00:00",
       isOpen: opts.isOpen ?? true, isApproved: s.approved ?? true, isHomeBusiness: !!s.home, minNoticeMin: s.noticeMin ?? 0, maxOrdersPerDay: s.maxPerDay ?? null, deliveryFee: s.deliveryFee, minOrder: s.minOrder ?? 0,
       deliveryTimeMin: s.time, prepTimeMin: Math.round(s.time / 2),

@@ -25,6 +25,12 @@ export const DIETARY_TAGS = ["vegan", "vegetarian", "gluten_free", "halal", "lac
 export const ALLERGENS = ["gluten", "dairy", "eggs", "nuts", "peanuts", "seafood", "fish", "soy"] as const;
 // "vintage" = Desapega (moda nova, vintage e em segunda mão); "jewelry" = bijuteria e acessórios;
 // "other" = qualquer outro negócio (descreve-se nas categorias) — nenhum negócio fica de fora
+/** IVA (CIVA Angola): Exclusão < 25 M Kz/ano, Simplificado 25–350 M (7% sobre o recebido), Geral ≥ 350 M (14%). */
+export const VAT_REGIMES = ["exclusion", "simplified", "general"] as const;
+export type VatRegime = (typeof VAT_REGIMES)[number];
+export const SELLER_TYPES = ["individual", "company"] as const; // pessoa singular (muitos negócios caseiros) ou empresa
+export type SellerType = (typeof SELLER_TYPES)[number];
+
 /** Planos da loja (modelo Uber Eats): quanto maior a comissão, mais visibilidade. */
 export const STORE_PLANS = ["basic", "standard", "featured"] as const;
 export type StorePlan = (typeof STORE_PLANS)[number];
@@ -150,6 +156,9 @@ export const stores = pgTable("stores", {
   plan: text("plan").$type<StorePlan>().notNull().default("standard"), // Básico / Padrão / Destaque (ver STORE_PLANS)
   counterPrice: boolean("counter_price").notNull().default(false), // compromisso "mesmo preço que no balcão" (−2 pontos)
   commissionFreeUntil: timestamp("commission_free_until"), // 1.º mês sem comissão (a contar da aprovação)
+  sellerType: text("seller_type").$type<SellerType>().notNull().default("individual"),
+  vatRegime: text("vat_regime").$type<VatRegime>().notNull().default("exclusion"), // regime de IVA da loja (declarado ou subido automaticamente)
+  vatRegimeRaisedAt: timestamp("vat_regime_raised_at"), // quando a app subiu o regime pelas vendas na PedeJá
   deliveryTimeMin: integer("delivery_time_min").notNull().default(35), // estimativa total
   ratingAvg: real("rating_avg").notNull().default(0),
   ratingCount: integer("rating_count").notNull().default(0),
@@ -409,14 +418,17 @@ export const storeInvoices = pgTable("store_invoices", {
   storeName: text("store_name").notNull(),
   storeNif: text("store_nif"),
   storeAddress: text("store_address").notNull(),
+  storeVatRegime: text("store_vat_regime").$type<VatRegime>(),
+  pedejaVatRegime: text("pedeja_vat_regime").$type<VatRegime>(),
+  vatIncluded: boolean("vat_included").notNull().default(true), // IVA incluído na comissão (a loja não paga mais)
   lines: jsonb("lines").$type<InvoiceLine[]>().notNull(),
   salesTotal: integer("sales_total").notNull(), // valor dos artigos vendidos
   commissionTotal: integer("commission_total").notNull(),
   adsTotal: integer("ads_total").notNull(),
   netTotal: integer("net_total").notNull(), // comissão + publicidade, sem IVA
   vatPct: real("vat_pct").notNull(),
-  vatAmount: integer("vat_amount").notNull(),
-  total: integer("total").notNull(), // net + IVA
+  vatAmount: integer("vat_amount").notNull(), // IVA contido no netTotal (incluído) ou somado (não incluído)
+  total: integer("total").notNull(), // o que a loja paga: = net (IVA incluído) ou net + IVA
   status: text("status").$type<"issued" | "void">().notNull().default("issued"),
   // a fatura fiscal é emitida no software certificado pela AGT; aqui fica o seu número para cruzar
   agtInvoiceNumber: text("agt_invoice_number"),

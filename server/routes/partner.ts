@@ -5,9 +5,9 @@ import { db } from "../db";
 import {
   menuItemInputSchema, menuItems, menuSections, optionGroups, options, orderItems, orders, reviews, storeUpdateSchema,
   stores, users, type Store,
-  STORE_PLANS,
+  STORE_PLANS, SELLER_TYPES, VAT_REGIMES,
 } from "@shared/schema";
-import { ah, forbidden, idParam, notFound, parse } from "../lib/http";
+import { badRequest, ah, forbidden, idParam, notFound, parse } from "../lib/http";
 import { requireRole } from "../lib/auth";
 import { changeStatus, confirmScheduled, delayPrep } from "../lib/orderFlow";
 import { account } from "../lib/settlement";
@@ -17,6 +17,7 @@ import { nextPayday } from "../lib/fees";
 import { config } from "../config";
 import { commissionRateFor, planOptionsFor } from "../lib/commission";
 import { getInvoice, listInvoices } from "../lib/invoices";
+import { impliedRegime, regimeAtLeast, storeYearSales, vatStatusFor } from "../lib/vat";
 import { assertSafeWebhookUrl, newApiKey, newWebhookSecret, sendPosWebhook, withoutSecrets } from "../lib/pos";
 
 export const partnerRouter = Router();
@@ -105,6 +106,28 @@ partnerRouter.patch("/plan", ah(async (req, res) => {
   const input = parse(z.object({ plan: z.enum(STORE_PLANS).optional(), counterPrice: z.boolean().optional() }), req.body);
   const [u] = await db.update(stores).set(input).where(eq(stores.id, s.id)).returning();
   res.json({ plan: u.plan, counterPrice: u.counterPrice, delivery: commissionRateFor(u, "delivery") });
+}));
+
+/** IVA da loja: tipo de vendedor, NIF, regime e vendas do ano na PedeJá. */
+partnerRouter.get("/tax", ah(async (req, res) => {
+  res.json(await vatStatusFor(await myStore(req)));
+}));
+partnerRouter.patch("/tax", ah(async (req, res) => {
+  const s = await myStore(req);
+  const input = parse(z.object({
+    sellerType: z.enum(SELLER_TYPES).optional(), vatRegime: z.enum(VAT_REGIMES).optional(),
+    businessNif: z.string().trim().toUpperCase().regex(/^[0-9A-Z]{9,14}$/, "NIF inválido (9 a 14 letras e números).").nullable().optional(),
+  }), req.body);
+  const sellerType = input.sellerType ?? s.sellerType;
+  const nif = input.businessNif === undefined ? s.businessNif : input.businessNif;
+  if (sellerType === "company" && !nif) throw badRequest("Uma empresa tem de indicar o NIF.", "NIF_REQUIRED");
+  if (input.vatRegime) {
+    // as vendas na PedeJá, só por si, já obrigam a este regime: não se pode declarar um mais baixo
+    const min = impliedRegime(await storeYearSales(db, s.id));
+    if (regimeAtLeast(input.vatRegime, min) !== input.vatRegime) throw badRequest("As suas vendas na PedeJá este ano já passaram o limite deste regime de IVA.", "VAT_REGIME_TOO_LOW");
+  }
+  const [u] = await db.update(stores).set({ sellerType, businessNif: nif, ...(input.vatRegime ? { vatRegime: input.vatRegime } : {}) }).where(eq(stores.id, s.id)).returning();
+  res.json(await vatStatusFor(u));
 }));
 
 /** Notas de comissões da loja. */
